@@ -841,6 +841,9 @@ async function build(){
       // 6/8, 9/8, 12/8: count and click in eighth notes, accent every third
       ST.compound=ST.den===8 && ST.meter%3===0 && ST.meter>3; }
     ST.events=expandEvents(ST.sections); ST.env=songEnv(ST.mono,sr); ST.chartSig=chartSig(ST.events); ST.libId=null; ST.libDate=null;
+    if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
+      Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, libId:v.libId||null, libDate:v.libDate||null});
+      s=step('Putting back your last chart'); s.done('Reopened your last song'); ST.showRec=false; realign(false); return; }
     s=step('Checking the song library');
     const hit=await libFind(ST.audio.duration,ST.env);
     if(hit && applyLib(hit)){ s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); ST.showRec=false; realign(false); return; }
@@ -966,6 +969,7 @@ function realign(keep=true){
 }
 function bpmLabel(){ const b=Math.round(60/ST.P*10)/10; return ST.compound? `${b} BPM (eighth notes)` : b+' BPM'; }
 function finish(keep){
+  saveLast();
   ST.song=buildSong(ST.meta,ST.sections,ST.S,ST.P,ST.downPhase,ST.meter,ST.events,ST.al,ST.audio.duration,ST.vox);
   ST.song.bar0+=ST.nudge/1000;
   for(const [i,o] of Object.entries(ST.overrides)){ if(ST.song.bars[i]) Object.assign(ST.song.bars[i],o); }
@@ -1271,7 +1275,24 @@ $('halfBtn').addEventListener('click',()=>retempo(2));
 $('dblBtn').addEventListener('click',()=>retempo(0.5));
 async function retempo(f){ ST.P*=f; ST.beat0=ST.beat0%ST.P; ST.anchors={}; ST.overrides={};
   await fitSearch([ST.beat0,(ST.beat0+ST.P/2)%ST.P]); finish(true); }
-$('newBtn').addEventListener('click',()=>{ if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
+// ---------- keep the last song on this device, so a refresh doesn't lose it (stored only in this browser, never uploaded) ----------
+function idb(mode,fn){ return new Promise((res,rej)=>{ try{ const rq=indexedDB.open('mcb',1); rq.onupgradeneeded=()=>rq.result.createObjectStore('kv'); rq.onerror=()=>rej(rq.error);
+  rq.onsuccess=()=>{ const tx=rq.result.transaction('kv',mode), st=tx.objectStore('kv'), r=fn(st); tx.oncomplete=()=>res(r&&r.result); tx.onerror=()=>rej(tx.error); }; }catch(e){ rej(e); } }); }
+let saveT=null;
+function saveLast(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(!ST.songFile) return;
+  const rec={song:ST.songFile, songName:ST.songFile.name, chartMode:ST.chartMode, chart:ST.chartMode==='pdf'?ST.chartFile:null, chartName:ST.chartFile?.name||'', chartText:ST.chartMode==='text'?$('chartText').value:'',
+    bpmIn:$('bpmIn').value, meterIn:$('meterIn').value,
+    state:{P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, libId:ST.libId, libDate:ST.libDate}, savedAt:Date.now()};
+  idb('readwrite',st=>st.put(rec,'last')).catch(e=>console.warn('could not keep the song for next time',e)); },400); }
+function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
+(async()=>{ try{ const r=await idb('readonly',st=>st.get('last')); if(!r||!r.song||!(r.chart||r.chartText)) return;
+  ST.songFile=r.song instanceof File?r.song:new File([r.song],r.songName||'song'); $('songName').textContent=r.songName||'song'; $('dropSong').classList.add('has');
+  if(r.chartMode==='text'){ ST.chartMode='text'; $('chartText').value=r.chartText; $('chartText').hidden=false; }
+  else { ST.chartMode='pdf'; ST.chartFile=r.chart instanceof File?r.chart:new File([r.chart],r.chartName||'chart.pdf'); $('chartName').textContent=r.chartName||'chart'; $('dropChart').classList.add('has'); }
+  if(r.bpmIn) $('bpmIn').value=r.bpmIn; if(r.meterIn) $('meterIn').value=r.meterIn;
+  ST.restore=r.state&&r.state.P>0?r.state:null; ready(); build();
+}catch(e){ /* storage blocked: start fresh */ } })();
+$('newBtn').addEventListener('click',()=>{ forgetLast(); if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
 
 // ---------- downloads ----------
 let dl=null;

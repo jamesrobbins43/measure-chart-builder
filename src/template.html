@@ -605,7 +605,12 @@ function setupPlayer(){
   (function loop(){ if(playing){ choCheck(); update(false); } requestAnimationFrame(loop); })();
   update(true);
 }
-let lastBar=-2,lastBeat=-1,liveCh=null;
+let lastBar=-2,lastBeat=-1,liveCh=null,aheadRow=null,qsJob=0;
+// fast eased scroll (~0.3 s) that keeps up with the music; instant if the viewer prefers reduced motion
+function quickScroll(y){ y=Math.max(0,Math.min(y,document.documentElement.scrollHeight-innerHeight)); const y0=window.scrollY, d=y-y0; if(Math.abs(d)<4) return;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){ window.scrollTo(0,y); return; }
+  const job=++qsJob, t0=performance.now(), D=300;
+  (function step(now){ if(job!==qsJob) return; const k=Math.min(1,(now-t0)/D), e=1-Math.pow(1-k,3); window.scrollTo(0,y0+d*e); if(k<1) requestAnimationFrame(step); })(t0); }
 function update(force){
   if(!ST.song) return;
   const song=ST.song, M=ST.meter, P=song.beat, t=songTime();
@@ -614,11 +619,18 @@ function update(force){
   if(bar!==lastBar||force){
     document.querySelectorAll('.measure.cur').forEach(e=>e.classList.remove('cur'));
     const el=measEls[bar];
+    if(el && el.parentElement===aheadRow) aheadRow=null;
     if(el){ el.classList.add('cur'); if(playing||force){ const r=el.getBoundingClientRect(), top=document.querySelector('.transport').getBoundingClientRect().bottom, bottom=$('editor').hidden?innerHeight:$('editor').getBoundingClientRect().top;
-      if(r.top<top+8||r.bottom>bottom-16) el.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); } }
+      if(r.top<top+8||r.bottom>bottom-16) quickScroll(window.scrollY+r.top-top-10); } }
     $('where').textContent= bar<0?'Count-in': bar>=song.bars.length?'End': `${song.bars[bar].sec||''} · bar ${bar+1}`;
     lastBar=bar;
   }
+  // near the end of the last bar on a line, glide the next line up under the player so you can read ahead
+  if(playing && bar>=0 && bar+1<measEls.length){ const el=measEls[bar], nx=measEls[bar+1];
+    if(el && nx && nx.parentElement!==el.parentElement && aheadRow!==nx.parentElement){
+      const left=(bar+1)*P*M-(t-song.bar0), lead=Math.max(P*(ST.compound?2:1), Math.min(P*M*0.5, 0.9));
+      if(left<=lead){ aheadRow=nx.parentElement; const top=document.querySelector('.transport').getBoundingClientRect().bottom;
+        quickScroll(window.scrollY+nx.parentElement.getBoundingClientRect().top-top-10); } } }
   if(beat!==lastBeat||force){
     document.querySelectorAll('.bt.live').forEach(e=>e.classList.remove('live'));
     measEls[bar]?.querySelectorAll('.bt')[beat]?.classList.add('live');

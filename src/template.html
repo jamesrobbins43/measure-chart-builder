@@ -121,6 +121,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .lyr.wrap{flex-wrap:wrap}
 #choBtn[aria-pressed="true"]{background:var(--chorus);border-color:var(--chorus);color:#fff}
 .cho-only .row.nc-row{display:none}
+.row.cirow{--c:var(--ending)} .row.cirow .measure{cursor:default;min-height:64px} .row.cirow .g{flex:1}
 .lyr>span{flex:0 0 auto;max-width:100%;padding:0 .45em 0 3px;box-sizing:border-box}
 .ly{grid-row:2;line-height:1.25;padding:2px .3em 4px 3px;min-height:1.4em;align-self:start;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:break-word}
 .bt{grid-row:3;align-self:end;margin-top:3px;padding-left:1px;line-height:1}
@@ -595,7 +596,14 @@ function chorusBars(){ const song=ST.song, on=new Set(); if(!song) return on; le
 function chorusSpans(){ const song=ST.song, BAR=song.beat*ST.meter, out=[]; const on=chorusBars();
   [...on].sort((a,b)=>a-b).forEach(i=>{ const a=song.bar0+i*BAR, b=a+BAR, l=out[out.length-1]; if(l && Math.abs(l[1]-a)<0.01) l[1]=b; else out.push([a,b]); }); return out; }
 function markChoruses(){ const on=chorusBars(); measEls.forEach((m,i)=>m.classList.toggle('nc',!on.has(i)));
-  document.querySelectorAll('#rows .row').forEach(r=>r.classList.toggle('nc-row',![...r.querySelectorAll('.measure')].some(m=>!m.classList.contains('nc')))); $('rows').classList.toggle('cho-only',choOnly); }
+  document.querySelectorAll('#rows .row').forEach(r=>r.classList.toggle('nc-row',![...r.querySelectorAll('.measure')].some(m=>!m.classList.contains('nc'))));
+  // a count-in bar on its own line above each chorus
+  document.querySelectorAll('#rows .cirow').forEach(r=>r.remove());
+  if(choOnly){ const M=ST.meter; for(const [a] of chorusSpans()){ const i=Math.round((a-ST.song.bar0)/(ST.song.beat*M)), row=measEls[i]?.parentElement; if(!row) continue;
+    const ci=document.createElement('div'); ci.className='row cirow'; ci.dataset.bar=i;
+    let h=`<div class="measure ci" aria-label="Count-in"><span class="sec">Count-in</span><div class="g m${M}">`;
+    for(let q=0;q<M;q++) h+=`<span class="ch" style="grid-column:${q+1}"></span><span class="bt${q?'':' one'}" style="grid-column:${q+1}"><b>${q+1}</b></span>`;
+    ci.innerHTML=h+'</div></div>'+'<div class="spacer"></div>'.repeat(Math.max(0,perLine-1)); row.before(ci); } } $('rows').classList.toggle('cho-only',choOnly); }
 function choStartBar(t){ const sp=chorusSpans(), s=sp.find(([a])=>Math.abs(a-0.03-t)<0.12); return s?Math.round((s[0]-ST.song.bar0)/(ST.song.beat*ST.meter)):null; }
 function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt) return; const t=offsetAt+(ctxNow()-startAt), sp=chorusSpans(); if(!sp.length) return;
   if(sp.some(([a,b])=>t>=a-0.2&&t<b)) return;
@@ -619,7 +627,7 @@ function setupPlayer(){
   (function loop(){ if(playing){ choCheck(); update(false); } requestAnimationFrame(loop); })();
   update(true);
 }
-let lastBar=-2,lastBeat=-1,liveCh=null,aheadRow=null,qsJob=0,ciBar=null,ciUntil=0,lastCi=false;
+let lastBar=-2,lastBeat=-1,liveCh=null,aheadRow=null,qsJob=0,lastKeyB=null,ciBar=null,ciUntil=0,lastCi=false;
 // fast eased scroll (~0.3 s) that keeps up with the music; instant if the viewer prefers reduced motion
 function quickScroll(y){ y=Math.max(0,Math.min(y,document.documentElement.scrollHeight-innerHeight)); const y0=window.scrollY, d=y-y0; if(Math.abs(d)<4) return;
   if(matchMedia('(prefers-reduced-motion: reduce)').matches){ window.scrollTo(0,y); return; }
@@ -632,14 +640,15 @@ function update(force){
   let bar=Math.floor((t-song.bar0)/(P*M)), beat=((Math.floor((t-song.bar0)/P)%M)+M)%M;
   const ci=playing && ciBar!=null && ctxNow()<ciUntil; // one-bar count-in before a chorus: show the chorus's first bar counting down
   if(ci){ bar=ciBar; beat=Math.max(0,Math.min(M-1, M-Math.ceil((ciUntil-ctxNow())/P-1e-6))); }
-  if(bar!==lastBar||force){
+  const ciEl=ci?document.querySelector(`#rows .cirow[data-bar="${ciBar}"] .measure`):null, curEl=ciEl||measEls[bar], key=ciEl?'ci'+bar:bar;
+  if(key!==lastBar||force){
     document.querySelectorAll('.measure.cur').forEach(e=>e.classList.remove('cur'));
-    const el=measEls[bar];
+    const el=curEl;
     if(el && el.parentElement===aheadRow) aheadRow=null;
     if(el){ el.classList.add('cur'); if(playing||force){ const r=el.getBoundingClientRect(), top=document.querySelector('.transport').getBoundingClientRect().bottom, bottom=$('editor').hidden?innerHeight:$('editor').getBoundingClientRect().top;
       if(r.top<top+8||r.bottom>bottom-16) quickScroll(window.scrollY+r.top-top-10); } }
     $('where').textContent= ci||bar<0?'Count-in': bar>=song.bars.length?'End': `${song.bars[bar].sec||''} · bar ${bar+1}`;
-    lastBar=bar;
+    lastBar=key;
   }
   // near the end of the last bar on a line, glide the next line up under the player so you can read ahead
   if(playing && bar>=0 && bar+1<measEls.length){ const el=measEls[bar], nx=measEls[bar+1];
@@ -649,9 +658,9 @@ function update(force){
         quickScroll(window.scrollY+nx.parentElement.getBoundingClientRect().top-top-10); } } }
   if(ci && $('where').textContent!=='Count-in') $('where').textContent='Count-in';
   if(!ci && lastCi){ lastCi=false; $('where').textContent=`${song.bars[bar]?.sec||''} · bar ${bar+1}`; } if(ci) lastCi=true;
-  if(beat!==lastBeat||force){
+  if(beat!==lastBeat||key!==lastKeyB||force){ lastKeyB=key;
     document.querySelectorAll('.bt.live').forEach(e=>e.classList.remove('live'));
-    measEls[bar]?.querySelectorAll('.bt')[beat]?.classList.add('live');
+    curEl?.querySelectorAll('.bt')[beat]?.classList.add('live');
     [...$('beats').children].forEach((d,k)=>d.classList.toggle('on',bar>=-1&&k===beat));
     lastBeat=beat;
   }

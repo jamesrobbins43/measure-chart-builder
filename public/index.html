@@ -565,12 +565,16 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   const grp=opt.compound?3:2; // compound meters group eighths in threes
   const startBonus=i=>{ const p=pos(i); if(p%sub) return -0.3; const pb=p/sub; return pb===0?0.35:((meterBeats===4&&pb===2)||(opt.compound&&pb%3===0))?0.12:-0.08; };
   const durBonus=d=>(d%sub? -0.05 : (d/sub)%meterBeats===0?0.12:(d/sub)%grp===0?0.04:0);
-  const NEG=-1e9, lam=0.0, REP=opt.rep??0.8, STR=(opt.stretch??0.08)/sub;
-  const sylls=events.map(e=>e.lines.filter(l=>!l.pickup).reduce((a,l)=>a+l.reduce((x,w)=>x+syl(w),0),0));
+  const NEG=-1e9, lam=0.0, REP=opt.rep??0.8, STR0=(opt.stretch??0.08)/sub;
+  const sylls=events.map(e=>e.lines.reduce((a,l)=>a+l.reduce((x,w)=>x+syl(w),0),0)); // pickups into the next line are sung during this chord too
   // a sung line rarely takes much longer than ~0.6 s a syllable; past that, holding the chord costs a little each beat
   const Pb=S.n>1?(S.beats[1]-S.beats[0])*sub:0.6, SPS=opt.secPerSyl??0.6;
+  const STR=STR0*Math.min(1,Pb*sub/0.6); // per second, not per beat, so short beats (6/8 eighths) don't make holding a chord dearer
   const maxNat=sylls.map((n,j)=>events[j].quick? sub : (n? Math.max(4,n*SPS/Pb) : 2*meterBeats)*sub);
   const minD=sylls.map(n=>Math.max(1,Math.ceil(n*0.16/Pb*sub))); // no faster than ~6 syllables a second
+  // a chord line with no words (intro, interlude) is usually played a bar per chord, even when a bar is a rest
+  const secOf=events.map(e=>e.sec+'/'+e.pass), words=e=>e.lines.some(l=>!l.pickup&&l.length), bare=events.map((e0,j)=>{ if(words(e0)||e0.quick) return false; // only short all-instrumental sections (busy instrumentals change chords mid-bar)
+    const same=events.filter((e,k)=>secOf[k]===secOf[j]); return same.length<=4 && same.every(e=>!e.quick && !words(e)) ? same.length : 0; }), BF=0.4, barFit=(d,n)=>(d===meter?BF:(n<4&&d%meter===0)?0:-1) // four chords written for a bare line = four bars;
   const quick=events.map(e=>!!e.quick), afterQuick=events.map((e,j)=>j>0&&!!events[j-1].quick);
   // a section can be played again right after itself (charts often write a repeat once)
   const firstOf=new Int32Array(N).fill(-1), lastOf=new Int32Array(N).fill(-1);
@@ -591,7 +595,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
       if(j===0){ const q=barQ(a); const i=at(0,a,q); arrV[i]=lam*a; arrF[i]=-1; arrQ[i]=q; continue; }
       if(!isStart(j)){ for(let q=0;q<Q;q++){ const v=dp[at(j-1,a,q)]; if(v>NEG/2){ const i=at(j,a,q); arrV[i]=v; arrF[i]=j-1; arrQ[i]=q; } } continue; }
       const qn=barQ(a), onBar=((a-downPhase)%meter+meter)%meter===0, i=at(j,a,qn);
-      const srcs=[[j-1,0]]; if(repSrc[j]>=0) srcs.push([repSrc[j],REP]);
+      const srcs=[[j-1,0]]; if(repSrc[j]>=0){ let nb=0; for(let k=j;k<N&&firstOf[k]===j;k++) if(bare[k]) nb++; srcs.push([repSrc[j],REP+BF*nb]); } // a repeat mustn't pay for itself with the bar-per-chord bonus
       for(const [k,cost] of srcs) for(let q=0;q<Q;q++){ const v0=dp[at(k,a,q)]; if(v0<=NEG/2) continue;
         const v=v0-cost-(onBar&&q===qn?0:PH); if(v>arrV[i]){ arrV[i]=v; arrF[i]=k; arrQ[i]=q; } }
     }
@@ -603,7 +607,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
       for(let q=0;q<Q;q++){
         let best=NEG,bd=0,bf=-1,bq=0;
         for(let d=minD[j];d<=dm;d++){ const a=b-d, ia=at(j,a,q), pv=arrV[ia]; if(pv<=NEG/2) continue;
-          const v=pv+(P[b]-P[a])+(afterQuick[j]?0:startBonus(a))+(quick[j]?0:durBonus(d))-(d>maxNat[j]?(quick[j]?0.15:STR)*(d-maxNat[j]):0); if(v>best){best=v;bd=d;bf=arrF[ia];bq=arrQ[ia];} }
+          const v=pv+(P[b]-P[a])+(afterQuick[j]?0:startBonus(a))+(quick[j]?0:durBonus(d))+(bare[j]?barFit(d,bare[j]):0)-(d>maxNat[j]?(quick[j]?0.15:STR)*(d-maxNat[j]):0); if(v>best){best=v;bd=d;bf=arrF[ia];bq=arrQ[ia];} }
         const io=at(j,b,q); dp[io]=best; bpD[io]=bd; bpP[io]=bf; bpQ[io]=bq;
       }
     }

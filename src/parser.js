@@ -2,7 +2,7 @@
 const SECTION_RE=/^(intro|verse|pre[- ]?chorus|chorus|post[- ]?chorus|bridge|interlude|instrumental|refrain|tag|outro|ending|turnaround|vamp|breakdown|channel|hook|solo|coda)\b\s*(\d+)?\s*(?:\(?\s*(\d+)\s*x\s*\)?)?\s*:?\s*$/i;
 const CHORD_RE=/^(N\.?C\.?|[A-G][b#♭♯]?(?:maj|min|m|dim|aug|sus|add|M|°|ø|\+)?\d*(?:sus\d?|add\d+|maj\d+|b\d+|#\d+|\(.+?\))*(?:\/[A-G][b#♭♯]?)?)$/;
 const isChord=t=>CHORD_RE.test(t.replace(/^\((.+)\)$/,'$1').replace(/[♭]/g,'b').replace(/[♯]/g,'#'));
-function titleCase(s){return s.toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase()).replace(/\bX\b/,'x')}
+function titleCase(s){return s.toLowerCase().replace(/(^|[^a-z0-9'’])([a-z])/g,(m,p,c)=>p+c.toUpperCase()).replace(/\bX\b/,'x')}
 
 // pages: [{width, height, items:[{str,x,y,w,h}]}]  (y = PDF baseline, up is larger)
 function pdfItemsToLines(pages){

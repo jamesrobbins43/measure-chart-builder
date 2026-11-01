@@ -50,7 +50,7 @@ textarea{width:100%;box-sizing:border-box;min-height:180px;font-family:var(--f-m
 .opts label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
 .opts input[type=number]{width:90px}
 .steps{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:4px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
-.steps li.done{color:var(--ok)} .steps li.run{color:var(--ink)} .steps li.err{color:#d23a3a}
+.steps li.note{color:var(--muted,#666)} .linkbtn{background:none;border:0;padding:0;color:var(--accent,#2b54d6);text-decoration:underline;cursor:pointer;font:inherit} .steps li.done{color:var(--ok)} .steps li.run{color:var(--ink)} .steps li.err{color:#d23a3a}
 .example{margin-top:28px;border-top:1px solid var(--rule);padding-top:16px;font-size:13px;color:var(--muted);max-width:70ch;line-height:1.5}
 
 /* transport */
@@ -247,7 +247,7 @@ function setupDrop(dropId,inputId,nameId,kind){
   d.addEventListener('dragover',e=>{e.preventDefault(); d.classList.add('over');});
   d.addEventListener('dragleave',()=>d.classList.remove('over'));
   d.addEventListener('drop',e=>{e.preventDefault(); d.classList.remove('over'); if(e.dataTransfer.files[0]) take(e.dataTransfer.files[0]);});
-  function take(f){ ST[kind]=f; $(nameId).textContent=f.name; d.classList.add('has'); if(kind==='chartFile'){ ST.chartMode='pdf'; $('chartText').hidden=true; } ready(); }
+  function take(f){ cancelBuild(); ST[kind]=f; $(nameId).textContent=f.name; d.classList.add('has'); if(kind==='chartFile'){ ST.chartMode='pdf'; $('chartText').hidden=true; } ready(); }
 }
 setupDrop('dropSong','songFile','songName','songFile');
 setupDrop('dropChart','chartFile','chartName','chartFile');
@@ -273,35 +273,40 @@ async function readPdf(file){
 let AC=null;
 const getAC=()=>AC||(AC=new (window.AudioContext||window.webkitAudioContext)());
 $('buildBtn').addEventListener('click',build);
+let buildGen=0, building=false; const CANCEL={cancel:true};
+// picking a new file (or pressing "Load a different song") while a build is running stops it
+function cancelBuild(){ if(!building) return; buildGen++; building=false; ST.restore=null; steps.innerHTML=''; ready(); }
 async function build(){
-  $('buildBtn').disabled=true; steps.innerHTML='';
+  $('buildBtn').disabled=true; steps.innerHTML=''; const my=++buildGen; building=true; const chk=v=>{ if(my!==buildGen) throw CANCEL; return v; };
+  if(ST.restore){ const li=document.createElement('li'); li.className='note'; li.innerHTML='Reopening your last song. <button type="button" class="linkbtn" id="otherSong">Load a different song</button>'; steps.appendChild(li);
+    li.querySelector('button').addEventListener('click',()=>{ forgetLast(); cancelBuild(); clearPicked(); }); }
   try{
     let s=step('Reading the chart');
-    const parsed = ST.chartMode==='text' ? parseLines(textToLines($('chartText').value)) : await readPdf(ST.chartFile);
+    const parsed = ST.chartMode==='text' ? parseLines(textToLines($('chartText').value)) : chk(await readPdf(ST.chartFile));
     if(!parsed.sections.length || !parsed.sections.some(x=>x.events.some(e=>e.chord))) throw new Error("couldn't find sections and chords in that chart. Section names (Verse 1, Chorus...) need to be on their own lines, with chords on the line above the lyrics.");
     ST.meta=parsed.meta; ST.sections=parsed.sections;
     s.done(`Chart: ${parsed.sections.length} sections${parsed.meta.key?', key '+parsed.meta.key:''}${parsed.meta.bpm?', '+parsed.meta.bpm+' BPM':''}`);
     s=step('Decoding the song');
-    const ab=await ST.songFile.arrayBuffer();
-    ST.audio=await new Promise((res,rej)=>getAC().decodeAudioData(ab,res,rej));
+    const ab=chk(await ST.songFile.arrayBuffer());
+    ST.audio=await new Promise((res,rej)=>getAC().decodeAudioData(ab,res,rej)); chk();
     const sr=22050, off=new OfflineAudioContext(2,Math.ceil(ST.audio.duration*sr),sr);
     const src=off.createBufferSource(); src.buffer=ST.audio; src.connect(off.destination); src.start();
-    { const st=await off.startRendering(), L=st.getChannelData(0), R=st.getChannelData(1), n=L.length; ST.mono=new Float32Array(n); let dif=0;
+    { const st=chk(await off.startRendering()), L=st.getChannelData(0), R=st.getChannelData(1), n=L.length; ST.mono=new Float32Array(n); let dif=0;
       for(let i=0;i<n;i++){ ST.mono[i]=(L[i]+R[i])*0.5; if(i%50===0) dif+=Math.abs(L[i]-R[i]); } ST.st22=dif>1e-3*n/50?[L,R]:null; }
     s.done(`Song: ${fmt(ST.audio.duration)}`);
-    s=step('Listening for the beat'); ST.O=await onsetEnvelope(ST.mono,sr,p=>s.prog(p)); s.done();
-    s=step('Listening for the chords'); ST.Cf=await chromaFrames(ST.mono,sr,p=>s.prog(p)); s.done();
-    ST.vox=null; if(ST.st22){ s=step('Listening for where the singing starts'); try{ ST.vox=await vocalOnsets(ST.st22[0],ST.st22[1],sr,p=>s.prog(p)); s.done(); }catch(e){ console.warn(e); s.done(); } ST.st22=null; }
+    s=step('Listening for the beat'); ST.O=chk(await onsetEnvelope(ST.mono,sr,p=>s.prog(p))); s.done();
+    s=step('Listening for the chords'); ST.Cf=chk(await chromaFrames(ST.mono,sr,p=>s.prog(p))); s.done();
+    ST.vox=null; if(ST.st22){ s=step('Listening for where the singing starts'); try{ ST.vox=chk(await vocalOnsets(ST.st22[0],ST.st22[1],sr,p=>s.prog(p))); s.done(); }catch(e){ if(e===CANCEL) throw e; console.warn(e); s.done(); } ST.st22=null; }
     { const [tn,td]=(parsed.meta.time||'4/4').split('/').map(Number); ST.meter=+$('meterIn').value || tn || 4; ST.den=td||4;
       // 6/8, 9/8, 12/8: count and click in eighth notes, accent every third
       ST.compound=ST.den===8 && ST.meter%3===0 && ST.meter>3; }
     ST.events=expandEvents(ST.sections); ST.env=songEnv(ST.mono,sr); ST.chartSig=chartSig(ST.events); ST.libId=null; ST.libDate=null;
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
       Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, libId:v.libId||null, libDate:v.libDate||null});
-      s=step('Putting back your last chart'); s.done('Reopened your last song'); ST.showRec=false; realign(false); return; }
+      s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; realign(false); return; }
     s=step('Checking the song library');
-    const hit=await libFind(ST.audio.duration,ST.env);
-    if(hit && applyLib(hit)){ s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); ST.showRec=false; realign(false); return; }
+    const hit=chk(await libFind(ST.audio.duration,ST.env));
+    if(hit && applyLib(hit)){ s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); building=false; ST.showRec=false; realign(false); return; }
     if(hit===undefined) steps.lastElementChild?.remove(); else s.done('Not in the library yet');
     s=step('Finding the tempo');
     const hint=+$('bpmIn').value || parsed.meta.bpm || 0;
@@ -311,11 +316,11 @@ async function build(){
     s.done(`Tempo: ${(60/G.P).toFixed(1)} BPM`);
     s=step('Lining the chart up with the song');
     await new Promise(r=>setTimeout(r,20));
-    await fitSearch([G.beat0%G.P, (G.beat0+G.P/2)%G.P]);
+    await fitSearch([G.beat0%G.P, (G.beat0+G.P/2)%G.P]); chk(); building=false;
     ST.showRec=false;
     s.done('Chart lined up'+(ST.shift?` (recording is in ${recKey()}, chart is in ${ST.meta.key||'another key'})`:''));
     finish();
-  }catch(e){ console.error(e); const li=[...steps.children].pop(); (li?{err:t=>{li.className='err';li.textContent='✕ '+t;}}:step('')).err('Stopped: '+(e.message||e)); $('buildBtn').disabled=false; }
+  }catch(e){ if(e===CANCEL) return; building=false; console.error(e); const li=[...steps.children].pop(); (li?{err:t=>{li.className='err';li.textContent='✕ '+t;}}:step('')).err('Stopped: '+(e.message||e)); $('buildBtn').disabled=false; }
 }
 // ---------- song library: saved fixes, shared through the artifact's db ----------
 let DB=null; (async()=>{ try{ DB=await window.claude?.use?.('db'); }catch(e){ DB=null; } })();
@@ -751,6 +756,7 @@ function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
   if(r.bpmIn) $('bpmIn').value=r.bpmIn; if(r.meterIn) $('meterIn').value=r.meterIn;
   ST.restore=r.state&&r.state.P>0?r.state:null; ready(); build();
 }catch(e){ /* storage blocked: start fresh */ } })();
+function clearPicked(){ ST.songFile=null; ST.chartFile=null; ST.chartMode='pdf'; for(const [d,n] of [['dropSong','songName'],['dropChart','chartName']]){ $(d).classList.remove('has'); $(n).textContent=''; } $('chartText').hidden=true; $('chartText').value=''; $('songFile').value=''; $('chartFile').value=''; ready(); }
 $('newBtn').addEventListener('click',()=>{ forgetLast(); if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
 
 // ---------- downloads ----------

@@ -120,7 +120,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .lyr.tight>span{padding-right:.25em}
 .lyr.wrap{flex-wrap:wrap}
 #choBtn[aria-pressed="true"]{background:var(--chorus);border-color:var(--chorus);color:#fff}
-.cho-only .measure.nc{opacity:.38}
+.cho-only .row.nc-row{display:none}
 .lyr>span{flex:0 0 auto;max-width:100%;padding:0 .45em 0 3px;box-sizing:border-box}
 .ly{grid-row:2;line-height:1.25;padding:2px .3em 4px 3px;min-height:1.4em;align-self:start;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:break-word}
 .bt{grid-row:3;align-self:end;margin-top:3px;padding-left:1px;line-height:1}
@@ -487,7 +487,7 @@ function makeClick(){
   let k0=Math.ceil((0-song.bar0)/P - 1e-6); // first beat at or after 0
   for(let k=k0; song.bar0+k*P<endT+0.01; k++){ const t=song.bar0+k*P; if(t<0) continue; const s=Math.round(t*sr), q=((k%M)+M)%M, c=q===0?hi:(ST.compound&&q%3===0)?mid:lo; for(let i=0;i<c.length&&s+i<n;i++) d[s+i]+=c[i]; }
   clickBuf=buf;
-  if(playing) startAtTime(songTime()+userSync/1000);
+  if(playing) restartHere();
 }
 function buildGraph(ac,dest,songBuffer,clickBuffer,vocal,clickGain,stems){
   // vocals live mostly in the centre: subtract part of the centre (200 Hz–6 kHz) from both sides
@@ -540,13 +540,13 @@ async function startStems(){
     for(const [id,out,x,what] of [['drumVol','drumV',R.dL,'drums'],['bassVol','bassV',R.bass,'bass'],['gtrVol','gtrV',R.gL,'guitars panned left or right']]){
       if(rms(x)/ref<0.08){ $(id).value=100; $(id).disabled=true; $(out).textContent='none'; $(id).closest('.strip').title=`No ${what} found in this song`; }
       else $(id).closest('.strip').title=''; }
-    if(playing) startAtTime(songTime()+userSync/1000);
+    if(playing) restartHere();
   }catch(e){ console.error(e); if(job===stemJob){ ['drumV','bassV','gtrV','restV'].forEach(id=>$(id).textContent='n/a'); } }
 }
 function showMix(){ const m=mixGains(); const lock=id=>$(id).disabled&&ST.stems; if(!lock('drumVol')) $('drumV').textContent=Math.round(m.d*100)+'%'; if(!lock('bassVol')) $('bassV').textContent=Math.round(m.b*100)+'%'; if(!lock('gtrVol')) $('gtrV').textContent=Math.round(m.g*100)+'%'; $('restV').textContent=Math.round(m.o*100)+'%'; }
 function ctxNow(){ const ac=getAC(); if(ac.getOutputTimestamp){ const ts=ac.getOutputTimestamp(); if(ts.contextTime>0) return ts.contextTime+(performance.now()-ts.performanceTime)/1000; } return ac.currentTime-(ac.outputLatency||ac.baseLatency||0); }
 function songTime(){ return (playing? offsetAt+(ctxNow()-startAt) : pausedAt) - userSync/1000; }
-function stopSrc(){ if(nodes){ for(const n of [nodes.s,nodes.c,nodes.ds,nodes.bsrc,nodes.gsrc]) if(n){ try{n.onended=null;n.stop();}catch(e){} } nodes=null; } }
+function stopSrc(){ ciBar=null; if(nodes){ for(const n of [nodes.s,nodes.c,nodes.ds,nodes.bsrc,nodes.gsrc,nodes.ci]) if(n){ try{n.onended=null;n.stop();}catch(e){} } nodes=null; } }
 // the vocal cut only works while someone is singing (bars with lyrics), so instrumental parts keep centred guitars and keys
 function singSpans(){
   const song=ST.song; if(!song) return []; const BAR=song.beat*ST.meter, out=[];
@@ -565,15 +565,27 @@ function scheduleCut(param,ctxT0,songT0,level){
     param.setTargetAtTime(0, ctxT0+(b-songT0), 0.06); }
 }
 function vocalLevel(){ return +$('vocal').value/100; } function clickLevel(){ return (+$('clickVol').value/100)**1.5*1.4; }
-function startAtTime(t){
+function startAtTime(t,countBar,keep){
   const ac=getAC(); stopSrc();
   nodes=buildGraph(ac,ac.destination,ST.audio,clickBuf,vocalLevel(),clickLevel(),ST.stems);
-  startAt=ac.currentTime+0.06; offsetAt=Math.max(0,Math.min(t,ST.audio.duration-0.1));
+  offsetAt=Math.max(0,Math.min(t,ST.audio.duration-0.1)); ciBar=null;
+  if(countBar!=null){ // one bar of clicks first, landing on the downbeat of countBar
+    const P=ST.song.beat, M=ST.meter, down=ST.song.bar0+countBar*P*M, now=ac.currentTime+0.06;
+    const c0=keep?ciUntil-M*P:now; // keep: carry on a count-in that's already running
+    ciUntil=c0+M*P; startAt=ciUntil-(down-offsetAt); ciBar=countBar; nodes.ci=countInSource(ac,Math.max(c0,now),Math.max(0,now-c0)); }
+  else startAt=ac.currentTime+0.06;
   scheduleCut(nodes.cut.gain, startAt, offsetAt, vocalLevel());
   nodes.start(startAt,offsetAt);
   nodes.s.onended=()=>{ if(playing && songTime()>=ST.audio.duration-0.3){ playing=false; pausedAt=0; $('play').textContent='Play'; update(true);} };
   playing=true; $('play').textContent='Pause';
 }
+// rebuild the audio graph without losing our place (keeps a count-in going if one is running)
+function restartHere(){ if(ciBar!=null && getAC().currentTime<ciUntil-0.1) startAtTime(offsetAt,ciBar,true); else startAtTime(songTime()+userSync/1000); }
+// count-in clicks (always audible, even with the click turned off)
+function countInSource(ac,when,skip=0){ const sr=ac.sampleRate, P=ST.song.beat, M=ST.meter, n=Math.ceil((M*P+0.1)*sr), buf=ac.createBuffer(1,n,sr), d=buf.getChannelData(0);
+  for(let k=0;k<M;k++){ const f=k===0?1800:(ST.compound&&k%3===0)?1500:1200, amp=k===0?0.6:0.42, s0=Math.round(k*P*sr);
+    for(let i=0;i<sr*0.04&&s0+i<n;i++){ const tt=i/sr; d[s0+i]+=amp*Math.sin(2*Math.PI*f*tt)*Math.exp(-tt*80)*Math.min(1,i/20); } }
+  const src=ac.createBufferSource(); src.buffer=buf; const g=ac.createGain(); g.gain.value=Math.max(clickLevel(),0.5); src.connect(g); g.connect(ac.destination); src.start(when,skip); return src; }
 function pause(){ pausedAt=songTime()+userSync/1000; playing=false; stopSrc(); $('play').textContent='Play'; update(true); }
 function seekBar(i){ const t=Math.max(0,ST.song.bar0+i*ST.song.beat*ST.meter-0.05); getAC().resume().then(()=>startAtTime(t)); pausedAt=t; update(true); }
 // choruses only: play each chorus and jump straight to the next one
@@ -582,15 +594,17 @@ function chorusBars(){ const song=ST.song, on=new Set(); if(!song) return on; le
   song.bars.forEach((b,i)=>{ if(b.section) cur=/chorus/i.test(b.section) && !/pre/i.test(b.section); if(cur) on.add(i); }); return on; }
 function chorusSpans(){ const song=ST.song, BAR=song.beat*ST.meter, out=[]; const on=chorusBars();
   [...on].sort((a,b)=>a-b).forEach(i=>{ const a=song.bar0+i*BAR, b=a+BAR, l=out[out.length-1]; if(l && Math.abs(l[1]-a)<0.01) l[1]=b; else out.push([a,b]); }); return out; }
-function markChoruses(){ const on=chorusBars(); measEls.forEach((m,i)=>m.classList.toggle('nc',!on.has(i))); $('rows').classList.toggle('cho-only',choOnly); }
-function choCheck(){ if(!choOnly||!playing) return; const t=offsetAt+(ctxNow()-startAt), sp=chorusSpans(); if(!sp.length) return;
+function markChoruses(){ const on=chorusBars(); measEls.forEach((m,i)=>m.classList.toggle('nc',!on.has(i)));
+  document.querySelectorAll('#rows .row').forEach(r=>r.classList.toggle('nc-row',![...r.querySelectorAll('.measure')].some(m=>!m.classList.contains('nc')))); $('rows').classList.toggle('cho-only',choOnly); }
+function choStartBar(t){ const sp=chorusSpans(), s=sp.find(([a])=>Math.abs(a-0.03-t)<0.12); return s?Math.round((s[0]-ST.song.bar0)/(ST.song.beat*ST.meter)):null; }
+function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt) return; const t=offsetAt+(ctxNow()-startAt), sp=chorusSpans(); if(!sp.length) return;
   if(sp.some(([a,b])=>t>=a-0.2&&t<b)) return;
   const nx=sp.find(([a])=>a>t);
-  if(nx) startAtTime(Math.max(0,nx[0]-0.03)); else { pause(); pausedAt=Math.max(0,sp[0][0]-0.03); update(true); } }
+  if(nx) startAtTime(Math.max(0,nx[0]-0.03), Math.round((nx[0]-ST.song.bar0)/(ST.song.beat*ST.meter))); else { pause(); pausedAt=Math.max(0,sp[0][0]-0.03); update(true); } }
 let playerReady=false;
 function setupPlayer(){
   if(playerReady) { update(true); return; } playerReady=true;
-  $('play').addEventListener('click',()=>{ if(playing) pause(); else getAC().resume().then(()=>startAtTime(pausedAt)); });
+  $('play').addEventListener('click',()=>{ if(playing) pause(); else getAC().resume().then(()=>{ const sb=choOnly?choStartBar(pausedAt):null; startAtTime(pausedAt,sb); }); });
   const sv=$('sync'); sv.value=userSync; const showSync=()=>$('syncV').textContent=`${userSync>0?'+':''}${userSync} ms`; showSync();
   sv.addEventListener('input',()=>{ userSync=+sv.value; showSync(); try{localStorage.setItem('mcb-sync',userSync)}catch(e){} update(true); });
   $('clickVol').addEventListener('input',()=>{ const v=+$('clickVol').value; $('clickV').textContent=v?v+'%':'off'; if(nodes) nodes.cg.gain.value=clickLevel(); });
@@ -601,11 +615,11 @@ function setupPlayer(){
   $('vocal').addEventListener('input',()=>{ const v=+$('vocal').value; $('vocalV').textContent=v+'%'; if(nodes){ const ac=getAC(); scheduleCut(nodes.cut.gain, ac.currentTime, offsetAt+(ac.currentTime-startAt), vocalLevel()); } });
   $('choBtn').addEventListener('click',()=>{ choOnly=!choOnly; $('choBtn').setAttribute('aria-pressed',String(choOnly)); markChoruses();
     if(choOnly && !chorusSpans().length){ choOnly=false; $('choBtn').setAttribute('aria-pressed','false'); markChoruses(); $('choBtn').title='No chorus found in this chart'; }
-    if(choOnly && !playing){ const sp=chorusSpans(), t=pausedAt; if(!sp.some(([a,b])=>t>=a-0.2&&t<b)){ const nx=sp.find(([a])=>a>t)||sp[0]; pausedAt=Math.max(0,nx[0]-0.03); update(true); } } });
+    if(choOnly && !playing){ const sp=chorusSpans(), t=pausedAt; if(!sp.some(([a,b])=>t>=a-0.2&&t<b)){ const nx=sp.find(([a])=>a>t)||sp[0]; pausedAt=Math.max(0,nx[0]-0.03); } } update(true); });
   (function loop(){ if(playing){ choCheck(); update(false); } requestAnimationFrame(loop); })();
   update(true);
 }
-let lastBar=-2,lastBeat=-1,liveCh=null,aheadRow=null,qsJob=0;
+let lastBar=-2,lastBeat=-1,liveCh=null,aheadRow=null,qsJob=0,ciBar=null,ciUntil=0,lastCi=false;
 // fast eased scroll (~0.3 s) that keeps up with the music; instant if the viewer prefers reduced motion
 function quickScroll(y){ y=Math.max(0,Math.min(y,document.documentElement.scrollHeight-innerHeight)); const y0=window.scrollY, d=y-y0; if(Math.abs(d)<4) return;
   if(matchMedia('(prefers-reduced-motion: reduce)').matches){ window.scrollTo(0,y); return; }
@@ -615,29 +629,33 @@ function update(force){
   if(!ST.song) return;
   const song=ST.song, M=ST.meter, P=song.beat, t=songTime();
   $('time').textContent=`${fmt(t)} / ${fmt(ST.audio.duration)}`;
-  const bar=Math.floor((t-song.bar0)/(P*M)), beat=((Math.floor((t-song.bar0)/P)%M)+M)%M;
+  let bar=Math.floor((t-song.bar0)/(P*M)), beat=((Math.floor((t-song.bar0)/P)%M)+M)%M;
+  const ci=playing && ciBar!=null && ctxNow()<ciUntil; // one-bar count-in before a chorus: show the chorus's first bar counting down
+  if(ci){ bar=ciBar; beat=Math.max(0,Math.min(M-1, M-Math.ceil((ciUntil-ctxNow())/P-1e-6))); }
   if(bar!==lastBar||force){
     document.querySelectorAll('.measure.cur').forEach(e=>e.classList.remove('cur'));
     const el=measEls[bar];
     if(el && el.parentElement===aheadRow) aheadRow=null;
     if(el){ el.classList.add('cur'); if(playing||force){ const r=el.getBoundingClientRect(), top=document.querySelector('.transport').getBoundingClientRect().bottom, bottom=$('editor').hidden?innerHeight:$('editor').getBoundingClientRect().top;
       if(r.top<top+8||r.bottom>bottom-16) quickScroll(window.scrollY+r.top-top-10); } }
-    $('where').textContent= bar<0?'Count-in': bar>=song.bars.length?'End': `${song.bars[bar].sec||''} · bar ${bar+1}`;
+    $('where').textContent= ci||bar<0?'Count-in': bar>=song.bars.length?'End': `${song.bars[bar].sec||''} · bar ${bar+1}`;
     lastBar=bar;
   }
   // near the end of the last bar on a line, glide the next line up under the player so you can read ahead
   if(playing && bar>=0 && bar+1<measEls.length){ const el=measEls[bar], nx=measEls[bar+1];
-    if(el && nx && nx.parentElement!==el.parentElement && aheadRow!==nx.parentElement){
+    if(!ci && el && nx && nx.parentElement!==el.parentElement && aheadRow!==nx.parentElement && nx.parentElement.offsetParent){
       const left=(bar+1)*P*M-(t-song.bar0), lead=Math.max(P*(ST.compound?2:1), Math.min(P*M*0.5, 0.9));
       if(left<=lead){ aheadRow=nx.parentElement; const top=document.querySelector('.transport').getBoundingClientRect().bottom;
         quickScroll(window.scrollY+nx.parentElement.getBoundingClientRect().top-top-10); } } }
+  if(ci && $('where').textContent!=='Count-in') $('where').textContent='Count-in';
+  if(!ci && lastCi){ lastCi=false; $('where').textContent=`${song.bars[bar]?.sec||''} · bar ${bar+1}`; } if(ci) lastCi=true;
   if(beat!==lastBeat||force){
     document.querySelectorAll('.bt.live').forEach(e=>e.classList.remove('live'));
     measEls[bar]?.querySelectorAll('.bt')[beat]?.classList.add('live');
     [...$('beats').children].forEach((d,k)=>d.classList.toggle('on',bar>=-1&&k===beat));
     lastBeat=beat;
   }
-  const look=t+0.08; let idx=-1; for(let k=0;k<timeline.length;k++){ if(timeline[k].t<=look) idx=k; else break; }
+  const look=ci?Math.max(t+0.08, song.bar0+ciBar*P*M+0.01):t+0.08; let idx=-1; for(let k=0;k<timeline.length;k++){ if(timeline[k].t<=look) idx=k; else break; }
   const cur=timeline[idx], nx=timeline[idx+1];
   $('now').innerHTML=cur?chordHTML(cur.name):'–'; $('next').innerHTML=nx?chordHTML(nx.name):'–';
   const el=cur?measEls[cur.bar]?.querySelector(`.c1[data-k="${cur.k}"]`):null;

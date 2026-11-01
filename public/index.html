@@ -796,7 +796,7 @@ function setupDrop(dropId,inputId,nameId,kind){
   d.addEventListener('dragover',e=>{e.preventDefault(); d.classList.add('over');});
   d.addEventListener('dragleave',()=>d.classList.remove('over'));
   d.addEventListener('drop',e=>{e.preventDefault(); d.classList.remove('over'); if(e.dataTransfer.files[0]) take(e.dataTransfer.files[0]);});
-  function take(f){ cancelBuild(); ST[kind]=f; $(nameId).textContent=f.name; d.classList.add('has'); if(kind==='chartFile'){ ST.chartMode='pdf'; $('chartText').hidden=true; } ready(); }
+  function take(f){ cancelBuild(); if(ST.restore){ ST.restore=null; $('reopenNote')?.remove(); } ST[kind]=f; $(nameId).textContent=f.name; d.classList.add('has'); if(kind==='chartFile'){ ST.chartMode='pdf'; $('chartText').hidden=true; } ready(); }
 }
 setupDrop('dropSong','songFile','songName','songFile');
 setupDrop('dropChart','chartFile','chartName','chartFile');
@@ -827,8 +827,6 @@ let buildGen=0, building=false; const CANCEL={cancel:true};
 function cancelBuild(){ if(!building) return; buildGen++; building=false; ST.restore=null; steps.innerHTML=''; ready(); }
 async function build(){
   $('buildBtn').disabled=true; steps.innerHTML=''; const my=++buildGen; building=true; const chk=v=>{ if(my!==buildGen) throw CANCEL; return v; };
-  if(ST.restore){ const li=document.createElement('li'); li.className='note'; li.innerHTML='Reopening your last song. <button type="button" class="linkbtn" id="otherSong">Load a different song</button>'; steps.appendChild(li);
-    li.querySelector('button').addEventListener('click',()=>{ forgetLast(); cancelBuild(); clearPicked(); }); }
   try{
     let s=step('Reading the chart');
     const parsed = ST.chartMode==='text' ? parseLines(textToLines($('chartText').value)) : chk(await readPdf(ST.chartFile));
@@ -1311,7 +1309,11 @@ function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
   if(r.chartMode==='text'){ ST.chartMode='text'; $('chartText').value=r.chartText; $('chartText').hidden=false; }
   else { ST.chartMode='pdf'; ST.chartFile=r.chart instanceof File?r.chart:new File([r.chart],r.chartName||'chart.pdf'); $('chartName').textContent=r.chartName||'chart'; $('dropChart').classList.add('has'); }
   if(r.bpmIn) $('bpmIn').value=r.bpmIn; if(r.meterIn) $('meterIn').value=r.meterIn;
-  ST.restore=r.state&&r.state.P>0?r.state:null; ready(); build();
+  ST.restore=r.state&&r.state.P>0?r.state:null; ready();
+  // don't build on its own: offer it (CJ found the automatic rebuild got in the way of loading a new song)
+  const nm=(r.songName||'your last song').replace(/\.[a-z0-9]+$/i,''), li=document.createElement('li'); li.className='note'; li.id='reopenNote';
+  li.innerHTML='<button type="button" class="primary" id="reopenBtn"></button> or choose a different song and chart above.'; li.querySelector('#reopenBtn').textContent='Reopen '+nm;
+  steps.innerHTML=''; steps.appendChild(li); li.querySelector('#reopenBtn').addEventListener('click',build);
 }catch(e){ /* storage blocked: start fresh */ } })();
 function clearPicked(){ ST.songFile=null; ST.chartFile=null; ST.chartMode='pdf'; for(const [d,n] of [['dropSong','songName'],['dropChart','chartName']]){ $(d).classList.remove('has'); $(n).textContent=''; } $('chartText').hidden=true; $('chartText').value=''; $('songFile').value=''; $('chartFile').value=''; ready(); }
 $('newBtn').addEventListener('click',()=>{ forgetLast(); if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });

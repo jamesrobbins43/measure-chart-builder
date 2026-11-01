@@ -1,0 +1,4 @@
+node_modules/
+.wrangler/
+*.f32
+*.mp3

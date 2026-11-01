@@ -20,5 +20,6 @@ t=t.replace(old,shim,1)
 # no downloads on the site (licensing)
 t=t.replace("let dl=null; (async()=>{ try{ dl=await window.claude?.use?.('downloads'); }catch(e){ dl=null; } })();","let dl=null;")
 assert '<div class="group" hidden>Download' in t
+t=t.replace('with a click track you can switch on and download.','with a click track you can switch on.')
 open(os.path.join(H,'public','index.html'),'w').write(t)
 print('ok',len(t))

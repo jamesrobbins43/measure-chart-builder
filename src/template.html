@@ -577,6 +577,7 @@ function startAtTime(t,countBar,keep){
   if(countBar!=null){ // one bar of clicks first, landing on the downbeat of countBar
     const P=ST.song.beat, M=ST.meter, down=ST.song.bar0+countBar*P*M, now=ac.currentTime+0.06;
     const c0=keep?ciUntil-M*P:now; // keep: carry on a count-in that's already running
+    if(!keep && down-offsetAt>M*P) offsetAt=down-M*P; // long lead-in before bar 1: start the audio with the count-in
     ciUntil=c0+M*P; startAt=ciUntil-(down-offsetAt); ciBar=countBar; nodes.ci=countInSource(ac,Math.max(c0,now),Math.max(0,now-c0)); }
   else startAt=ac.currentTime+0.06;
   scheduleCut(nodes.cut.gain, startAt, offsetAt, vocalLevel());
@@ -603,14 +604,20 @@ function markChoruses(){ const on=chorusBars(); measEls.forEach((m,i)=>m.classLi
   document.querySelectorAll('#rows .row').forEach(r=>r.classList.toggle('nc-row',![...r.querySelectorAll('.measure')].some(m=>!m.classList.contains('nc'))));
   // a count-in bar on its own line above each chorus
   document.querySelectorAll('#rows .cirow').forEach(r=>r.remove());
-  if(choOnly){ const M=ST.meter; for(const [a] of chorusSpans()){ const i=Math.round((a-ST.song.bar0)/(ST.song.beat*M)), row=measEls[i]?.parentElement; if(!row) continue;
-    const ci=document.createElement('div'); ci.className='row cirow'; ci.dataset.bar=i;
+  const M=ST.meter, addCi=(i,a,row,label,top)=>{
+    const ci=document.createElement('div'); ci.className='row cirow'+(top?' top':''); ci.dataset.bar=i;
     let h=`<div class="measure ci" aria-label="Count-in"><span class="sec">Count-in</span><div class="g m${M}">`;
     for(let q=0;q<M;q++) h+=`<span class="ch" style="grid-column:${q+1}"></span><span class="bt${q?'':' one'}" style="grid-column:${q+1}"><b>${q+1}</b></span>`;
     ci.innerHTML=h+'</div></div>'+'<div class="spacer"></div>'.repeat(Math.max(0,perLine-1)); row.before(ci);
-    const m=ci.querySelector('.measure'); m.tabIndex=0; m.setAttribute('role','button'); m.setAttribute('aria-label',`Count in to bar ${i+1}`);
+    const m=ci.querySelector('.measure'); m.tabIndex=0; m.setAttribute('role','button'); m.setAttribute('aria-label',label);
     const go=()=>{ const t=Math.max(0,a-0.03); pausedAt=t; getAC().resume().then(()=>startAtTime(t,i)); };
-    m.addEventListener('click',go); m.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); go(); } }); } } $('rows').classList.toggle('cho-only',choOnly); }
+    m.addEventListener('click',go); m.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); go(); } }); };
+  if(choOnly){ for(const [a] of chorusSpans()){ const i=Math.round((a-ST.song.bar0)/(ST.song.beat*M)), row=measEls[i]?.parentElement; if(row) addCi(i,a,row,`Count in to bar ${i+1}`); } }
+  else { const i=topBar(), row=measEls[0]?.parentElement; if(row) addCi(i,0.03,row,'Count in and play from the top',true); }
+  $('rows').classList.toggle('cho-only',choOnly); }
+// every song starts with one bar of count-in, landing on the first bar that starts after 0 s
+function topBar(){ const BAR=ST.song.beat*ST.meter; return Math.max(0,Math.ceil(-ST.song.bar0/BAR-1e-6)); }
+function atTop(t){ return t<=ST.song.bar0+topBar()*ST.song.beat*ST.meter+0.05; }
 function choStartBar(t){ const sp=chorusSpans(), s=sp.find(([a])=>Math.abs(a-0.03-t)<0.12); return s?Math.round((s[0]-ST.song.bar0)/(ST.song.beat*ST.meter)):null; }
 function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt) return; const t=offsetAt+(ctxNow()-startAt), sp=chorusSpans(); if(!sp.length) return;
   if(sp.some(([a,b])=>t>=a-0.2&&t<b)) return;
@@ -619,7 +626,7 @@ function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt) return; const t=of
 let playerReady=false;
 function setupPlayer(){
   if(playerReady) { update(true); return; } playerReady=true;
-  $('play').addEventListener('click',()=>{ if(playing) pause(); else getAC().resume().then(()=>{ const sb=choOnly?choStartBar(pausedAt):null; startAtTime(pausedAt,sb); }); });
+  $('play').addEventListener('click',()=>{ if(playing) pause(); else getAC().resume().then(()=>{ const sb=choOnly?choStartBar(pausedAt):atTop(pausedAt)?topBar():null; startAtTime(atTop(pausedAt)&&!choOnly?0:pausedAt,sb); }); });
   const sv=$('sync'); sv.value=userSync; const showSync=()=>$('syncV').textContent=`${userSync>0?'+':''}${userSync} ms`; showSync();
   sv.addEventListener('input',()=>{ userSync=+sv.value; showSync(); try{localStorage.setItem('mcb-sync',userSync)}catch(e){} update(true); });
   $('clickVol').addEventListener('input',()=>{ const v=+$('clickVol').value; $('clickV').textContent=v?v+'%':'off'; if(nodes) nodes.cg.gain.value=clickLevel(); });

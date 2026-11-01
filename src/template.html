@@ -394,7 +394,7 @@ function libUI(){
 // try the likeliest keys x both halves of the pulse x every beat-1 position; keep the best fit
 async function fitSearch(b0s){
   const S1=beatSegments(ST.Cf,ST.P,b0s[0],ST.audio.duration);
-  const shifts=keyShifts(S1,ST.events).slice(0,3).map(x=>x[0]);
+  const ks=keyShifts(S1,ST.events), shifts=ks.slice(0,3).filter(x=>x[1]>=ks[0][1]-0.2).map(x=>x[0]); // a key that fits the recording's notes much worse isn't tried (I Believe matched a 4th away)
   let best=null;
   for(const sh of shifts) for(const b0 of b0s){
     const S0=beatSegments(ST.Cf,ST.P,b0,ST.audio.duration);

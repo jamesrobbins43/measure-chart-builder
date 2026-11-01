@@ -560,7 +560,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   for(let i=0;i<T;i++){ let s=0,n=0; for(const tp of uT){ if(tp){ s+=raw(tp,i); n++; } } mean[i]=n?s/n:0; }
   const loud=i=>Math.min(1,S.E[i]/(emax*0.08));
   // prefix sums per event
-  const pre=events.map((e,j)=>{ const a=new Float32Array(T+1); for(let i=0;i<T;i++) a[i+1]=a[i]+((raw(temps[j],i)-mean[i])*loud(i)+0.02)/sub; return a; });
+  const pre=events.map((e,j)=>{ const a=new Float32Array(T+1); for(let i=0;i<T;i++) a[i+1]=a[i]+((temps[j]?(raw(temps[j],i)-mean[i])*loud(i):0)+0.02)/sub; return a; }); // N.C. scores neutral, not penalised when the band keeps playing
   const pos=i=>((i-downPhase)%meter+meter)%meter;
   const grp=opt.compound?3:2; // compound meters group eighths in threes
   const startBonus=i=>{ const p=pos(i); if(p%sub) return -0.3; const pb=p/sub; return pb===0?0.35:((meterBeats===4&&pb===2)||(opt.compound&&pb%3===0))?0.12:-0.08; };
@@ -951,7 +951,7 @@ function libUI(){
 // try the likeliest keys x both halves of the pulse x every beat-1 position; keep the best fit
 async function fitSearch(b0s){
   const S1=beatSegments(ST.Cf,ST.P,b0s[0],ST.audio.duration);
-  const shifts=keyShifts(S1,ST.events).slice(0,3).map(x=>x[0]);
+  const ks=keyShifts(S1,ST.events), shifts=ks.slice(0,3).filter(x=>x[1]>=ks[0][1]-0.2).map(x=>x[0]); // a key that fits the recording's notes much worse isn't tried (I Believe matched a 4th away)
   let best=null;
   for(const sh of shifts) for(const b0 of b0s){
     const S0=beatSegments(ST.Cf,ST.P,b0,ST.audio.duration);

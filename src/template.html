@@ -121,7 +121,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .lyr.wrap{flex-wrap:wrap}
 #choBtn[aria-pressed="true"]{background:var(--chorus);border-color:var(--chorus);color:#fff}
 .cho-only .row.nc-row{display:none}
-.row.cirow{--c:var(--ending)} .row.cirow .measure{cursor:default;min-height:64px} .row.cirow .g{flex:1}
+.row.cirow{--c:var(--ending)} .row.cirow .measure{cursor:pointer;min-height:64px} .row.cirow .g{flex:1}
 .lyr>span{flex:0 0 auto;max-width:100%;padding:0 .45em 0 3px;box-sizing:border-box}
 .ly{grid-row:2;line-height:1.25;padding:2px .3em 4px 3px;min-height:1.4em;align-self:start;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:break-word}
 .bt{grid-row:3;align-self:end;margin-top:3px;padding-left:1px;line-height:1}
@@ -607,7 +607,10 @@ function markChoruses(){ const on=chorusBars(); measEls.forEach((m,i)=>m.classLi
     const ci=document.createElement('div'); ci.className='row cirow'; ci.dataset.bar=i;
     let h=`<div class="measure ci" aria-label="Count-in"><span class="sec">Count-in</span><div class="g m${M}">`;
     for(let q=0;q<M;q++) h+=`<span class="ch" style="grid-column:${q+1}"></span><span class="bt${q?'':' one'}" style="grid-column:${q+1}"><b>${q+1}</b></span>`;
-    ci.innerHTML=h+'</div></div>'+'<div class="spacer"></div>'.repeat(Math.max(0,perLine-1)); row.before(ci); } } $('rows').classList.toggle('cho-only',choOnly); }
+    ci.innerHTML=h+'</div></div>'+'<div class="spacer"></div>'.repeat(Math.max(0,perLine-1)); row.before(ci);
+    const m=ci.querySelector('.measure'); m.tabIndex=0; m.setAttribute('role','button'); m.setAttribute('aria-label',`Count in to bar ${i+1}`);
+    const go=()=>{ const t=Math.max(0,a-0.03); pausedAt=t; getAC().resume().then(()=>startAtTime(t,i)); };
+    m.addEventListener('click',go); m.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); go(); } }); } } $('rows').classList.toggle('cho-only',choOnly); }
 function choStartBar(t){ const sp=chorusSpans(), s=sp.find(([a])=>Math.abs(a-0.03-t)<0.12); return s?Math.round((s[0]-ST.song.bar0)/(ST.song.beat*ST.meter)):null; }
 function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt) return; const t=offsetAt+(ctxNow()-startAt), sp=chorusSpans(); if(!sp.length) return;
   if(sp.some(([a,b])=>t>=a-0.2&&t<b)) return;
@@ -627,7 +630,9 @@ function setupPlayer(){
   $('vocal').addEventListener('input',()=>{ const v=+$('vocal').value; $('vocalV').textContent=v+'%'; if(nodes){ const ac=getAC(); scheduleCut(nodes.cut.gain, ac.currentTime, offsetAt+(ac.currentTime-startAt), vocalLevel()); } });
   $('choBtn').addEventListener('click',()=>{ choOnly=!choOnly; $('choBtn').setAttribute('aria-pressed',String(choOnly)); markChoruses();
     if(choOnly && !chorusSpans().length){ choOnly=false; $('choBtn').setAttribute('aria-pressed','false'); markChoruses(); $('choBtn').title='No chorus found in this chart'; }
-    if(choOnly && !playing){ const sp=chorusSpans(), t=pausedAt; if(!sp.some(([a,b])=>t>=a-0.2&&t<b)){ const nx=sp.find(([a])=>a>t)||sp[0]; pausedAt=Math.max(0,nx[0]-0.03); } } update(true); });
+    // turning it on starts over: stop, and the next Play counts in to the first chorus
+    if(choOnly){ if(playing) pause(); const sp=chorusSpans(); pausedAt=Math.max(0,sp[0][0]-0.03); window.scrollTo(0,0); }
+    update(true); });
   (function loop(){ if(playing){ choCheck(); update(false); } requestAnimationFrame(loop); })();
   update(true);
 }

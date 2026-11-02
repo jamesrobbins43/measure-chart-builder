@@ -17,6 +17,9 @@ let DB=(()=>{
     doc(id){ id=id||crypto.randomUUID(); return { id, async set(d){ const r=await fetch(`/api/songs/${encodeURIComponent(id)}`,{method:'PUT',headers:{'content-type':'application/json','x-editor-key':key||''},body:JSON.stringify(d)}); if(r.status===403) throw err('invalid_argument'); if(!r.ok) throw err('unavailable'); } }; } }; return api; } };
 })();"""
 t=t.replace(old,shim,1)
+# Fix bars only for the editor (CJ's key); members on the public page don't get it
+assert 'let CAN_FIX=true;' in t
+t=t.replace('let CAN_FIX=true;','let CAN_FIX=DB.canSave;',1)
 # no downloads on the site (licensing)
 t=t.replace("let dl=null; (async()=>{ try{ dl=await window.claude?.use?.('downloads'); }catch(e){ dl=null; } })();","let dl=null;")
 assert '<div class="group" hidden>Download' in t

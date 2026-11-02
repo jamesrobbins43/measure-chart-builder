@@ -166,7 +166,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <button class="primary" id="buildBtn" type="button" disabled>Build chart</button>
   </div>
   <ul class="steps" id="steps"></ul>
-  <p class="example">Everything runs in your browser; your files are not uploaded anywhere. Songs recorded to a click (most worship releases) work best. After it builds, check where each section starts. If one is off, click its first bar and set it, and the rest of the song re-lines up around your fix.</p>
+  <p class="example">Everything runs in your browser; your files are not uploaded anywhere. Songs recorded to a click (most worship releases) work best.<span id="fixHint"> After it builds, check where each section starts. If one is off, click its first bar and set it, and the rest of the song re-lines up around your fix.</span></p>
 </section>
 
 <!-- ===== result ===== -->
@@ -354,6 +354,8 @@ async function build(){
 }
 // ---------- song library: saved fixes, shared through the artifact's db ----------
 let DB=null; (async()=>{ try{ DB=await window.claude?.use?.('db'); }catch(e){ DB=null; } })();
+let CAN_FIX=true; // "Fix bars" editing: off in the public builds (CJ), on in CJ's own copies
+if(!CAN_FIX){ document.getElementById('fixHint')?.remove(); }
 const ENV_HZ=20;
 function songEnv(x,sr){ // loudness at 20 Hz for the first 2 minutes, 0..255
   const hop=sr/ENV_HZ, n=Math.min(Math.floor(x.length/hop),ENV_HZ*120), out=new Array(n);
@@ -466,7 +468,8 @@ function finish(keep){
   $('nudgeV').textContent=(ST.nudge>0?'+':'')+ST.nudge+' ms';
   $('beats').innerHTML=Array.from({length:ST.meter},(_,k)=>`<i class="${k?'':'one'}">${k+1}</i>`).join('');
   const chartBpm=ST.meta.bpm, got=60/ST.P;
-  $('msg').className='msg'; $('msg').textContent='Check where each section starts. To fix one, click "Fix bars", click the bar where it really starts, and set it there.';
+  $('editBtn').parentElement.hidden=!CAN_FIX;
+  $('msg').className='msg'; $('msg').textContent=CAN_FIX?'Check where each section starts. To fix one, click "Fix bars", click the bar where it really starts, and set it there.':'';
   const near=x=>Math.abs(got-x)/x<=0.04;
   if(chartBpm && !(near(chartBpm) || (ST.compound && (near(chartBpm*2)||near(chartBpm*3))))){ $('msg').className='msg warn'; $('msg').textContent=`The chart says ${chartBpm} BPM but the recording sounds like ${got.toFixed(1)}. If the chart looks rushed or dragged, open Advanced and try ½× or 2×, or type the tempo.`; }
   libUI(); render(); makeClick(); if(!keep){ setupPlayer(); startStems(); } else { update(true); }

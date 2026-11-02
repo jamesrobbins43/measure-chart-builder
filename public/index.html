@@ -222,7 +222,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
       <label for="meterIn">Beats per bar <select id="meterIn"><option value="">From chart</option><option value="4">4</option><option value="3">3</option><option value="6">6</option><option value="2">2</option></select></label>
       <button type="button" id="advApply">Redo with these</button></div>
     <div class="group" id="keyGroup"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <span id="keyMsg" class="keymsg" role="status"></span></div>
-    <div class="group"><button type="button" id="editBtn" aria-pressed="false" title="Fix bars (⌘E / Ctrl+E)">Fix bars</button></div>
+    <div class="group"><button type="button" id="editBtn" aria-pressed="false" title="Fix bars (press E)">Fix bars</button></div>
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button></div>
     <div class="group"><button type="button" id="dlPdf">Chart PDF</button><button type="button" id="dlVid" title="An MP4 of the chart with the beats lighting up and the click. No music.">Play-along video</button><span id="vidProgWrap" hidden style="display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)"><progress id="vidProg" max="100" value="0" style="width:140px;height:10px;accent-color:var(--accent)" aria-label="Video progress"></progress><b id="vidProgV">0%</b></span></div>
     <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><span id="libMsg"></span></div>
@@ -1459,8 +1459,8 @@ $('editBtn').addEventListener('click',()=>{ editing=!editing; $('editBtn').setAt
 function onBar(i){ if(editing){ openEditor(i,true); cueBar(i); } else seekBar(i); }
 // while fixing, a click only moves the play position to that bar (no auto-play, CJ): Space or Play then plays from there
 function cueBar(i){ if(playing) pause(); pausedAt=Math.max(0,bT(i)-0.05); update(true,true); }
-// ⌘E / Ctrl+E turns Fix bars on and off from anywhere on the page (CJ)
-document.addEventListener('keydown',e=>{ if(!(e.metaKey||e.ctrlKey)||e.altKey||e.shiftKey||e.key.toLowerCase()!=='e') return; if(!CAN_FIX||$('result').hidden||$('editBtn').parentElement.hidden) return; e.preventDefault(); $('editBtn').click(); },true);
+// the E key turns Fix bars on and off from anywhere on the page (CJ). ⌘E is taken by the Claude extension in Chrome, so it's a plain E, ignored while typing
+document.addEventListener('keydown',e=>{ if(e.metaKey||e.ctrlKey||e.altKey||e.repeat||e.key.toLowerCase()!=='e') return; const t=e.target; if((t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&!(t.tagName==='INPUT'&&/^(range|checkbox|radio|button)$/.test(t.type))))||!CAN_FIX||$('result').hidden||$('editBtn').parentElement.hidden) return; e.preventDefault(); $('editBtn').click(); },true);
 function markSel(){ document.querySelectorAll('.measure.sel').forEach(e=>e.classList.remove('sel')); if(selBar>=0) measEls[selBar]?.classList.add('sel'); }
 // clicking a bar while fixing: the chords & lyrics grid opens on it straight away (CJ: the one-line quick edit is gone)
 function openEditor(i,noFocus){

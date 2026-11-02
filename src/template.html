@@ -226,7 +226,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button></div>
     <div class="group"><button type="button" id="dlPdf">Chart PDF</button><button type="button" id="dlVid" title="An MP4 of the chart with the beats lighting up and the click. No music.">Play-along video</button><span id="vidProgWrap" hidden style="display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)"><progress id="vidProg" max="100" value="0" style="width:140px;height:10px;accent-color:var(--accent)" aria-label="Video progress"></progress><b id="vidProgV">0%</b></span></div>
     <div class="group" id="vidNote" hidden role="dialog" aria-labelledby="vidNoteT" style="flex-basis:100%;max-width:640px;padding:10px 12px;border:1px solid var(--rule);border-left:3px solid var(--accent);border-radius:8px;background:var(--paper);font-family:var(--f-ui);font-size:13px;gap:8px 10px"><span id="vidNoteT" style="flex-basis:100%">Please note: Due to licensing restrictions, this download contains only click and chord progressions, the lyrics and music have been removed.</span><button class="primary" type="button" id="vidGo">Continue</button><button type="button" id="vidCancel">Cancel</button></div>
-    <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><span id="libMsg"></span></div>
+    <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><button type="button" id="libDel" hidden>Remove from library</button><span id="libMsg"></span></div>
     <div class="group"><button type="button" id="newBtn">New song</button> <button type="button" id="reportBtn">Report a problem</button></div>
     <p class="msg" id="msg"></p>
     <div class="checks" id="checks" hidden role="status"></div>
@@ -444,17 +444,25 @@ async function libSave(){
   b.disabled=false;
 }
 $('libSave').addEventListener('click',libSave);
-$('libFresh').addEventListener('click',async()=>{
+// CJ: take a song's saved fixes out of the library so the site works it out again (two clicks, so it can't happen by accident)
+$('libDel').addEventListener('click',async()=>{ const b=$('libDel');
+  if(!b.dataset.sure){ b.dataset.sure='1'; b.textContent='Click again to remove it'; setTimeout(()=>{ delete b.dataset.sure; b.textContent='Remove from library'; },5000); return; }
+  delete b.dataset.sure; b.disabled=true; b.textContent='Removing…';
+  try{ await DB.collection('songs').doc(ST.libId).delete(); ST.libId=null; ST.libDate=null; b.textContent='Remove from library'; b.disabled=false; await freshStart(); $('libMsg').textContent='Removed from the library and worked out again from scratch.'; }
+  catch(e){ b.textContent='Remove from library'; b.disabled=false; $('libMsg').textContent="Couldn't remove it just now. Try again in a moment."; }
+});
+async function freshStart(){
   // ignore the saved version and work the song out from scratch
   $('libFresh').disabled=true; $('libMsg').textContent='Working it out from scratch…';
   if(!ST.O) ST.O=await onsetEnvelope(ST.mono,22050,()=>{});
   const h0=+$('bpmIn').value||ST.meta.bpm||0; const G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,h0,ST.meter):h0);
   ST.P=G.P; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); ST.libDate=null;
-  await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); $('libFresh').disabled=false; finish(true);
-});
+  await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); $('libFresh').disabled=false; finish(true); saveLast();
+}
+$('libFresh').addEventListener('click',freshStart);
 function libUI(){
   $('libGroup').hidden=!DB; $('libSave').hidden=!!DB && DB.canSave===false;
-  $('libFresh').hidden=!ST.libDate;
+  $('libFresh').hidden=!ST.libDate; $('libDel').hidden=!(ST.libId && DB && DB.canSave!==false);
   $('libMsg').textContent=ST.libDate?`Using fixes saved ${new Date(ST.libDate).toLocaleDateString()}.`:(DB&&DB.canSave===false?'':'Save once the bars look right, so this song lines up on its own next time.');
 }
 // ambience before the song proper (a pad swell, room noise): the chart can't start until the first clear attack

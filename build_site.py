@@ -14,7 +14,8 @@ let DB=(()=>{
   return { canSave:!!key, collection(){ const f={min:-1e9,max:1e9}; const api={
     where(field,op,v){ if(op==='>=') f.min=v; if(op==='<=') f.max=v; return api; },
     async get(){ const r=await fetch(`/api/songs?min=${f.min}&max=${f.max}`); if(!r.ok) throw err('unavailable'); const {songs}=await r.json(); return {docs:songs.map(s=>({id:s.id,data:()=>s}))}; },
-    doc(id){ id=id||crypto.randomUUID(); return { id, async set(d){ const r=await fetch(`/api/songs/${encodeURIComponent(id)}`,{method:'PUT',headers:{'content-type':'application/json','x-editor-key':key||''},body:JSON.stringify(d)}); if(r.status===403) throw err('invalid_argument'); if(!r.ok) throw err('unavailable'); } }; } }; return api; } };
+    doc(id){ id=id||crypto.randomUUID(); return { id, async set(d){ const r=await fetch(`/api/songs/${encodeURIComponent(id)}`,{method:'PUT',headers:{'content-type':'application/json','x-editor-key':key||''},body:JSON.stringify(d)}); if(r.status===403) throw err('invalid_argument'); if(!r.ok) throw err('unavailable'); },
+      async delete(){ const r=await fetch(`/api/songs/${encodeURIComponent(id)}`,{method:'DELETE',headers:{'x-editor-key':key||''}}); if(r.status===403) throw err('invalid_argument'); if(!r.ok) throw err('unavailable'); } }; } }; return api; } };
 })();"""
 t=t.replace(old,shim,1)
 # Fix bars only for the editor (CJ's key); members on the public page don't get it

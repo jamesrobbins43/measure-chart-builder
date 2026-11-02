@@ -20,6 +20,10 @@ t=t.replace(old,shim,1)
 # Fix bars only for the editor (CJ's key); members on the public page don't get it
 assert 'let CAN_FIX=true;' in t
 t=t.replace('let CAN_FIX=true;','let CAN_FIX=DB.canSave;',1)
+# problem reports go to this site's server
+old_rep="async function sendReportRaw(d){ if(!DB) throw new Error('no db'); await DB.collection('reports').doc().set(d); }"
+assert old_rep in t
+t=t.replace(old_rep,"async function sendReportRaw(d){ const r=await fetch('/api/reports',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(d)}); if(!r.ok) throw new Error('report '+r.status); }",1)
 # no downloads on the site (licensing)
 t=t.replace("let dl=null; (async()=>{ try{ dl=await window.claude?.use?.('downloads'); }catch(e){ dl=null; } })();","let dl=null;")
 assert '<div class="group" hidden>Download' in t

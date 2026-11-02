@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Problem reports</title>
+<style>
+:root{--bg:#f6f7f9;--paper:#fff;--ink:#15191f;--muted:#5d6672;--rule:#d8dde4;--flag:#c62828;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--paper:#181c22;--ink:#e8ebef;--muted:#9aa3ae;--rule:#2b313a;--flag:#ff7b72;color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Open Sans",system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px}
+h1{font-size:20px;margin:0 0 4px} .muted{color:var(--muted);font-size:13px}
+.r{background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:12px 14px;margin:12px 0}
+.r.done{opacity:.55} .r h2{font-size:15px;margin:0} .msg{white-space:pre-wrap;margin:8px 0;font-size:14px}
+.secs{font-size:12px;color:var(--muted)} .secs b{color:var(--flag)} button{font:inherit;font-size:12px;padding:4px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink);cursor:pointer}
+</style></head><body><main>
+<h1>Problem reports</h1>
+<p class="muted" id="state">Loading…</p>
+<div id="list"></div>
+</main>
+<script>
+const key=(()=>{ try{ return localStorage.getItem('mcb-editor')||''; }catch(e){ return ''; } })();
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function load(){
+  if(!key){ document.getElementById('state').textContent='Open the tool once with ?editor=YOUR_KEY on this browser, then come back.'; return; }
+  const r=await fetch('/api/reports',{headers:{'x-editor-key':key}});
+  if(!r.ok){ document.getElementById('state').textContent=r.status===403?'This browser\'s editor key is not accepted.':'Could not load reports ('+r.status+').'; return; }
+  const {reports}=await r.json();
+  document.getElementById('state').textContent=reports.length?`${reports.filter(x=>!x.done).length} open, ${reports.length} total`:'No reports yet.';
+  document.getElementById('list').innerHTML=reports.map(x=>`<div class="r${x.done?' done':''}" data-id="${esc(x.id)}">
+    <h2>${esc(x.title||x.file||'Untitled')}${x.artist?' · '+esc(x.artist):''}</h2>
+    <div class="muted">${new Date(x.sentAt).toLocaleString()} · ${esc(x.file)} · ${esc(x.chart)} · key ${esc(x.key)} · ${esc(x.bpm)} BPM · ${esc(x.bars)} bars${x.shortBars?.length?' · 2-beat bars: '+x.shortBars.join(', '):''}</div>
+    <div class="msg">${esc(x.message)}</div>
+    <div class="secs">${(x.sections||[]).map(s=>{ const flag=(x.flags||[]).some(f=>f[0]===s[0]&&f[1]===s[1]); return (flag?'<b>':'')+esc(s[0])+' @'+s[1]+' ('+s[2]+(s[3]?'+'+s[3]+' beats':'')+')'+(flag?'</b>':''); }).join(' · ')}</div>
+    ${x.done?'':'<p><button type="button" class="done">Mark fixed</button></p>'}</div>`).join('');
+  document.querySelectorAll('button.done').forEach(b=>b.addEventListener('click',async()=>{ const id=b.closest('.r').dataset.id; b.disabled=true; await fetch('/api/reports?id='+encodeURIComponent(id),{method:'PUT',headers:{'x-editor-key':key}}); load(); }));
+}
+load();
+</script></body></html>

@@ -9,7 +9,7 @@
 /* Layout: one column. Upload card first; after building, a sticky transport, a fix-it toolbar, then the chart in rows of 8 equal measures. */
 :root{
   --bg:#f4f6f8; --paper:#ffffff; --ink:#15191f; --muted:#5d6672; --rule:#d5dbe2; --tick:#aeb7c2;
-  --accent:#2c56c9; --accent-soft:#e3eafc; --warn:#9a5b00; --ok:#1d7a4a;
+  --accent:#2c56c9; --accent-soft:#e3eafc; --warn:#9a5b00; --ok:#1d7a4a; --flag:#c62828;
   --intro:#c99a00; --chorus:#2f6fd6; --prechorus:#8e4fc4; --interlude:#e06d22; --verse:#d23a3a; --bridge:#3f9e3a; --inst:#a0522d; --refrain:#1f9e96; --tag:#c2408f; --ending:#8a939e;
   --f-chord:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
   --f-lyric:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
@@ -18,10 +18,10 @@
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#101318; --paper:#181c23; --ink:#e8ebef; --muted:#9aa3ae; --rule:#2b313a; --tick:#4a525d;
-  --accent:#7f9dff; --accent-soft:#1f2a47; --warn:#e0a84a; --ok:#5ccf8f; color-scheme:dark}}
+  --accent:#7f9dff; --accent-soft:#1f2a47; --warn:#e0a84a; --ok:#5ccf8f; --flag:#ff7b72; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#101318; --paper:#181c23; --ink:#e8ebef; --muted:#9aa3ae; --rule:#2b313a; --tick:#4a525d;
-  --accent:#7f9dff; --accent-soft:#1f2a47; --warn:#e0a84a; --ok:#5ccf8f; color-scheme:dark}
+  --accent:#7f9dff; --accent-soft:#1f2a47; --warn:#e0a84a; --ok:#5ccf8f; --flag:#ff7b72; color-scheme:dark}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-lyric)}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
 .wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -98,6 +98,12 @@ textarea{width:100%;box-sizing:border-box;min-height:180px;font-family:var(--f-m
 .group button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 [hidden]{display:none!important}
 .msg{font-family:var(--f-ui);font-size:13px;color:var(--muted);flex-basis:100%;margin:0}
+.checks{flex-basis:100%;font-family:var(--f-ui);font-size:13px;line-height:1.5;color:var(--ink);background:color-mix(in srgb,var(--flag) 8%,var(--paper));border:1px solid color-mix(in srgb,var(--flag) 45%,var(--rule));border-radius:8px;padding:10px 12px}
+.checks b{color:var(--flag)} .checks a{color:inherit;text-decoration:underline;cursor:pointer} .checks .cbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.report{flex-basis:100%;display:grid;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted);max-width:640px}
+.report textarea{min-height:80px;font-family:var(--f-ui);font-size:13px;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:8px 10px}
+.report .rbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.measure .sec .flag{color:var(--flag);margin-left:4px}
 .msg.warn{color:var(--warn)}
 
 /* chart */
@@ -111,7 +117,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .measure{flex:0 0 calc(100% / var(--per,8));min-width:0;box-sizing:border-box;background:var(--paper);border:1px solid var(--rule);margin:0 0 -1px -1px;padding:22px 4px 4px;position:relative;cursor:pointer;outline:none;display:flex;flex-direction:column}
 .measure.cur{background:var(--accent-soft)}
 .measure.sel{box-shadow:inset 0 0 0 2px var(--accent)}
-.measure .num{position:absolute;top:4px;left:5px;font-family:var(--f-ui);font-size:10px;color:var(--muted)}
+.measure .num{position:absolute;top:3px;left:5px;font-family:var(--f-chord);font-weight:700;font-size:11px;letter-spacing:.02em;color:var(--ink);opacity:.55} /* bar numbers: condensed bold, unlike the beat counts (CJ) */
 .measure .sec{position:absolute;top:3px;left:26px;right:4px;overflow:hidden;text-overflow:ellipsis;font-family:var(--f-chord);font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;padding-left:6px;border-left:3px solid var(--c,var(--muted))}
 .g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:auto 1fr auto;flex:1}
 .g.m3{grid-template-columns:repeat(3,minmax(0,1fr))} .g.m6{grid-template-columns:repeat(6,minmax(0,1fr))} .g.m2{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -208,8 +214,14 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="group"><button type="button" id="editBtn" aria-pressed="false">Fix bars</button></div>
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button><button type="button" id="dlChart">Printable chart</button></div>
     <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><span id="libMsg"></span></div>
-    <div class="group"><button type="button" id="newBtn">New song</button></div>
+    <div class="group"><button type="button" id="newBtn">New song</button> <button type="button" id="reportBtn">Report a problem</button></div>
     <p class="msg" id="msg"></p>
+    <div class="checks" id="checks" hidden role="status"></div>
+    <div class="report" id="report" hidden>
+      <label for="reportText">What's wrong? Name the section and bar if you can.</label>
+      <textarea id="reportText" maxlength="2000" placeholder="e.g. The intro should be 4 bars, so Verse 1 starts at bar 6."></textarea>
+      <div class="rbtns"><button type="button" class="primary" id="reportSend">Send</button><button type="button" id="reportCancel">Cancel</button><span id="reportMsg" role="status"></span></div>
+    </div>
   </div>
   <main class="out wrap">
     <div class="scroller"><div id="chart" lang="en"><div id="rows"></div></div></div>
@@ -582,7 +594,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   const minD=sylls.map(n=>Math.max(1,Math.ceil(n*0.16/Pb*sub))); // no faster than ~6 syllables a second
   // a chord line with no words (intro, interlude) is usually played a bar per chord, even when a bar is a rest
   const secOf=events.map(e=>e.sec+'/'+e.pass), words=e=>e.lines.some(l=>!l.pickup&&l.length), bare=events.map((e0,j)=>{ if(words(e0)||e0.quick) return false; // only short all-instrumental sections (busy instrumentals change chords mid-bar)
-    const same=events.filter((e,k)=>secOf[k]===secOf[j]); return same.length<=4 && same.every(e=>!e.quick && !words(e)) ? same.length : 0; }), BF=0.4, barFit=(d,n)=>(d===meter?BF:(n<4&&d%meter===0)?0:-1) // four chords written for a bare line = four bars;
+    const same=events.filter((e,k)=>secOf[k]===secOf[j]); return same.length<=4 && same.every(e=>!e.quick && !words(e)) ? same.length : 0; }), BF=0.4, barFit=(d,n)=>(d===meter?BF:(n===1&&(d===4*meter||d===8*meter))?BF:(n<4&&d%meter===0)?0:-1) // four chords written for a bare line = four bars;
   // pattern memory: a later verse/chorus usually holds each chord about as long as the first one did (opt.refDur, in beats)
   const REF=opt.refDur||null, DEV=(opt.devCost??0.12)/sub;
   const quick=events.map(e=>!!e.quick), afterQuick=events.map((e,j)=>j>0&&!!events[j-1].quick);
@@ -1061,7 +1073,7 @@ function finish(keep){
   $('msg').className='msg'; $('msg').textContent=CAN_FIX?'Check where each section starts. To fix one, click "Fix bars", click the bar where it really starts, and set it there.':'';
   const near=x=>Math.abs(got-x)/x<=0.04;
   if(chartBpm && !(near(chartBpm) || (ST.compound && (near(chartBpm*2)||near(chartBpm*3))))){ $('msg').className='msg warn'; $('msg').textContent=`The chart says ${chartBpm} BPM but the recording sounds like ${got.toFixed(1)}. If the chart looks rushed or dragged, open Advanced and try ½× or 2×, or type the tempo.`; }
-  libUI(); render(); makeClick(); if(!keep){ setupPlayer(); startStems(); } else { update(true); }
+  libUI(); render(); sectionCheck(); makeClick(); if(!keep){ setupPlayer(); startStems(); } else { update(true); }
 }
 
 // ---------- chart render ----------
@@ -1326,6 +1338,39 @@ function update(force){
   if(el!==liveCh){ liveCh?.classList.remove('live'); el?.classList.add('live'); liveCh=el; }
 }
 
+// ---------- section length check + problem reports ----------
+// most worship sections run 4, 8 or 16 bars; anything else gets a "please double-check" (CJ)
+function sectionSpans(){ const b=ST.song.bars, out=[]; b.forEach((x,i)=>{ if(x.section) out.push({label:x.section,bar:i,beats:0}); if(out.length) out[out.length-1].beats+=x.len||ST.meter; });
+  out.forEach(o=>{ o.bars=Math.floor(o.beats/ST.meter+1e-6); o.extra=Math.round(o.beats-o.bars*ST.meter); }); return out; }
+let checksOk=new Set();
+function sectionCheck(){
+  const sig=ST.songFile?.name+'|'+ST.song.bars.length, el=$('checks');
+  const flags=sectionSpans().filter((o,k,a)=>o.label!=='Lead-in' && !(k===a.length-1 && /ending|outro/i.test(o.label)) && o.bars%4!==0);
+  ST.flags=flags;
+  document.querySelectorAll('.measure .sec .flag').forEach(f=>f.remove());
+  for(const f of flags){ const s=measEls[f.bar]?.querySelector('.sec'); if(s) s.insertAdjacentHTML('beforeend',`<span class="flag" title="${f.bars} bar${f.bars===1?'':'s'}: please double-check">⚑</span>`); }
+  if(!flags.length || checksOk.has(sig)){ el.hidden=true; return; }
+  el.innerHTML=`<b>⚑ Please double-check:</b> ${flags.map((f,k)=>`<a data-bar="${f.bar}">${esc(f.label)} (bar ${f.bar+1}) is ${f.bars} bar${f.bars===1?'':'s'}</a>`).join(', ')}. Most sections are 4, 8 or 16 bars long, so these may be off.
+    <div class="cbtns"><button type="button" id="chkOk">Looks right</button><button type="button" id="chkBad">Something's wrong</button></div>`;
+  el.hidden=false;
+  el.querySelectorAll('a[data-bar]').forEach(a=>a.addEventListener('click',()=>{ const i=+a.dataset.bar; pausedAt=Math.max(0,bT(i)-0.05); update(true); measEls[i]?.scrollIntoView({block:'center',behavior:'smooth'}); }));
+  $('chkOk').addEventListener('click',()=>{ checksOk.add(sig); el.hidden=true; });
+  $('chkBad').addEventListener('click',()=>openReport(flags.map(f=>`${f.label} (bar ${f.bar+1}) is ${f.bars} bar${f.bars===1?'':'s'} but should be `).join('\n')));
+}
+function openReport(prefill){ $('report').hidden=false; $('reportMsg').textContent=''; $('reportSend').disabled=false; const t=$('reportText'); if(prefill&&!t.value) t.value=prefill; t.focus(); }
+$('reportBtn').addEventListener('click',()=>openReport(''));
+$('reportCancel').addEventListener('click',()=>{ $('report').hidden=true; });
+// where a report goes: the artifact's database here; the site build swaps in its own server
+async function sendReportRaw(d){ const r=await fetch('/api/reports',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(d)}); if(!r.ok) throw new Error('report '+r.status); }
+$('reportSend').addEventListener('click',async()=>{
+  const text=$('reportText').value.trim(); if(!text){ $('reportText').focus(); return; }
+  const b=$('reportSend'); b.disabled=true; $('reportMsg').textContent='Sending…';
+  const d={message:text.slice(0,2000), title:ST.meta?.title||'', artist:ST.meta?.artist||'', file:ST.songFile?.name||'', chart:ST.chartFile?.name||'', dur:Math.round((ST.audio?.duration||0)*10)/10,
+    key:ST.meta?.key||'', bpm:ST.song?.bpm||0, meter:ST.meter, bars:ST.song?.bars.length||0, shortBars:(ST.song?.bars||[]).map((x,i)=>x.len<ST.meter?i+1:0).filter(Boolean),
+    sections:sectionSpans().map(o=>[o.label,o.bar+1,o.bars,o.extra]), flags:(ST.flags||[]).map(f=>[f.label,f.bar+1,f.bars]), sentAt:new Date().toISOString(), page:location.hostname};
+  try{ await sendReportRaw(d); $('reportMsg').textContent='Sent. Thank you!'; $('reportText').value=''; setTimeout(()=>{ $('report').hidden=true; },1800); }
+  catch(e){ console.warn(e); $('reportMsg').textContent="Couldn't send just now. Try again in a moment."; b.disabled=false; }
+});
 // ---------- fixing ----------
 let editing=false, selBar=-1;
 $('editBtn').addEventListener('click',()=>{ editing=!editing; $('editBtn').setAttribute('aria-pressed',editing); $('editBtn').classList.toggle('primary',editing); $('editBtn').textContent=editing?'Done fixing':'Fix bars'; if(!editing) closeEditor(); });

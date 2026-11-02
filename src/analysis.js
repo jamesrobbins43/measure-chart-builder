@@ -234,7 +234,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   const minD=sylls.map(n=>Math.max(1,Math.ceil(n*0.16/Pb*sub))); // no faster than ~6 syllables a second
   // a chord line with no words (intro, interlude) is usually played a bar per chord, even when a bar is a rest
   const secOf=events.map(e=>e.sec+'/'+e.pass), words=e=>e.lines.some(l=>!l.pickup&&l.length), bare=events.map((e0,j)=>{ if(words(e0)||e0.quick) return false; // only short all-instrumental sections (busy instrumentals change chords mid-bar)
-    const same=events.filter((e,k)=>secOf[k]===secOf[j]); return same.length<=4 && same.every(e=>!e.quick && !words(e)) ? same.length : 0; }), BF=0.4, barFit=(d,n)=>(d===meter?BF:(n<4&&d%meter===0)?0:-1) // four chords written for a bare line = four bars;
+    const same=events.filter((e,k)=>secOf[k]===secOf[j]); return same.length<=4 && same.every(e=>!e.quick && !words(e)) ? same.length : 0; }), BF=0.4, barFit=(d,n)=>(d===meter?BF:(n===1&&(d===4*meter||d===8*meter))?BF:(n<4&&d%meter===0)?0:-1) // four chords written for a bare line = four bars;
   // pattern memory: a later verse/chorus usually holds each chord about as long as the first one did (opt.refDur, in beats)
   const REF=opt.refDur||null, DEV=(opt.devCost??0.12)/sub;
   const quick=events.map(e=>!!e.quick), afterQuick=events.map((e,j)=>j>0&&!!events[j-1].quick);

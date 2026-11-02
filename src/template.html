@@ -151,7 +151,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .lgtop{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px} .lgtop input{width:64px;font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)} .lghint{flex-basis:100%}
 .lgbody{overflow-x:auto} .lgbar{display:grid;grid-template-columns:44px repeat(var(--n),minmax(46px,1fr));gap:2px;margin-bottom:6px;min-width:calc(44px + var(--n) * 48px)}
 .lgbar .lbn{font-family:var(--f-chord);font-weight:700;font-size:13px;color:var(--ink);align-self:end;padding-bottom:6px}
-.lgcell{display:grid;gap:2px} .lgcell span{font-size:10px;text-align:center;color:var(--muted)} .lgcell span.b{font-weight:700;color:var(--ink)} .lgcell.beat{border-left:2px solid var(--rule);padding-left:2px}
+.lgbar.draft .lbn{color:var(--accent)} .lgcell{display:grid;gap:2px} .lgcell span{font-size:10px;text-align:center;color:var(--muted)} .lgcell span.b{font-weight:700;color:var(--ink)} .lgcell.beat{border-left:2px solid var(--rule);padding-left:2px}
 .editor .lgcell input.lgc.bad{border-color:var(--flag);background:color-mix(in srgb,var(--flag) 10%,var(--bg))} .editor .lgcell input.lgc[type=text]{font-family:var(--f-chord);font-weight:700;font-size:14px} .editor .lgcell input[type=text]{width:100%;box-sizing:border-box;font-family:var(--f-lyric);font-size:13px;padding:4px 3px;border:1px solid var(--rule);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0}
 .lgbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .editor .row2{font-family:var(--f-ui);grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12px;color:var(--muted)}
@@ -488,6 +488,7 @@ function realign(keep=true){
 }
 function bpmLabel(){ const b=Math.round(60/ST.P*10)/10; return ST.compound? `${b} BPM (eighth notes)` : b+' BPM'; }
 function finish(keep){
+  lgDraft={};
   saveLast();
   ST.song=buildSong(ST.meta,ST.sections,ST.S,ST.P,ST.downPhase,ST.meter,ST.events,ST.al,ST.audio.duration,ST.vox);
   ST.song.bar0+=ST.nudge/1000;
@@ -817,13 +818,21 @@ const SIX=['','e','+','a'];
 // (uses the parser's own chord test, the same one that reads chords off the PDF)
 function lgMark(inp){ const v=inp.value.trim(), bad=!!v && !isChord(v); inp.classList.toggle('bad',bad); inp.setAttribute('aria-invalid',String(bad)); return !bad; }
 document.addEventListener('input',e=>{ const t=e.target; if(t.classList?.contains('lgc')){ t.value=t.value.replace(/\s+/g,''); lgMark(t); } });
+// unsaved grid edits, kept per bar while you change which bars are open (CJ); cleared on Save or when the bars are rebuilt
+var lgDraft={}, lgOrig={};
+function lgRead(row){ return [[...row.querySelectorAll('input.lgc')].map(x=>x.value.trim()), [...row.querySelectorAll('input.lgw')].map(x=>x.value.trim())]; }
+function lgStash(){ $('lgBody').querySelectorAll('.lgbar').forEach(row=>{ const i=+row.dataset.bar, v=lgRead(row); if(JSON.stringify(v)!==lgOrig[i]) lgDraft[i]=v; else delete lgDraft[i]; }); }
 function lgBuild(){
+  lgStash();
   const nb=ST.song.bars.length, a=Math.max(1,Math.min(nb,+$('lgFrom').value||1)), z=Math.max(a,Math.min(nb,a+7,+$('lgTo').value||a));
   $('lgFrom').value=a; $('lgTo').value=z; let h='';
   for(let i=a-1;i<z;i++){ const L=bLen(i)*4, words=Array.from({length:L},()=>[]);
     ST.song.bars[i].lyrics.forEach(([p,w])=>words[Math.min(L-1,Math.max(0,p))].push(w));
     const chs=Array.from({length:L},()=>[]); ST.song.bars[i].chords.forEach(([bt,c])=>chs[Math.min(L-1,Math.max(0,Math.round((bt-1)*4)))].push(c));
-    h+=`<div class="lgbar" style="--n:${L}" data-bar="${i}"><div class="lbn">${i+1}</div>`;
+    const orig=[chs.map(x=>x.join(' ')), words.map(x=>x.join(' '))], dr=lgDraft[i]&&lgDraft[i][0].length===L?lgDraft[i]:null;
+    lgOrig[i]=JSON.stringify(orig);
+    if(dr){ for(let p=0;p<L;p++){ chs[p]=dr[0][p]?[dr[0][p]]:[]; words[p]=dr[1][p]?[dr[1][p]]:[]; } }
+    h+=`<div class="lgbar${dr?' draft':''}" style="--n:${L}" data-bar="${i}"><div class="lbn" title="${dr?'Not saved yet':''}">${i+1}${dr?' •':''}</div>`;
     for(let p=0;p<L;p++){ const lab=p%4?SIX[p%4]:String(p/4+1);
       h+=`<div class="lgcell${p%4?'':' beat'}"><span class="${p%4?'':'b'}">${lab}</span><input type="text" class="lgc" data-p="${p}" value="${esc(chs[p].join(' '))}" aria-label="Chord, bar ${i+1}, beat ${Math.floor(p/4)+1}${p%4?' '+SIX[p%4]:''}" autocomplete="off" spellcheck="false"><input type="text" class="lgw" data-p="${p}" value="${esc(words[p].join(' '))}" aria-label="Lyric, bar ${i+1}, beat ${Math.floor(p/4)+1}${p%4?' '+SIX[p%4]:''}" autocomplete="off" spellcheck="false"></div>`; }
     h+='</div>'; }
@@ -834,11 +843,16 @@ for(const id of ['lgFrom','lgTo']) $(id).addEventListener('change',lgBuild);
 $('lgSave').addEventListener('click',()=>{
   const bad=[...$('lgBody').querySelectorAll('input.lgc')].filter(inp=>!lgMark(inp));
   if(bad.length){ $('lgMsg').textContent=`"${bad[0].value}" isn't a chord name. The top boxes only take chords like C, F#m7 or Bb/D; put words in the bottom boxes.`; bad[0].focus(); return; }
-  pushUndo(); ST.overrides={...ST.overrides}; let n=0; $('lgBody').querySelectorAll('.lgbar').forEach(row=>{ const i=+row.dataset.bar, lyrics=[], chords=[];
-    row.querySelectorAll('input.lgw').forEach(inp=>{ const p=+inp.dataset.p; inp.value.trim().split(/\s+/).filter(Boolean).forEach(w=>lyrics.push([p,w])); });
-    row.querySelectorAll('input.lgc').forEach(inp=>{ const p=+inp.dataset.p, c=inp.value.trim().split(/\s+/).filter(Boolean).pop(); if(c) chords.push([1+p/4,c]); }); // one chord per 16th
-    const b=ST.song.bars[i]; ST.overrides[i]={chords, lyrics}; b.chords=chords; b.lyrics=lyrics; n++; });
-  render(); sectionCheck(); update(true,true); markSel(); saveLast();
+  lgStash(); const todo=new Map();
+  $('lgBody').querySelectorAll('.lgbar').forEach(row=>todo.set(+row.dataset.bar, lgRead(row)));
+  for(const [i,v] of Object.entries(lgDraft)) if(!todo.has(+i)) todo.set(+i,v); // edits on bars you've since scrolled the grid away from
+  pushUndo(); ST.overrides={...ST.overrides}; let n=0;
+  for(const [i,[cs,ws]] of todo){ const b=ST.song.bars[i]; if(!b) continue; const lyrics=[], chords=[];
+    ws.forEach((v,p)=>v.split(/\s+/).filter(Boolean).forEach(w=>lyrics.push([p,w])));
+    cs.forEach((v,p)=>{ const c=v.split(/\s+/).filter(Boolean).pop(); if(c && isChord(c)) chords.push([1+p/4,c]); }); // one chord per 16th
+    ST.overrides[i]={chords, lyrics}; b.chords=chords; b.lyrics=lyrics; n++; }
+  lgDraft={};
+  render(); sectionCheck(); update(true,true); markSel(); saveLast(); lgBuild();
   $('lgMsg').textContent=`Saved ${n} bar${n===1?'':'s'}.`;
 });
 // ---------- fixing ----------

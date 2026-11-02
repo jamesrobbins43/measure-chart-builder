@@ -1523,9 +1523,16 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
       for(let k=at;k<grid.length;k++) grid[k].s+=e.len; grid.splice(at,0,{s:s0,len:e.len,ins:ei}); }
     else if(e.op==='sec'){ const f=grid[e.from], t=grid[e.at]; if(!f||!t) return; for(const it of items) if(it.t==='s' && it.x>=f.s-1e-6 && it.x<f.s+f.len-1e-6) it.x=t.s; } // move a section name only (CJ): no chord moves
     else if(e.op==='len'){ // CJ: set this bar's beats; the beats left over (or borrowed) belong to the next bar, and bar lines settle back at the next short bar
-      const at=e.at; if(at<0||at>=grid.length) return; grid[at].len=e.len; let pos=grid[at].s+e.len;
+      const at=e.at; if(at<0||at>=grid.length) return; const was=new Map(grid.slice(at).map(g=>[g,{s:g.s,len:g.len}])), g0=grid[at];
+      grid[at].len=e.len; let pos=grid[at].s+e.len;
       for(let k=at+1;k<grid.length;){ const g=grid[k], end=g.s+g.len; if(Math.abs(g.s-pos)<1e-6) break; const nl=end-pos;
-        if(nl<=1e-6){ grid.splice(k,1); continue; } if(nl>M0+1e-6){ g.s=pos; g.len=M0; pos+=M0; k++; continue; } g.s=pos; g.len=nl; break; } }
+        if(nl<=1e-6){ grid.splice(k,1); continue; } if(nl>M0+1e-6){ g.s=pos; g.len=M0; pos+=M0; k++; continue; } g.s=pos; g.len=nl; break; }
+      // CJ (bar 53 / Bridge): a bar whose line moved takes its own chords, words and section name with it, so the next section still starts on its bar
+      const mv=[]; for(const [g,o] of was){ if(g===g0 || !grid.includes(g) || Math.abs(g.s-o.s)<1e-6) continue; for(const it of items) if(it.x>=o.s-1e-6 && it.x<o.s+o.len-1e-6) mv.push([it,g.s-o.s]); }
+      for(const [it,d] of mv) it.x+=d;
+      // a chord left past the end of the shortened bar is dropped when the next bar already starts with a chord
+      const nx=grid[at+1]; if(nx){ const end=g0.s+g0.len, hasOne=items.some(it=>it.t==='c' && Math.abs(it.x-nx.s)<0.26);
+        if(hasOne) for(let q=items.length-1;q>=0;q--){ const it=items[q]; if(it.t==='c' && it.x>=end-1e-6 && it.x<was.get(g0).s+was.get(g0).len-1e-6 && !mv.some(m=>m[0]===it)) items.splice(q,1); } } }
     else if(e.op==='mrg'||(e.op==='del'&&e.at>0&&e.at<grid.length&&grid[e.at].len<M0&&grid[e.at].ins==null)){ if(e.at<1||e.at>=grid.length) return; grid[e.at-1].len+=grid[e.at].len; grid.splice(e.at,1); } // fold a bar's beats into the bar before it, so no bar line after it moves (a short bar removed before this fix is folded in too)
     else if(e.op==='del'){ if(e.at<0||e.at>=grid.length||grid.length<2) return; const [g]=grid.splice(e.at,1); for(let k=e.at;k<grid.length;k++) grid[k].s-=g.len; } });
   for(let l=grid[grid.length-1]; l.s+l.len<end0-1e-6; l=grid[grid.length-1]) grid.push({s:l.s+l.len,len:M0}); // keep the end of the song covered

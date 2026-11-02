@@ -15,13 +15,8 @@
   --f-lyric:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --f-ui:"Open Sans",system-ui,-apple-system,"Segoe UI",sans-serif; /* small grey text (CJ) */
+  color-scheme:light; /* always the light look, even when the computer is in dark mode (CJ: chords are easier to read) */
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#101318; --paper:#181c23; --ink:#e8ebef; --muted:#9aa3ae; --rule:#2b313a; --tick:#4a525d;
-  --accent:#7f9dff; --accent-soft:#1f2a47; --warn:#e0a84a; --ok:#5ccf8f; --flag:#ff7b72; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#101318; --paper:#181c23; --ink:#e8ebef; --muted:#9aa3ae; --rule:#2b313a; --tick:#4a525d;
-  --accent:#7f9dff; --accent-soft:#1f2a47; --warn:#e0a84a; --ok:#5ccf8f; --flag:#ff7b72; color-scheme:dark}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-lyric)}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
 .wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}

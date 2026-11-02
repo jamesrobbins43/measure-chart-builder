@@ -222,9 +222,9 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
       <label for="meterIn">Beats per bar <select id="meterIn"><option value="">From chart</option><option value="4">4</option><option value="3">3</option><option value="6">6</option><option value="2">2</option></select></label>
       <button type="button" id="advApply">Redo with these</button></div>
     <div class="group" id="keyGroup"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <span id="keyMsg" class="keymsg" role="status"></span></div>
-    <div class="group"><button type="button" id="editBtn" aria-pressed="false">Fix bars</button></div>
+    <div class="group"><button type="button" id="editBtn" aria-pressed="false" title="Fix bars (⌘E / Ctrl+E)">Fix bars</button></div>
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button></div>
-    <div class="group"><button type="button" id="dlPdf">Chart PDF</button><button type="button" id="dlVid" title="An MP4 of the chart with the beats lighting up and the click. No music.">Play-along video</button></div>
+    <div class="group"><button type="button" id="dlPdf">Chart PDF</button><button type="button" id="dlVid" title="An MP4 of the chart with the beats lighting up and the click. No music.">Play-along video</button><span id="vidProgWrap" hidden style="display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)"><progress id="vidProg" max="100" value="0" style="width:140px;height:10px;accent-color:var(--accent)" aria-label="Video progress"></progress><b id="vidProgV">0%</b></span></div>
     <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><span id="libMsg"></span></div>
     <div class="group"><button type="button" id="newBtn">New song</button> <button type="button" id="reportBtn">Report a problem</button></div>
     <p class="msg" id="msg"></p>
@@ -1456,7 +1456,11 @@ $('lgSave').addEventListener('click',()=>{
 // ---------- fixing ----------
 let editing=false, selBar=-1;
 $('editBtn').addEventListener('click',()=>{ editing=!editing; $('editBtn').setAttribute('aria-pressed',editing); $('editBtn').classList.toggle('primary',editing); $('editBtn').textContent=editing?'Done fixing':'Fix bars'; if(editing) openEditor(Math.max(0,Math.min(ST.song.bars.length-1,selBar>=0?selBar:barAt(songTime())))); else closeEditor(); });
-function onBar(i){ if(editing){ openEditor(i,true); seekBar(i); } else seekBar(i); } // while fixing, a click also plays from that bar so you can check it (CJ); focus stays off the grid so Space still pauses
+function onBar(i){ if(editing){ openEditor(i,true); cueBar(i); } else seekBar(i); }
+// while fixing, a click only moves the play position to that bar (no auto-play, CJ): Space or Play then plays from there
+function cueBar(i){ if(playing) pause(); pausedAt=Math.max(0,bT(i)-0.05); update(true,true); }
+// ⌘E / Ctrl+E turns Fix bars on and off from anywhere on the page (CJ)
+document.addEventListener('keydown',e=>{ if(!(e.metaKey||e.ctrlKey)||e.altKey||e.shiftKey||e.key.toLowerCase()!=='e') return; if(!CAN_FIX||$('result').hidden||$('editBtn').parentElement.hidden) return; e.preventDefault(); $('editBtn').click(); },true);
 function markSel(){ document.querySelectorAll('.measure.sel').forEach(e=>e.classList.remove('sel')); if(selBar>=0) measEls[selBar]?.classList.add('sel'); }
 // clicking a bar while fixing: the chords & lyrics grid opens on it straight away (CJ: the one-line quick edit is gone)
 function openEditor(i,noFocus){
@@ -1728,13 +1732,14 @@ $('dlVid').addEventListener('click',async()=>{
     if(playing) pause();
     try{ await document.fonts.ready; }catch(e){}
     const pl=vidPlan(), cv=document.createElement('canvas'); cv.width=1280; cv.height=720; const g=cv.getContext('2d');
-    const prog=u=>{ $('msg').textContent=`Making the video… ${Math.min(99,Math.round(u*100))}%`; };
+    const prog=u=>{ const v=Math.min(99,Math.round(u*100)); $('msg').textContent=`Making the video… ${v}%`; $('vidProg').value=v; $('vidProgV').textContent=v+'%'; };
+    $('vidProg').value=0; $('vidProgV').textContent='0%'; $('vidProgWrap').hidden=false;
     let out=null; if(window.VideoEncoder&&window.AudioEncoder&&window.VideoFrame) out=await vidWebCodecs(pl,cv,g,prog);
     if(!out){ $('msg').textContent='Recording the video in real time (this takes as long as the song)…'; out=await vidRealtime(pl,cv,g,prog); }
     const bpm=Math.round(60/ST.P), ok=await save(`${baseName()} - play-along, click only (${bpm} BPM).${out.ext}`, out.blob);
     $('msg').textContent= ok?`Saved the play-along video (${(out.blob.size/1048576).toFixed(1)} MB).`:'Download was cancelled.';
   }catch(e){ console.warn(e); $('msg').className='msg warn'; $('msg').textContent="Couldn't make the video: "+(e.message||e); }
-  btn.disabled=false;
+  $('vidProgWrap').hidden=true; btn.disabled=false;
 });
 // song map shorthand for the PDF (CJ): V1, C1, TA, End; Intro, Interlude, Instrumental, Outro, Vamp, Tag stay whole words
 function mapLabel(l){ let rep=''; l=l.replace(/\s*\((\d+)\s*x\)\s*$/i,(m,n)=>{ rep=` (${n}x)`; return ''; }).trim();

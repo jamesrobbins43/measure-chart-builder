@@ -1527,19 +1527,18 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
       grid[at].len=e.len; let pos=grid[at].s+e.len;
       for(let k=at+1;k<grid.length;){ const g=grid[k], end=g.s+g.len; if(Math.abs(g.s-pos)<1e-6) break; const nl=end-pos;
         if(nl<=1e-6){ grid.splice(k,1); continue; } if(nl>M0+1e-6){ g.s=pos; g.len=M0; pos+=M0; k++; continue; } g.s=pos; g.len=nl; break; }
-      // CJ (bar 53 / Bridge): a bar whose line moved takes its own chords, words and section name with it, so the next section still starts on its bar
-      const mv=[]; for(const [g,o] of was){ if(g===g0 || !grid.includes(g) || Math.abs(g.s-o.s)<1e-6) continue; for(const it of items) if(it.x>=o.s-1e-6 && it.x<o.s+o.len-1e-6) mv.push([it,g.s-o.s]); }
-      for(const [it,d] of mv) it.x+=d;
-      // a chord left past the end of the shortened bar is dropped when the next bar already starts with a chord
-      const nx=grid[at+1]; if(nx){ const end=g0.s+g0.len, hasOne=items.some(it=>it.t==='c' && Math.abs(it.x-nx.s)<0.26);
-        if(hasOne) for(let q=items.length-1;q>=0;q--){ const it=items[q]; if(it.t==='c' && it.x>=end-1e-6 && it.x<was.get(g0).s+was.get(g0).len-1e-6 && !mv.some(m=>m[0]===it)) items.splice(q,1); } } }
+      // CJ (Bridge after bar 53): the bar lines move, the chords stay with the music
+    }
     else if(e.op==='mrg'||(e.op==='del'&&e.at>0&&e.at<grid.length&&grid[e.at].len<M0&&grid[e.at].ins==null)){ if(e.at<1||e.at>=grid.length) return; grid[e.at-1].len+=grid[e.at].len; grid.splice(e.at,1); } // fold a bar's beats into the bar before it, so no bar line after it moves (a short bar removed before this fix is folded in too)
     else if(e.op==='del'){ if(e.at<0||e.at>=grid.length||grid.length<2) return; const [g]=grid.splice(e.at,1); for(let k=e.at;k<grid.length;k++) grid[k].s-=g.len; } });
   for(let l=grid[grid.length-1]; l.s+l.len<end0-1e-6; l=grid[grid.length-1]) grid.push({s:l.s+l.len,len:M0}); // keep the end of the song covered
   const nb=grid.map(g=>({chords:[],lyrics:[],section:null,s:g.s,len:g.len,s0:g.s0,ins:g.ins}));
   const find=x=>{ let lo=0,hi=nb.length-1; if(x<nb[0].s) return 0; while(lo<hi){ const m=(lo+hi+1)>>1; if(nb[m].s<=x+1e-6) lo=m; else hi=m-1; } return lo; };
+  items.sort((a,b)=>a.x-b.x); let lastC=null; const secX=items.filter(it=>it.t==='s').map(it=>it.x); // a chord that's already playing isn't written again
   for(const it of items){ const i=find(it.x), b=nb[i], r=Math.max(0,it.x-b.s);
-    if(it.t==='c'){ const pc=b.chords[b.chords.length-1]; if(!pc||pc[1]!==it.v) b.chords.push([1+r,it.v]); } else if(it.t==='w') b.lyrics.push([Math.round(r*4),it.v]); else if(!b.section) b.section=it.v; }
+    if(it.t==='c'){ if(it.v!==lastC || r<0.3 || secX.some(x=>Math.abs(x-it.x)<0.3)) b.chords.push([1+r,it.v]); else if(!b.chords.length) b.chords.push([1,it.v]); lastC=it.v; } else if(it.t==='w') b.lyrics.push([Math.round(r*4),it.v]); else if(!b.section){ b.section=it.v; if(r>0.3) b.secAt=r; } }
+  // a section that now starts part-way into a bar (CJ: the Bridge's F on beat 3 of the old bar 54) starts that bar, with its first chord on beat 1
+  for(const b of nb){ if(b.secAt==null) continue; const r=b.secAt; delete b.secAt; const k=b.chords.findIndex(c=>Math.abs(c[0]-1-r)<0.3); if(k>=0){ b.chords=[[1,b.chords[k][1]],...b.chords.slice(k+1)]; } }
   while(nb.length>1 && nb[nb.length-1].s>=end0-1e-6 && !nb[nb.length-1].chords.length && !nb[nb.length-1].section) nb.pop(); // nothing past the end of the music
   bars.splice(0,bars.length,...nb);
 }

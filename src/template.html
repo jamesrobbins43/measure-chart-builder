@@ -90,6 +90,7 @@ textarea{width:100%;box-sizing:border-box;min-height:180px;font-family:var(--f-m
 /* toolbar */
 .toolbar{margin:0 auto;padding-block:12px 0;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
 .group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.adv{flex-basis:100%;gap:8px 10px;padding:8px 10px;border:1px solid var(--rule);border-radius:8px} .adv[hidden]{display:none} .adv label{display:inline-flex;align-items:center;gap:6px} .adv input[type=number]{width:70px;font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)} .adv select{font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)}
 .group b{font-family:var(--f-mono);font-weight:500;color:var(--ink)}
 .group button{padding:5px 10px;font-size:13px}
 .group button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -161,8 +162,6 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     </div>
   </div>
   <div class="opts">
-    <label for="bpmIn">Tempo (BPM)<input type="number" id="bpmIn" min="40" max="220" step="1" placeholder="from chart"></label>
-    <label for="meterIn">Beats per bar<select id="meterIn"><option value="">From chart</option><option value="4">4</option><option value="3">3</option><option value="6">6</option><option value="2">2</option></select></label>
     <button class="primary" id="buildBtn" type="button" disabled>Build chart</button>
   </div>
   <ul class="steps" id="steps"></ul>
@@ -198,7 +197,11 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="group">Beat 1 <button type="button" id="dbL" aria-label="Move beat 1 earlier">◀</button><button type="button" id="dbR" aria-label="Move beat 1 later">▶</button></div>
     <div class="group">Grid <button type="button" id="nudgeL" aria-label="Shift grid 10 ms earlier">−10 ms</button><b id="nudgeV">0</b><button type="button" id="nudgeR" aria-label="Shift grid 10 ms later">+10 ms</button></div>
     <div class="group"><label for="sync" style="display:inline-flex;align-items:center;gap:6px">Sync <input id="sync" type="range" min="-250" max="400" step="10" value="0" style="width:90px;accent-color:var(--accent)"></label><b id="syncV">0 ms</b></div>
-    <div class="group">Tempo <b id="bpmV"></b> <button type="button" id="halfBtn">½×</button><button type="button" id="dblBtn">2×</button></div>
+    <div class="group"><button type="button" id="advBtn" aria-expanded="false" aria-controls="advGroup">Advanced</button></div>
+    <div class="group adv" id="advGroup" hidden>Tempo <b id="bpmV"></b> <button type="button" id="halfBtn">½×</button><button type="button" id="dblBtn">2×</button>
+      <label for="bpmIn">Set tempo <input type="number" id="bpmIn" min="40" max="220" step="1" placeholder="BPM"></label>
+      <label for="meterIn">Beats per bar <select id="meterIn"><option value="">From chart</option><option value="4">4</option><option value="3">3</option><option value="6">6</option><option value="2">2</option></select></label>
+      <button type="button" id="advApply">Redo with these</button></div>
     <div class="group" id="keyGroup"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <span id="keyMsg" class="keymsg" role="status"></span></div>
     <div class="group"><button type="button" id="editBtn" aria-pressed="false">Fix bars</button></div>
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button><button type="button" id="dlChart">Printable chart</button></div>
@@ -464,7 +467,7 @@ function finish(keep){
   const chartBpm=ST.meta.bpm, got=60/ST.P;
   $('msg').className='msg'; $('msg').textContent='Check where each section starts. To fix one, click "Fix bars", click the bar where it really starts, and set it there.';
   const near=x=>Math.abs(got-x)/x<=0.04;
-  if(chartBpm && !(near(chartBpm) || (ST.compound && (near(chartBpm*2)||near(chartBpm*3))))){ $('msg').className='msg warn'; $('msg').textContent=`The chart says ${chartBpm} BPM but the recording sounds like ${got.toFixed(1)}. If the chart looks rushed or dragged, try ½× or 2×.`; }
+  if(chartBpm && !(near(chartBpm) || (ST.compound && (near(chartBpm*2)||near(chartBpm*3))))){ $('msg').className='msg warn'; $('msg').textContent=`The chart says ${chartBpm} BPM but the recording sounds like ${got.toFixed(1)}. If the chart looks rushed or dragged, open Advanced and try ½× or 2×, or type the tempo.`; }
   libUI(); render(); makeClick(); if(!keep){ setupPlayer(); startStems(); } else { update(true); }
 }
 
@@ -768,6 +771,18 @@ $('nudgeL').addEventListener('click',()=>{ ST.nudge-=10; finish(true); });
 $('nudgeR').addEventListener('click',()=>{ ST.nudge+=10; finish(true); });
 $('halfBtn').addEventListener('click',()=>retempo(2));
 $('dblBtn').addEventListener('click',()=>retempo(0.5));
+$('advBtn').addEventListener('click',()=>{ const g=$('advGroup'), o=g.hidden; g.hidden=!o; $('advBtn').setAttribute('aria-expanded',String(o)); });
+// tempo / beats per bar override: work the grid and the line-up out again with these (empty = what the chart says)
+$('advApply').addEventListener('click',async()=>{ const b=$('advApply'); b.disabled=true; $('msg').className='msg'; $('msg').textContent='Redoing the tempo and the line-up…';
+  try{ if(playing) pause();
+    const [tn,td]=(ST.meta.time||'4/4').split('/').map(Number); ST.meter=+$('meterIn').value||tn||4; ST.den=td||4; ST.compound=ST.den===8&&ST.meter%3===0&&ST.meter>3;
+    if(!ST.O) ST.O=await onsetEnvelope(ST.mono,22050,()=>{});
+    await new Promise(r=>setTimeout(r,20));
+    const h0=+$('bpmIn').value||ST.meta.bpm||0, G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,h0,ST.meter):h0);
+    ST.P=G.P; ST.beat0=G.beat0; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.libDate=null;
+    await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); finish(true);
+  }catch(e){ console.warn(e); $('msg').className='msg warn'; $('msg').textContent="Couldn't redo it with those settings."; }
+  b.disabled=false; });
 async function retempo(f){ ST.P*=f; ST.beat0=ST.beat0%ST.P; ST.anchors={}; ST.overrides={};
   await fitSearch([ST.beat0,(ST.beat0+ST.P/2)%ST.P]); finish(true); }
 // ---------- keep the last song on this device, so a refresh doesn't lose it (stored only in this browser, never uploaded) ----------
@@ -792,7 +807,7 @@ function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
   steps.innerHTML=''; steps.appendChild(li); li.querySelector('#reopenBtn').addEventListener('click',build);
 }catch(e){ /* storage blocked: start fresh */ } })();
 function clearPicked(){ ST.songFile=null; ST.chartFile=null; ST.chartMode='pdf'; for(const [d,n] of [['dropSong','songName'],['dropChart','chartName']]){ $(d).classList.remove('has'); $(n).textContent=''; } $('chartText').hidden=true; $('chartText').value=''; $('songFile').value=''; $('chartFile').value=''; ready(); }
-$('newBtn').addEventListener('click',()=>{ forgetLast(); if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
+$('newBtn').addEventListener('click',()=>{ forgetLast(); $('bpmIn').value=''; $('meterIn').value=''; if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
 
 // ---------- downloads ----------
 let dl=null; (async()=>{ try{ dl=await window.claude?.use?.('downloads'); }catch(e){ dl=null; } })();

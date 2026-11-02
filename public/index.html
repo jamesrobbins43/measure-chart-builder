@@ -1345,16 +1345,20 @@ function update(force,noScroll){
     const el=curEl;
     if(el && el.parentElement===aheadRow) aheadRow=null;
     if(el){ el.classList.add('cur'); if(playing||(force&&!noScroll)){ const r=el.getBoundingClientRect(), top=document.querySelector('.transport').getBoundingClientRect().bottom, bottom=$('editor').hidden?innerHeight:$('editor').getBoundingClientRect().top;
-      if(r.top<top+8||r.bottom>bottom-16) quickScroll(window.scrollY+r.top-top-10); } }
+      if(r.top<top+8||r.bottom>bottom-16){ // while playing, keep the line just played on top so its last bar can still be read (CJ)
+        const row=el.parentElement, pr=row?.previousElementSibling, prR=playing&&pr?.classList.contains('row')?pr.getBoundingClientRect():null;
+        const y=prR&&r.bottom-prR.top<=bottom-top-26?prR.top:r.top; quickScroll(window.scrollY+y-top-10); } } }
     $('where').textContent= ci||bar<0?'Count-in': bar>=song.bars.length?'End': `${song.bars[bar].sec||''} · bar ${bar+1}`;
     lastBar=key;
   }
-  // near the end of the last bar on a line, glide the next line up under the player so you can read ahead
+  // near the end of the last bar on a line, glide that line up to the top so the next line shows under it:
+  // the bar just played stays readable while you read ahead (CJ)
   if(playing && bar>=0 && bar+1<measEls.length){ const el=measEls[bar], nx=measEls[bar+1];
     if(!ci && el && nx && nx.parentElement!==el.parentElement && aheadRow!==nx.parentElement && nx.parentElement.offsetParent){
       const left=bT(bar+1)-t, lead=Math.max(P*(ST.compound?2:1), Math.min(P*M*0.5, 0.9));
       if(left<=lead){ aheadRow=nx.parentElement; const top=document.querySelector('.transport').getBoundingClientRect().bottom;
-        quickScroll(window.scrollY+nx.parentElement.getBoundingClientRect().top-top-10); } } }
+        const bottom=$('editor').hidden?innerHeight:$('editor').getBoundingClientRect().top, rr=el.parentElement.getBoundingClientRect(), nr=nx.parentElement.getBoundingClientRect();
+        quickScroll(window.scrollY+(nr.bottom-rr.top<=bottom-top-26?rr.top:nr.top)-top-10); } } }
   if(ci && $('where').textContent!=='Count-in') $('where').textContent='Count-in';
   if(!ci && lastCi){ lastCi=false; $('where').textContent=`${song.bars[bar]?.sec||''} · bar ${bar+1}`; } if(ci) lastCi=true;
   if(beat!==lastBeat||key!==lastKeyB||force){ lastKeyB=key;

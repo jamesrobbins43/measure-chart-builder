@@ -242,7 +242,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
   <div class="editor" id="editor" hidden><div class="ein wrap">
     <h2 id="edTitle">Bar 1</h2>
     <div class="row2" style="grid-column:auto / span 2"><label for="edLen" style="flex-direction:row;align-items:center;gap:8px">Beats in this bar:<select id="edLen"></select></label><button type="button" id="edLenApply">Apply</button><button type="button" id="edPrevLine" title="Put this bar at the end of the line above">Move to prior line</button><button type="button" id="edNextLine" title="Start a new line with this bar">Move to next line</button><span id="edLenMsg" role="status"></span></div>
-    <div class="group"><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button class="primary" type="button" id="edClose">Done fixing</button></div>
+    <div class="group"><span id="edLocal" hidden style="font-family:var(--f-ui);font-size:12px;color:var(--muted);align-self:center">Your fixes are saved on this computer only.</span><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button class="primary" type="button" id="edClose">Done fixing</button></div>
     <div class="row2"><label for="edInsLen" style="flex-direction:row;align-items:center;gap:8px">Add a bar of<select id="edInsLen"></select>beats</label><button type="button" id="edInsBefore">before this bar</button><button type="button" id="edInsAfter">after this bar</button><button type="button" id="edDel">Remove this bar</button></div>
     <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply">Re-line up from here</button><span id="edAnchors"></span></div>
     <div class="lgrid" id="lyrGrid" hidden>
@@ -386,7 +386,7 @@ async function build(){
 }
 // ---------- song library: saved fixes, shared through the artifact's db ----------
 let DB=null; (async()=>{ try{ DB=await window.claude?.use?.('db'); }catch(e){ DB=null; } })();
-let CAN_FIX=true; // "Fix bars" editing: off in the public builds (CJ), on in CJ's own copies
+let CAN_FIX=true; // "Fix bars" editing: on for everyone (CJ); members' fixes stay in their own browser
 if(!CAN_FIX){ document.getElementById('fixHint')?.remove(); }
 const ENV_HZ=20;
 function songEnv(x,sr){ // loudness at 20 Hz for the first 2 minutes, 0..255
@@ -874,7 +874,7 @@ function openEditor(i,noFocus){
   const M=bLen(i);
   $('edTitle').textContent=`Bar ${i+1}`+(M!==ST.meter?` (${M} beats)`:'');
   $('edLen').innerHTML=Array.from({length:ST.meter+4},(_,k)=>k+1).map(n=>`<option value="${n}"${n===M?' selected':''}>${n}${n===ST.meter?' (normal)':''}</option>`).join('');
-  $('edLenMsg').textContent=''; lineUI(i);
+  $('edLenMsg').textContent=''; lineUI(i); $('edLocal').hidden=!!(typeof DB!=='undefined'&&DB&&DB.canSave!==false);
   if(!$('edInsLen').options.length || $('edInsLen').dataset.m!=String(ST.meter)){ $('edInsLen').innerHTML=Array.from({length:ST.meter+4},(_,k)=>k+1).map(n=>`<option value="${n}"${n===ST.meter?' selected':''}>${n}</option>`).join(''); $('edInsLen').dataset.m=ST.meter; }
   $('edDel').disabled=ST.song.bars.length<2;
   const opts=['<option value="">(no change)</option>']; const seen=new Set();

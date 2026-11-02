@@ -18,8 +18,7 @@ let DB=(()=>{
 })();"""
 t=t.replace(old,shim,1)
 # Fix bars only for the editor (CJ's key); members on the public page don't get it
-assert 'let CAN_FIX=true;' in t
-t=t.replace('let CAN_FIX=true;','let CAN_FIX=DB.canSave;',1)
+assert 'let CAN_FIX=true;' in t  # Fix bars is on for members too (CJ): their fixes stay in their own browser; only the editor key can Save to library
 # problem reports go to this site's server
 old_rep="async function sendReportRaw(d){ if(!DB) throw new Error('no db'); await DB.collection('reports').doc().set(d); }"
 assert old_rep in t

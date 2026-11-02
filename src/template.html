@@ -860,7 +860,7 @@ $('lgSave').addEventListener('click',()=>{
 // ---------- fixing ----------
 let editing=false, selBar=-1;
 $('editBtn').addEventListener('click',()=>{ editing=!editing; $('editBtn').setAttribute('aria-pressed',editing); $('editBtn').classList.toggle('primary',editing); $('editBtn').textContent=editing?'Done fixing':'Fix bars'; if(editing) openEditor(Math.max(0,Math.min(ST.song.bars.length-1,selBar>=0?selBar:barAt(songTime())))); else closeEditor(); });
-function onBar(i){ if(editing) openEditor(i); else seekBar(i); }
+function onBar(i){ if(editing){ openEditor(i,true); seekBar(i); } else seekBar(i); } // while fixing, a click also plays from that bar so you can check it (CJ); focus stays off the grid so Space still pauses
 function markSel(){ document.querySelectorAll('.measure.sel').forEach(e=>e.classList.remove('sel')); if(selBar>=0) measEls[selBar]?.classList.add('sel'); }
 // clicking a bar while fixing: the chords & lyrics grid opens on it straight away (CJ: the one-line quick edit is gone)
 function openEditor(i,noFocus){

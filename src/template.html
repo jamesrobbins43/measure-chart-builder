@@ -391,6 +391,9 @@ function libUI(){
   $('libFresh').hidden=!ST.libDate;
   $('libMsg').textContent=ST.libDate?`Using fixes saved ${new Date(ST.libDate).toLocaleDateString()}.`:(DB&&DB.canSave===false?'':'Save once the bars look right, so this song lines up on its own next time.');
 }
+// ambience before the song proper (a pad swell, room noise): the chart can't start until the first clear attack
+function leadT(){ if(!ST.O) return 0; const e=ST.O.env, s=[...e].sort((a,b)=>a-b), p95=s[Math.floor(s.length*0.95)]||0; let i=0; while(i<e.length&&e[i]<0.8*p95) i++; return i/ST.O.fps+ST.O.offset; }
+function leadMinT(){ const t=leadT(); return t>1.5? t-0.35*ST.P : null; }
 // try the likeliest keys x both halves of the pulse x every beat-1 position; keep the best fit
 async function fitSearch(b0s){
   const S1=beatSegments(ST.Cf,ST.P,b0s[0],ST.audio.duration);
@@ -398,7 +401,7 @@ async function fitSearch(b0s){
   let best=null;
   for(const sh of shifts) for(const b0 of b0s){
     const S0=beatSegments(ST.Cf,ST.P,b0,ST.audio.duration);
-    for(let ph=0;ph<ST.meter;ph++){ const al=alignEvents(S0,ST.events,ST.meter,ph,{shift:sh,phrase:0,compound:ST.compound}); if(!best||al.score>best.al.score) best={b0,ph,al,S:S0,sh}; }
+    for(let ph=0;ph<ST.meter;ph++){ const al=alignEvents(S0,ST.events,ST.meter,ph,{shift:sh,phrase:0,compound:ST.compound,minT:leadMinT()}); if(!best||al.score>best.al.score) best={b0,ph,al,S:S0,sh}; }
     await new Promise(r=>setTimeout(r,0));
   }
   ST.beat0=best.b0; ST.downPhase=best.ph; ST.S=best.S; ST.shift=best.sh;
@@ -406,9 +409,9 @@ async function fitSearch(b0s){
 }
 // final pass on half beats (so pushed chords fit) and with 4-bar phrase awareness
 function fineAlign(anchors){
-  if(ST.compound) return alignEvents(beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration),ST.events,ST.meter,ST.downPhase,{anchors,shift:ST.shift,compound:true}); // eighths are already fine enough
+  if(ST.compound) return alignEvents(beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration),ST.events,ST.meter,ST.downPhase,{anchors,shift:ST.shift,compound:true,minT:leadMinT()}); // eighths are already fine enough
   const S2=beatSegments(ST.Cf,ST.P/2,ST.beat0,ST.audio.duration);
-  return alignEvents(S2,ST.events,ST.meter,ST.downPhase,{anchors,shift:ST.shift,sub:2});
+  return alignEvents(S2,ST.events,ST.meter,ST.downPhase,{anchors,shift:ST.shift,sub:2,minT:leadMinT()});
 }
 function realign(keep=true){
   ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration);
@@ -507,7 +510,7 @@ function buildGraph(ac,dest,songBuffer,clickBuffer,vocal,clickGain,stems){
   // drums and bass are added (or taken away) on top of the full song: song*o + drums*(d-o) + bass*(b-o)
   // soft limiter with no delay, so boosted drums can't clip and the click stays in time
   const bus=ac.createWaveShaper(); bus.curve=SOFTCLIP; bus.oversample='none';
-  bus.connect(dest);
+  const fade=ac.createGain(); bus.connect(fade); fade.connect(dest); // fade-in on the last count-in beat
   let ds=null, bsrc=null, gsrc=null, dg=null, bg=null, gg=null;
   if(stems){ ds=ac.createBufferSource(); ds.buffer=stems.drums; dg=ac.createGain(); dg.gain.value=0.9*(mx.d-mx.o); ds.connect(dg); dg.connect(bus);
     bsrc=ac.createBufferSource(); bsrc.buffer=stems.bass; bg=ac.createGain(); bg.gain.value=0.9*(mx.b-mx.o); bsrc.connect(bg); bg.connect(bus);
@@ -520,7 +523,7 @@ function buildGraph(ac,dest,songBuffer,clickBuffer,vocal,clickGain,stems){
   let c=null, cg=ac.createGain(); cg.gain.value=clickGain; cg.connect(dest);
   if(clickBuffer){ c=ac.createBufferSource(); c.buffer=clickBuffer; c.connect(cg); }
   const start=(when,off)=>{ s.start(when,off); c&&c.start(when,off); ds&&ds.start(when,off); bsrc&&bsrc.start(when,off); gsrc&&gsrc.start(when,off); };
-  return {s,c,cut,cg,ds,bsrc,gsrc,dg,bg,gg,master,start};
+  return {s,c,cut,cg,ds,bsrc,gsrc,dg,bg,gg,master,fade,start};
 }
 const SOFTCLIP=(()=>{ const n=4097, c=new Float32Array(n); for(let i=0;i<n;i++){ const x=(i/(n-1))*2-1, ax=Math.abs(x); c[i]=ax<=0.8? x : Math.sign(x)*(0.8+0.2*Math.tanh((ax-0.8)/0.2)); } return c; })();
 function mixGains(){ return {d:+$('drumVol').value/100, b:+$('bassVol').value/100, g:+$('gtrVol').value/100, o:+$('restVol').value/100}; }
@@ -580,8 +583,11 @@ function startAtTime(t,countBar,keep){
   if(countBar!=null){ // one bar of clicks first, landing on the downbeat of countBar
     const P=ST.song.beat, M=ST.meter, down=ST.song.bar0+countBar*P*M, now=ac.currentTime+0.06;
     const c0=keep?ciUntil-M*P:now; // keep: carry on a count-in that's already running
-    if(!keep && down-offsetAt>M*P) offsetAt=down-M*P; // long lead-in before bar 1: start the audio with the count-in
-    ciUntil=c0+M*P; startAt=ciUntil-(down-offsetAt); ciBar=countBar; nodes.ci=countInSource(ac,Math.max(c0,now),Math.max(0,now-c0)); }
+    // the music fades in over the count-in's last beat (a dotted quarter in 6/8), so any lead-in or pickup is heard coming in
+    const FADE=P*(ST.compound?3:1); if(!keep) offsetAt=Math.max(0,down-FADE);
+    ciUntil=c0+M*P; startAt=ciUntil-(down-offsetAt); ciBar=countBar; nodes.ci=countInSource(ac,Math.max(c0,now),Math.max(0,now-c0));
+    const g=nodes.fade.gain, f0=Math.max(now,ciUntil-FADE); g.setValueAtTime(0,now); g.setValueAtTime(0,f0); if(ciUntil>f0) g.linearRampToValueAtTime(1,ciUntil); else g.setValueAtTime(1,ciUntil);
+    const cg=nodes.cg.gain, cl=cg.value; cg.setValueAtTime(0,now); cg.setValueAtTime(cl,ciUntil-0.02); } // the count-in plays its own clicks
   else startAt=ac.currentTime+0.06;
   scheduleCut(nodes.cut.gain, startAt, offsetAt, vocalLevel());
   nodes.start(startAt,offsetAt);
@@ -619,7 +625,7 @@ function markChoruses(){ const on=chorusBars(); measEls.forEach((m,i)=>m.classLi
   else { const i=topBar(), row=measEls[0]?.parentElement; if(row) addCi(i,0.03,row,'Count in and play from the top',true); }
   $('rows').classList.toggle('cho-only',choOnly); }
 // every song starts with one bar of count-in, landing on the first bar that starts after 0 s
-function topBar(){ const BAR=ST.song.beat*ST.meter; return Math.max(0,Math.ceil(-ST.song.bar0/BAR-1e-6)); }
+function topBar(){ const BAR=ST.song.beat*ST.meter, b=ST.song.bars; let i=Math.max(0,Math.ceil(-ST.song.bar0/BAR-1e-6)); if(b[i]&&b[i].section==='Lead-in'){ while(i<b.length-1&&!b[i].chords.length) i++; } return i; } // count in to the first chord, past any lead-in
 function atTop(t){ return t<=ST.song.bar0+topBar()*ST.song.beat*ST.meter+0.05; }
 function choStartBar(t){ const sp=chorusSpans(), s=sp.find(([a])=>Math.abs(a-0.03-t)<0.12); return s?Math.round((s[0]-ST.song.bar0)/(ST.song.beat*ST.meter)):null; }
 function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt) return; const t=offsetAt+(ctxNow()-startAt), sp=chorusSpans(); if(!sp.length) return;

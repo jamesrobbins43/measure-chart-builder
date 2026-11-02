@@ -249,7 +249,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   const fillArrive=a=>{ // best ways to be at the start of each event at beat a
     for(let j=0;j<N;j++){
       if(anchor[j]!==undefined && a!==anchor[j]) continue;
-      if(j===0){ const q=barQ(a); const i=at(0,a,q); arrV[i]=lam*a; arrF[i]=-1; arrQ[i]=q; continue; }
+      if(j===0){ if(opt.minT!=null && S.beats[Math.min(a,S.n-1)]<opt.minT) continue; const q=barQ(a); const i=at(0,a,q); arrV[i]=lam*a; arrF[i]=-1; arrQ[i]=q; continue; }
       if(!isStart(j)){ for(let q=0;q<Q;q++){ const v=dp[at(j-1,a,q)]; if(v>NEG/2){ const i=at(j,a,q); arrV[i]=v; arrF[i]=j-1; arrQ[i]=q; } } continue; }
       const qn=barQ(a), onBar=((a-downPhase)%meter+meter)%meter===0, i=at(j,a,qn);
       const srcs=[[j-1,0]]; if(repSrc[j]>=0){ let nb=0; for(let k=j;k<N&&firstOf[k]===j;k++) if(bare[k]) nb++; srcs.push([repSrc[j],REP+BF*nb]); } // a repeat mustn't pay for itself with the bar-per-chord bonus
@@ -358,7 +358,8 @@ function buildSong(meta,sections,S,P,downPhase,meter,events,al,dur,vox){
     const m=new Map(); for(const c of b.chords) m.set(c[0],c[1]); b.chords=[...m.entries()].sort((a,c)=>a[0]-c[0]); }
   // repeat the ringing chord on beat 1 of bars with no change
   let ring=null; for(const b of bars){ if(!b.chords.length && ring) b.chords=[[1,ring]]; else if(b.chords.length && b.chords[0][0]>1 && ring) b.chords.unshift([1,ring]); if(b.chords.length) ring=b.chords[b.chords.length-1][1]; }
-  if(!bars[0].section && sections[0]) bars[0].section=sections[0].label;
+  // bars before the chart's first chord (ambience, a swell) are a lead-in, not part of the first section
+  if(!bars[0].section){ const fb=bars.findIndex(b=>b.section); if(fb>0 && bars.slice(0,fb).every(b=>!b.chords.length)) bars[0].section='Lead-in'; else if(sections[0]) bars[0].section=sections[0].label; }
   return {title:meta.title, artist:meta.artist, key:meta.key, bpm:Math.round(60/P*10)/10, meter, bar0, beat:P, bars};
 }
 

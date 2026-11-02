@@ -916,7 +916,7 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
   E.forEach((e,ei)=>{
     if(e.op==='ins'){ const at=Math.max(0,Math.min(grid.length,e.at)), l=grid[grid.length-1], s0=at<grid.length?grid[at].s:(l?l.s+l.len:0);
       for(let k=at;k<grid.length;k++) grid[k].s+=e.len; grid.splice(at,0,{s:s0,len:e.len,ins:ei}); }
-    else if(e.op==='mrg'){ if(e.at<1||e.at>=grid.length) return; grid[e.at-1].len+=grid[e.at].len; grid.splice(e.at,1); } // fold a bar's beats into the bar before it: no bar line after it moves
+    else if(e.op==='mrg'||(e.op==='del'&&e.at>0&&e.at<grid.length&&grid[e.at].len<M0&&grid[e.at].ins==null)){ if(e.at<1||e.at>=grid.length) return; grid[e.at-1].len+=grid[e.at].len; grid.splice(e.at,1); } // fold a bar's beats into the bar before it, so no bar line after it moves (a short bar removed before this fix is folded in too)
     else if(e.op==='del'){ if(e.at<0||e.at>=grid.length||grid.length<2) return; const [g]=grid.splice(e.at,1); for(let k=e.at;k<grid.length;k++) grid[k].s-=g.len; } });
   for(let l=grid[grid.length-1]; l.s+l.len<end0-1e-6; l=grid[grid.length-1]) grid.push({s:l.s+l.len,len:M0}); // keep the end of the song covered
   const nb=grid.map(g=>({chords:[],lyrics:[],section:null,s:g.s,len:g.len,s0:g.s0,ins:g.ins}));

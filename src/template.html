@@ -1,7 +1,7 @@
 <title>Measure Chart Builder</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta charset="utf-8">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500&family=IBM+Plex+Mono:wght@400;500&family=Open+Sans:wght@400;500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
@@ -14,6 +14,7 @@
   --f-chord:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
   --f-lyric:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --f-ui:"Open Sans",system-ui,-apple-system,"Segoe UI",sans-serif; /* small grey text (CJ) */
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#101318; --paper:#181c23; --ink:#e8ebef; --muted:#9aa3ae; --rule:#2b313a; --tick:#4a525d;
@@ -34,74 +35,74 @@ h1,h2{font-family:var(--f-chord);font-weight:700;letter-spacing:.02em;text-trans
 /* upload */
 .intro{max-width:980px;margin:0 auto;padding-block:32px 48px}
 .intro h1{font-size:30px}
-.lede{color:var(--muted);max-width:62ch;margin:6px 0 22px;line-height:1.5}
+.lede{font-family:var(--f-ui);color:var(--muted);max-width:62ch;margin:6px 0 22px;line-height:1.5}
 .drops{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
 .drop{position:relative;background:var(--paper);border:1.5px dashed var(--tick);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .drop.has{border-style:solid;border-color:var(--ok)}
 .drop.over{border-color:var(--accent);background:var(--accent-soft)}
 .drop h2{font-size:16px}
-.drop p{margin:0;color:var(--muted);font-size:13px}
+.drop p{font-family:var(--f-ui);margin:0;color:var(--muted);font-size:13px}
 .drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
 .drop .fname{font-family:var(--f-mono);font-size:12px;color:var(--ok);overflow-wrap:anywhere}
-.alt{font-size:12px;color:var(--muted);position:relative;z-index:1}
+.alt{font-family:var(--f-ui);font-size:12px;color:var(--muted);position:relative;z-index:1}
 .alt button{padding:2px 8px;font-size:12px}
 textarea{width:100%;box-sizing:border-box;min-height:180px;font-family:var(--f-mono);font-size:12px;position:relative;z-index:1}
 .opts{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:end;margin-top:18px}
-.opts label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.opts label{font-family:var(--f-ui);display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
 .opts input[type=number]{width:90px}
-.steps{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:4px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.steps{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:4px;font-family:var(--f-ui);font-size:12px;color:var(--muted)}
 .steps li.note{color:var(--muted,#666)} .linkbtn{background:none;border:0;padding:0;color:var(--accent,#2b54d6);text-decoration:underline;cursor:pointer;font:inherit} .steps li.done{color:var(--ok)} .steps li.run{color:var(--ink)} .steps li.err{color:#d23a3a}
-.example{margin-top:28px;border-top:1px solid var(--rule);padding-top:16px;font-size:13px;color:var(--muted);max-width:70ch;line-height:1.5}
+.example{font-family:var(--f-ui);margin-top:28px;border-top:1px solid var(--rule);padding-top:16px;font-size:13px;color:var(--muted);max-width:70ch;line-height:1.5}
 
 /* transport */
 .transport{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--rule)}
 .tin{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:10px;margin:0 auto}
 .titleblock{min-width:0}
 .titleblock h1{font-size:21px}
-.meta{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-top:2px}
+.meta{font-family:var(--f-ui);font-size:12px;color:var(--muted);margin-top:2px}
 .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 #play{min-width:84px}
-.time{font-family:var(--f-mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:96px}
-.knob{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.time{font-family:var(--f-ui);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:96px}
+.knob{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)}
 .knob input[type=range]{width:96px;accent-color:var(--accent)}
 .knob output{min-width:48px;font-variant-numeric:tabular-nums}
 .mixer{display:flex;gap:4px;align-items:flex-start}
 .strip span{min-height:2.2em}
 .mixer[hidden]{display:none}
-.strip{display:flex;flex-direction:column;align-items:center;gap:3px;width:56px;color:var(--muted);font-size:11px;line-height:1.1;text-align:center;cursor:pointer}
-.strip output{font-family:var(--f-mono);font-size:11px;color:var(--ink);font-variant-numeric:tabular-nums;min-height:13px}
+.strip{font-family:var(--f-ui);display:flex;flex-direction:column;align-items:center;gap:3px;width:56px;color:var(--muted);font-size:11px;line-height:1.1;text-align:center;cursor:pointer}
+.strip output{font-family:var(--f-ui);font-size:11px;color:var(--ink);font-variant-numeric:tabular-nums;min-height:13px}
 .strip svg{color:var(--ink)}
 .fader{writing-mode:vertical-lr;direction:rtl;width:24px;height:70px;margin:0;accent-color:var(--accent);cursor:pointer}
 .fader:disabled{opacity:.35;cursor:wait}
 .strip:has(.fader:disabled) svg{opacity:.45}
 .chordnow{display:flex;align-items:center;gap:16px;margin-left:auto}
 .cn{display:flex;flex-direction:column;align-items:flex-start}
-.cn small{font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.cn small{font-family:var(--f-ui);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .cn b{font-family:var(--f-chord);font-weight:700;font-size:36px;line-height:1;min-width:2.4em}
 .cn.next b{font-size:22px;color:var(--muted)}
-.ch .and{font-family:var(--f-mono);font-weight:500;font-size:.62em;color:var(--muted);margin-right:1px;vertical-align:.35em}
+.ch .and{font-family:var(--f-ui);font-weight:500;font-size:.62em;color:var(--muted);margin-right:1px;vertical-align:.35em}
 .cn sup,.ch sup{font-size:.6em;font-weight:600;margin-left:1px}
 .beats{display:flex;gap:5px;align-items:center}
-.beats i{font-style:normal;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;font-family:var(--f-mono);font-size:13px;font-weight:500;color:var(--muted)}
+.beats i{font-style:normal;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;font-family:var(--f-ui);font-size:13px;font-weight:500;color:var(--muted)}
 .beats i.on{background:var(--accent);color:var(--paper);font-weight:700}
 .beats i.on.one{background:var(--inst)}
-.where{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.where{font-family:var(--f-ui);font-size:12px;color:var(--muted)}
 
 /* toolbar */
 .toolbar{margin:0 auto;padding-block:12px 0;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
-.group{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.group{font-family:var(--f-ui);display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .help{position:relative;display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--muted);font-size:11px;font-weight:600;line-height:1;cursor:help;color:var(--muted)} .help:focus-visible{outline:2px solid var(--accent);outline-offset:2px} .help::after{content:attr(data-tip);position:absolute;left:50%;top:calc(100% + 6px);transform:translateX(-50%);width:220px;padding:6px 8px;border-radius:6px;background:var(--ink);color:var(--paper);font-size:12px;font-weight:400;line-height:1.35;text-align:left;opacity:0;pointer-events:none;transition:opacity .12s;z-index:20} .help:hover::after,.help:focus::after{opacity:1}
 .adv{flex-basis:100%;gap:8px 10px;padding:8px 10px;border:1px solid var(--rule);border-radius:8px} .adv[hidden]{display:none} .adv label{display:inline-flex;align-items:center;gap:6px} .adv input[type=number]{width:70px;font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)} .adv select{font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)}
-.group b{font-family:var(--f-mono);font-weight:500;color:var(--ink)}
+.group b{font-family:var(--f-ui);font-weight:500;color:var(--ink)}
 .group button{padding:5px 10px;font-size:13px}
 .group button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 [hidden]{display:none!important}
-.msg{font-size:13px;color:var(--muted);flex-basis:100%;margin:0}
+.msg{font-family:var(--f-ui);font-size:13px;color:var(--muted);flex-basis:100%;margin:0}
 .msg.warn{color:var(--warn)}
 
 /* chart */
 main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full window width; text stays the same size, so wider windows give lyrics more room */
-.scroller{overflow-x:auto;overflow-y:hidden} #keyGroup select{font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)} .keymsg{color:var(--muted);font-size:12px}
+.scroller{overflow-x:auto;overflow-y:hidden} #keyGroup select{font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)} .keymsg{font-family:var(--f-ui);color:var(--muted);font-size:12px}
 #chart{container-type:inline-size}
 #rows{font-size:12.5px}
 .row{display:flex;align-items:stretch;padding-left:1px;position:relative}
@@ -110,7 +111,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .measure{flex:0 0 calc(100% / var(--per,8));min-width:0;box-sizing:border-box;background:var(--paper);border:1px solid var(--rule);margin:0 0 -1px -1px;padding:22px 4px 4px;position:relative;cursor:pointer;outline:none;display:flex;flex-direction:column}
 .measure.cur{background:var(--accent-soft)}
 .measure.sel{box-shadow:inset 0 0 0 2px var(--accent)}
-.measure .num{position:absolute;top:4px;left:5px;font-family:var(--f-mono);font-size:10px;color:var(--muted)}
+.measure .num{position:absolute;top:4px;left:5px;font-family:var(--f-ui);font-size:10px;color:var(--muted)}
 .measure .sec{position:absolute;top:3px;left:26px;right:4px;overflow:hidden;text-overflow:ellipsis;font-family:var(--f-chord);font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;padding-left:6px;border-left:3px solid var(--c,var(--muted))}
 .g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:auto 1fr auto;flex:1}
 .g.m3{grid-template-columns:repeat(3,minmax(0,1fr))} .g.m6{grid-template-columns:repeat(6,minmax(0,1fr))} .g.m2{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -127,17 +128,17 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .lyr>span{flex:0 0 auto;max-width:100%;padding:0 .45em 0 3px;box-sizing:border-box}
 .ly{grid-row:2;line-height:1.25;padding:2px .3em 4px 3px;min-height:1.4em;align-self:start;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:break-word}
 .bt{grid-row:3;align-self:end;margin-top:3px;padding-left:1px;line-height:1}
-.bt b{display:inline-grid;place-items:center;width:1.6em;height:1.6em;border-radius:50%;font-family:var(--f-mono);font-size:.78em;font-weight:500;color:var(--muted)}
+.bt b{display:inline-grid;place-items:center;width:1.6em;height:1.6em;border-radius:50%;font-family:var(--f-ui);font-size:.78em;font-weight:500;color:var(--muted)}
 .bt.live b{background:var(--accent);color:var(--paper);font-weight:700}
 .bt.live.one b{background:var(--inst)}
 
 /* bar editor */
 .editor{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--paper);border-top:2px solid var(--accent);padding-bottom:max(12px,env(safe-area-inset-bottom,0px))}
 .editor .ein{max-width:1500px;margin:0 auto;padding-top:12px;display:grid;grid-template-columns:auto 1fr 1fr auto;gap:10px 14px;align-items:end}
-.editor label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+.editor label{font-family:var(--f-ui);display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
 .editor input[type=text]{font:inherit;font-family:var(--f-mono);font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:7px 10px;min-width:0}
 .editor h2{font-size:16px;align-self:center}
-.editor .row2{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12px;color:var(--muted)}
+.editor .row2{font-family:var(--f-ui);grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12px;color:var(--muted)}
 @media (max-width:760px){ .editor .ein{grid-template-columns:1fr} .chordnow{margin-left:0} .cn b{font-size:28px} }
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 </style>
@@ -880,9 +881,9 @@ $('dlChart').addEventListener('click',async()=>{
   const head=`<h1 style="font-family:var(--f-chord);font-size:20px;margin:0 0 2px;text-transform:uppercase">${esc($('songTitle').textContent)}</h1><div class="meta" style="margin-bottom:8px">${esc($('songMeta').textContent)} · ${8} bars per line</div>`;
   const was=perLine; if(was!==8) render(8);
   const clone=$('rows').cloneNode(true); if(was!==8){ render(); lastBar=-2; lastBeat=-1; update(false); } clone.querySelectorAll('.cur,.sel,.live').forEach(e=>e.classList.remove('cur','sel','live'));
-  const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc($('songTitle').textContent)} - measure chart</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap"><style>${css}
+  const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc($('songTitle').textContent)} - measure chart</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500&family=IBM+Plex+Mono:wght@400;500&family=Open+Sans:wght@400;500;600&display=swap"><style>${css}
 :root{color-scheme:light} body{background:#fff;color:#15191f;margin:24px} #chart{min-width:0} .measure{cursor:default}
-@page{size:legal landscape;margin:9mm} @media print{body{margin:0} .row{break-inside:avoid}}</style></head><body>${head}<div id="chart" lang="en">${clone.outerHTML}</div><p style="font:12px var(--f-mono);color:#5d6672;margin-top:12px">Print on legal paper, landscape, for 8 readable bars per line.</p></body></html>`;
+@page{size:legal landscape;margin:9mm} @media print{body{margin:0} .row{break-inside:avoid}}</style></head><body>${head}<div id="chart" lang="en">${clone.outerHTML}</div><p style="font:12px var(--f-ui);color:#5d6672;margin-top:12px">Print on legal paper, landscape, for 8 readable bars per line.</p></body></html>`;
   const ok=await save(`${baseName()} - measure chart.html`, html);
   $('msg').className='msg'; $('msg').textContent= ok?'Saved the chart. Open it in your browser and print (legal, landscape).':'Download was cancelled.';
 });

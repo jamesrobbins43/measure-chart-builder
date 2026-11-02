@@ -221,7 +221,12 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   // short bars: in 4/4 a section can end with a 2-beat bar, which moves beat 1 by half a bar for the rest of the song.
   // h = how many half-bar moves so far (mod 2); it can only change where a new section starts.
   const H=(opt.short??true)&&meterBeats===4&&!opt.compound?2:1, HALF=meter/2, SHORT=opt.shortCost??0.4;
-  const pos=(i,h=0)=>((i-downPhase-h*HALF)%meter+meter)%meter;
+  // bars whose length was set by hand (CJ: "Beats in this bar"): [start, beats] in beats from the first downbeat.
+  // Every beat after one moves beat 1 by (beats - meter); no automatic short bar may end inside one.
+  const FIX=(opt.fixedBars||[]).map(([s0,L])=>({a:downPhase+Math.round(s0*sub),z:downPhase+Math.round((s0+L)*sub),d:Math.round((L-meterBeats)*sub)})).filter(f=>f.z>f.a);
+  const offA=new Int32Array(T+2), noFlip=new Uint8Array(T+2); for(const f of FIX){ for(let i=Math.max(0,f.z);i<=T+1;i++) offA[i]+=f.d; for(let i=Math.max(0,f.a+1);i<=Math.min(T+1,f.z);i++) noFlip[i]=1; }
+  const off=i=>offA[Math.max(0,Math.min(T+1,i))];
+  const pos=(i,h=0)=>((i-downPhase-h*HALF-off(i))%meter+meter)%meter;
   const grp=opt.compound?3:2; // compound meters group eighths in threes
   const startBonus=(i,h)=>{ const p=pos(i,h); if(p%sub) return -0.3; const pb=p/sub; return pb===0?0.35:((meterBeats===4&&pb===2)||(opt.compound&&pb%3===0))?0.12:-0.08; };
   const durBonus=d=>(d%sub? -0.05 : (d/sub)%meterBeats===0?0.12:(d/sub)%grp===0?0.04:0);
@@ -248,7 +253,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   const arrV=new Float64Array(N*W*Q).fill(NEG), arrF=new Int32Array(N*W*Q), arrQ=new Int8Array(N*W*Q);
   const at=(j,b,q)=>(j*W+b)*Q+q;
   const anchor={}; for(const [j,v] of Object.entries(opt.anchors||{})) anchor[j]=v*sub;
-  const barQ=(a,h)=>(((Math.floor((a-downPhase-h*HALF)/meter))%Q0)+Q0)%Q0;
+  const barQ=(a,h)=>(((Math.floor((a-downPhase-h*HALF-off(a))/meter))%Q0)+Q0)%Q0;
   const isStart=j=>firstOf[j]===j;
   const repSrc=new Int32Array(N).fill(-1); for(let j=0;j<N;j++) if(isStart(j)) for(let k=j;k<N&&firstOf[k]===j;k++){ if(lastOf[k]===j){ repSrc[j]=k; break; } }
   // a section written "4X" may be played fewer times: the next section can follow any pass from the second on
@@ -264,7 +269,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
       for(const x of skipSrc[j]) srcs.push(x);
       for(const [k,cost] of srcs) for(let s=0;s<Q;s++){ const v0=dp[at(k,a,s)]; if(v0<=NEG/2) continue; const q=s%Q0, h=(s/Q0)|0;
         for(let h2=0;h2<H;h2++){
-          if(h2!==h && pos(a,h2)!==0) continue; // a short bar only ever ends right where this section starts on beat 1
+          if(h2!==h && (pos(a,h2)!==0 || noFlip[a])) continue; // a short bar only ever ends right where this section starts on beat 1
           const qn=barQ(a,h2), i=at(j,a,qn+Q0*h2), onBar=pos(a,h2)===0;
           const v=v0-cost-(h2===h ? (onBar&&q===qn?0:PH) : SHORT+(q===barQ(a,h)?0:PH)); // after a short bar, count whole bars in the old grid
           if(v>arrV[i]){ arrV[i]=v; arrF[i]=k; arrQ[i]=s; } } }
@@ -289,7 +294,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   // half-bar moves along the path, in beats from the first downbeat (each one ends a 2-beat bar)
   const moves=[]; for(let k=1;k<path.length;k++) if(path[k].h!==path[k-1].h) moves.push((path[k].start-downPhase)/sub);
   if(sub>1) for(const p of path) p.start/=sub;
-  return {path,end:bestEnd/sub,score:bv,moves};
+  return {path,end:bestEnd/sub,score:bv,moves,fixed:(opt.fixedBars||[]).map(f=>[+f[0],+f[1]])};
 }
 
 // reference length for each event from the first time its section type was played (Verse 1 for Verse 2, ...)
@@ -329,7 +334,12 @@ function buildSong(meta,sections,S,P,downPhase,meter,events,al,dur,vox){
   const endT=Math.max(beatT(al.end), beatT(lastLoud+1));
   // bar starts in beats from the first downbeat; a half-bar move (al.moves) ends a short bar there
   const total=(endT-bar0)/P-0.05*meter, moves=(al.moves||[]).slice().sort((a,b)=>a-b), bs=[]; { let x=0, mi=0;
-    while(bs.length===0 || x<total){ bs.push(x); let nx=x+meter; while(mi<moves.length && moves[mi]<=x+1e-6) mi++; if(mi<moves.length && moves[mi]<nx-1e-6){ nx=moves[mi]; mi++; } x=nx; } }
+    const fx=(al.fixed||[]).filter(f=>f[1]>0).sort((a,b)=>a[0]-b[0]); // bars set by hand: [start, beats]
+    while(bs.length===0 || x<total){ bs.push(x); const f=fx.find(f=>Math.abs(f[0]-x)<1e-6); let nx;
+      if(f){ nx=x+f[1]; while(mi<moves.length && moves[mi]<=nx+1e-6) mi++; }
+      else { nx=x+meter; const g=fx.find(f=>f[0]>x+1e-6 && f[0]<nx-1e-6); if(g) nx=g[0];
+        while(mi<moves.length && moves[mi]<=x+1e-6) mi++; if(mi<moves.length && moves[mi]<nx-1e-6){ nx=moves[mi]; mi++; } }
+      x=nx; } }
   const nb=bs.length;
   const bars=bs.map((x,i)=>({chords:[],lyrics:[],section:null,s:x,len:(i+1<nb?bs[i+1]:x+meter)-x}));
   const barOf=x=>{ if(x<bs[0]) return Math.floor(x/meter); let lo=0,hi=nb-1; while(lo<hi){ const m=(lo+hi+1)>>1; if(bs[m]<=x+1e-6) lo=m; else hi=m-1; } return lo; };

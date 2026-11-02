@@ -224,7 +224,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="group" id="keyGroup"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <span id="keyMsg" class="keymsg" role="status"></span></div>
     <div class="group"><button type="button" id="editBtn" aria-pressed="false">Fix bars</button></div>
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button></div>
-    <div class="group"><button type="button" id="dlPdf">Chart PDF</button></div>
+    <div class="group"><button type="button" id="dlPdf">Chart PDF</button><button type="button" id="dlVid" title="An MP4 of the chart with the beats lighting up and the click. No music.">Play-along video</button></div>
     <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><span id="libMsg"></span></div>
     <div class="group"><button type="button" id="newBtn">New song</button> <button type="button" id="reportBtn">Report a problem</button></div>
     <p class="msg" id="msg"></p>
@@ -1027,6 +1027,119 @@ function chordParts(c){ if(!c) return ['–','',''];
   const m=c.match(/^([A-G][b#]?)(m(?!aj))?(.*?)(\/[A-G][b#]?)?$/); if(!m) return [c,'',''];
   return [m[1]+(m[2]||''), (m[3]||'').replace(/^\((.*)\)$/,'$1'), m[4]||'']; }
 function cssColor(v){ const m=/var\((--[^)]+)\)/.exec(v||''); const raw=m?getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim():v; const ctx=document.createElement('canvas').getContext('2d'); ctx.fillStyle='#888'; ctx.fillStyle=raw||'#888'; const h=ctx.fillStyle; return h.startsWith('#')?[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]:[136,136,136]; }
+// ---------- play-along video (CJ): the chart with the beats lighting up + the click, no music. MP4, 1280x720 ----------
+const loadScript=(src,glob)=>window[glob]?Promise.resolve(window[glob]):new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src=src; sc.onload=()=>res(window[glob]); sc.onerror=()=>rej(new Error(glob)); document.head.appendChild(sc); });
+function vidPlan(){
+  const song=ST.song, P=song.beat, M0=ST.meter, nb=song.bars.length, start=Math.min(topBar(),nb-1), T0=bT(start), C=M0*P; // one bar of count-in first
+  const songEnd=bT(nb), dur=C+(songEnd-T0)+1.5;
+  // rows: 4 bars a line, each section on a new line, your own line moves too
+  const PER=4, rows=[]; for(let i=start;i<nb;i++){ const b=song.bars[i], cur=rows[rows.length-1], br=ST.breaks?.[i]; if(!cur||cur.idx.length===PER||br===true||(b.section&&br!==false)) rows.push({idx:[i]}); else cur.idx.push(i); }
+  let y=0; const secAt=[]; { let sc=''; song.bars.forEach((b,i)=>{ if(b.section) sc=b.section; secAt[i]=sc; }); }
+  for(const r of rows){ r.sec=r.idx.some(i=>song.bars[i].section); r.y=y; r.band=r.sec?30:0; y+=r.band+124; r.end=y; }
+  const rowOf=new Int32Array(nb).fill(-1); rows.forEach((r,k)=>r.idx.forEach(i=>rowOf[i]=k));
+  // section colours from the light theme, whatever the screen is set to
+  const root=document.documentElement, was=root.getAttribute('data-theme'); root.setAttribute('data-theme','light');
+  const colors={}; for(const sc of new Set(secAt)) colors[sc]='rgb('+cssColor(colorFor(sc)).join(',')+')';
+  const css=getComputedStyle(root), fChord=css.getPropertyValue('--f-chord').trim()||'sans-serif', fUi=css.getPropertyValue('--f-ui').trim()||'sans-serif';
+  if(was==null) root.removeAttribute('data-theme'); else root.setAttribute('data-theme',was);
+  return {song,P,M0,nb,start,T0,C,dur,rows,rowOf,secAt,colors,fChord,fUi,PER,title:$('songTitle').textContent,meta:$('songMeta').textContent};
+}
+function vidDraw(g,pl,tv){
+  const W=1280,H=720,{song,P,M0,T0,C,rows,rowOf,secAt,colors,fChord,fUi,PER}=pl, ink='#15191f', mut='#6b7480', acc='#2c56c9', soft='#e3eafc';
+  const ci=tv<C, ts=T0+(tv-C); let bar=ci?pl.start:Math.max(pl.start,Math.min(pl.nb-1,barAt(ts)));
+  const beat=ci?Math.floor(tv/P):Math.max(0,Math.floor((ts-bT(bar))/P+1e-6)), M=ci?M0:bLen(bar), done=!ci&&ts>=bT(pl.nb);
+  g.fillStyle='#fff'; g.fillRect(0,0,W,H);
+  // chart: the line just played stays on top, the current line under it (CJ); glide up near the end of a line
+  const top=120, r=rowOf[bar], tgt=k=>rows[Math.max(0,k-1)].y; let off=tgt(r);
+  if(!ci && r+1<rows.length){ const tn=bT(rows[r+1].idx[0]), left=tn-ts; if(left<0.6){ const u=1-left/0.6, e=u*u*(3-2*u); off=tgt(r)+(tgt(r+1)-tgt(r))*e; } }
+  g.save(); g.beginPath(); g.rect(0,top-6,W,H-top+6); g.clip();
+  const bw=(W-80)/PER;
+  for(const row of rows){ const y=top+row.y-off; if(y>H||y+row.band+124<top-40) continue;
+    if(row.band){ g.font=`700 19px ${fChord}`; row.idx.forEach((i,k)=>{ const b=song.bars[i]; if(!b.section) return; g.fillStyle=colors[b.section]||mut; g.fillText(b.section.toUpperCase(), 40+k*bw+4, y+22); }); }
+    const by=y+row.band;
+    row.idx.forEach((i,k)=>{ const b=song.bars[i], bm=bLen(i), x0=40+k*bw, beatW=(bw-24)/bm, cur=!ci&&!done&&i===bar;
+      if(cur){ g.fillStyle=soft; g.fillRect(x0,by,bw,116); }
+      g.strokeStyle='#d6dce5'; g.lineWidth=1; g.strokeRect(x0+0.5,by+0.5,bw,116);
+      g.fillStyle=colors[secAt[i]]||mut; g.fillRect(x0,by,bw,4);
+      if(b.section){ g.fillStyle='#5a6370'; g.fillRect(x0,by,3,116); }
+      g.font=`700 16px ${fChord}`; g.fillStyle=mut; g.fillText(String(i+1)+(bm!==M0?`  (${bm} beats)`:''), x0+10, by+24);
+      let lastEnd=-1e9;
+      b.chords.forEach(([bt,name])=>{ const f=bt%1, onAnd=f>=0.25&&f<0.75; let x=Math.max(x0+12+(Math.floor(bt-1)+(onAnd?0.5:0))*beatW, lastEnd+8); const [ro,ext,bass]=chordParts(name);
+        g.fillStyle=ink; g.font=`700 46px ${fChord}`; g.fillText(ro,x,by+70); let cx=x+g.measureText(ro).width;
+        if(ext){ g.font=`700 26px ${fChord}`; g.fillText(ext,cx+1,by+50); cx+=g.measureText(ext).width+2; }
+        if(bass){ g.font=`700 46px ${fChord}`; g.fillText(bass,cx,by+70); cx+=g.measureText(bass).width; } lastEnd=cx; });
+      const ands=new Set(b.chords.filter(([bt])=>{ const f=bt%1; return f>=0.25&&f<0.75; }).map(([bt])=>Math.floor(bt-1)));
+      for(let q=0;q<bm;q++){ const x=x0+12+q*beatW, yy=by+100;
+        if(cur&&q===beat){ g.fillStyle=acc; g.beginPath(); g.arc(x+7,yy-7,16,0,7); g.fill(); g.fillStyle='#fff'; } else g.fillStyle=mut;
+        g.font=`600 20px ${fUi}`; g.textAlign='center'; g.fillText(String(q+1),x+7,yy); g.textAlign='left';
+        if(ands.has(q)){ g.fillStyle=ink; g.font=`700 22px ${fUi}`; g.fillText('+',x+7+beatW/2-6,yy); } } });
+  }
+  g.restore();
+  // header: title, where you are, and the beat dots
+  g.fillStyle='#fff'; g.fillRect(0,0,W,top-8); g.fillStyle='#d6dce5'; g.fillRect(0,top-9,W,1);
+  g.fillStyle=ink; g.font=`700 34px ${fChord}`; g.fillText(pl.title.toUpperCase(),40,52);
+  g.fillStyle=mut; g.font=`400 17px ${fUi}`; g.fillText(pl.meta,40,82);
+  const where=ci?'COUNT-IN':done?'END':`${(song.bars[bar].sec||secAt[bar]||'').toUpperCase()} · BAR ${bar+1}`;
+  g.textAlign='right'; g.fillStyle=ci?acc:ink; g.font=`700 24px ${fChord}`; g.fillText(where,W-40,44);
+  for(let q=0;q<M;q++){ const x=W-40-(M-1-q)*44-16, y=78, on=!done&&q===beat; g.beginPath(); g.arc(x,y,16,0,7); g.fillStyle=on?(q===0?'#b4541a':acc):'#eef1f5'; g.fill(); g.fillStyle=on?'#fff':mut; g.font=`600 17px ${fUi}`; g.textAlign='center'; g.fillText(String(q+1),x,y+6); }
+  g.textAlign='left';
+}
+function vidAudio(pl,sr){
+  const n=Math.ceil(pl.dur*sr), d=new Float32Array(n), {P,M0,C,T0}=pl;
+  const tone=(f,amp)=>{ const L=Math.floor(sr*0.04), a=new Float32Array(L); for(let i=0;i<L;i++){ const t=i/sr; a[i]=amp*Math.sin(2*Math.PI*f*t)*Math.exp(-t*80)*Math.min(1,i/20); } return a; };
+  const hi=tone(1800,0.7), mid=tone(1500,0.6), lo=tone(1200,0.45);
+  const hit=(t,q)=>{ const s0=Math.round(t*sr), c=q===0?hi:(ST.compound&&q%3===0)?mid:lo; for(let i=0;i<c.length&&s0+i<n;i++) if(s0+i>=0) d[s0+i]+=c[i]; };
+  for(let k=0;k<M0;k++) hit(k*P,k);
+  for(let i=pl.start;i<pl.nb;i++){ const t0=C+bT(i)-T0; for(let q=0;q<bLen(i);q++) hit(t0+q*P,q); }
+  return d;
+}
+async function vidWebCodecs(pl,cv,g,prog){
+  const sr=48000, W=1280, H=720, fps=30;
+  const vcodec='avc1.42001f', vOk=(await VideoEncoder.isConfigSupported({codec:vcodec,width:W,height:H,bitrate:1500000,framerate:fps})).supported;
+  let acodec='mp4a.40.2'; let aOk=(await AudioEncoder.isConfigSupported({codec:acodec,sampleRate:sr,numberOfChannels:2,bitrate:128000})).supported;
+  if(!aOk){ acodec='opus'; aOk=(await AudioEncoder.isConfigSupported({codec:acodec,sampleRate:sr,numberOfChannels:2,bitrate:128000})).supported; }
+  if(!vOk||!aOk) return null;
+  const MX=await loadScript('https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js','Mp4Muxer');
+  const muxer=new MX.Muxer({target:new MX.ArrayBufferTarget(), video:{codec:'avc',width:W,height:H,frameRate:fps}, audio:{codec:acodec==='opus'?'opus':'aac',numberOfChannels:2,sampleRate:sr}, fastStart:'in-memory', firstTimestampBehavior:'offset'});
+  let err=null;
+  const ve=new VideoEncoder({output:(c,m)=>muxer.addVideoChunk(c,m), error:e=>err=e}); ve.configure({codec:vcodec,width:W,height:H,bitrate:1500000,framerate:fps});
+  const ae=new AudioEncoder({output:(c,m)=>muxer.addAudioChunk(c,m), error:e=>err=e}); ae.configure({codec:acodec,sampleRate:sr,numberOfChannels:2,bitrate:128000});
+  const pcm=vidAudio(pl,sr), CH=4800;
+  for(let i=0;i<pcm.length;i+=CH){ const n=Math.min(CH,pcm.length-i), buf=new Float32Array(n*2); buf.set(pcm.subarray(i,i+n),0); buf.set(pcm.subarray(i,i+n),n);
+    const ad=new AudioData({format:'f32-planar',sampleRate:sr,numberOfFrames:n,numberOfChannels:2,timestamp:Math.round(i/sr*1e6),data:buf}); ae.encode(ad); ad.close(); }
+  const N=Math.ceil(pl.dur*fps);
+  for(let f=0;f<N;f++){ if(err) throw err; vidDraw(g,pl,f/fps);
+    const vf=new VideoFrame(cv,{timestamp:Math.round(f*1e6/fps),duration:Math.round(1e6/fps)}); ve.encode(vf,{keyFrame:f%(fps*2)===0}); vf.close();
+    while(ve.encodeQueueSize>6) await new Promise(r=>setTimeout(r,2));
+    if(f%30===0){ prog(f/N); await new Promise(r=>setTimeout(r,0)); } }
+  await ve.flush(); await ae.flush(); if(err) throw err; muxer.finalize();
+  return {blob:new Blob([muxer.target.buffer],{type:'video/mp4'}), ext:'mp4'};
+}
+async function vidRealtime(pl,cv,g,prog){ // browsers without WebCodecs: record it as it plays (takes as long as the song)
+  const mime=['video/mp4;codecs=avc1,mp4a','video/mp4','video/webm;codecs=vp9,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported(m)); if(!mime) throw new Error('This browser cannot record video');
+  const ac=new AudioContext(), sr=ac.sampleRate, pcm=vidAudio(pl,sr), ab=ac.createBuffer(1,pcm.length,sr); ab.copyToChannel(pcm,0);
+  const dst=ac.createMediaStreamDestination(), src=ac.createBufferSource(); src.buffer=ab; src.connect(dst);
+  const st=cv.captureStream(30); dst.stream.getAudioTracks().forEach(t=>st.addTrack(t));
+  const rec=new MediaRecorder(st,{mimeType:mime,videoBitsPerSecond:1500000}), parts=[]; rec.ondataavailable=e=>{ if(e.data.size) parts.push(e.data); };
+  const stopped=new Promise(r=>rec.onstop=r); vidDraw(g,pl,0); rec.start(1000); await ac.resume(); const t0=ac.currentTime+0.15; src.start(t0);
+  await new Promise(res=>{ const tick=()=>{ const tv=ac.currentTime-t0; vidDraw(g,pl,Math.max(0,tv)); prog(Math.max(0,tv)/pl.dur); if(tv>=pl.dur){ res(); return; } requestAnimationFrame(tick); }; tick(); });
+  rec.stop(); await stopped; ac.close();
+  return {blob:new Blob(parts,{type:mime.split(';')[0]}), ext:mime.startsWith('video/mp4')?'mp4':'webm'};
+}
+$('dlVid').addEventListener('click',async()=>{
+  const btn=$('dlVid'); btn.disabled=true; $('msg').className='msg'; $('msg').textContent='Making the video…';
+  try{
+    if(playing) pause();
+    try{ await document.fonts.ready; }catch(e){}
+    const pl=vidPlan(), cv=document.createElement('canvas'); cv.width=1280; cv.height=720; const g=cv.getContext('2d');
+    const prog=u=>{ $('msg').textContent=`Making the video… ${Math.min(99,Math.round(u*100))}%`; };
+    let out=null; if(window.VideoEncoder&&window.AudioEncoder&&window.VideoFrame) out=await vidWebCodecs(pl,cv,g,prog);
+    if(!out){ $('msg').textContent='Recording the video in real time (this takes as long as the song)…'; out=await vidRealtime(pl,cv,g,prog); }
+    const bpm=Math.round(60/ST.P), ok=await save(`${baseName()} - play-along, click only (${bpm} BPM).${out.ext}`, out.blob);
+    $('msg').textContent= ok?`Saved the play-along video (${(out.blob.size/1048576).toFixed(1)} MB).`:'Download was cancelled.';
+  }catch(e){ console.warn(e); $('msg').className='msg warn'; $('msg').textContent="Couldn't make the video: "+(e.message||e); }
+  btn.disabled=false;
+});
 // song map shorthand for the PDF (CJ): V1, C1, TA, End; Intro, Interlude, Instrumental, Outro, Vamp, Tag stay whole words
 function mapLabel(l){ let rep=''; l=l.replace(/\s*\((\d+)\s*x\)\s*$/i,(m,n)=>{ rep=` (${n}x)`; return ''; }).trim();
   const m=l.match(/^(pre[- ]?chorus|verse|chorus|bridge|turn[- ]?around)\s*(\d*)$/i);

@@ -239,6 +239,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="row2" style="grid-column:auto / span 2"><label for="edLen" style="flex-direction:row;align-items:center;gap:8px">Beats in this bar:<select id="edLen"></select></label><button type="button" id="edLenApply">Apply</button><button type="button" id="edPrevLine" title="Put this bar at the end of the line above">Move to prior line</button><button type="button" id="edNextLine" title="Start a new line with this bar">Move to next line</button><span id="edLenMsg" role="status"></span></div>
     <div class="group"><button type="button" id="edPlay" title="Play / pause (Space or P)">Play</button><span id="edLocal" hidden style="font-family:var(--f-ui);font-size:12px;color:var(--muted);align-self:center">Your fixes are saved on this computer only.</span><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button class="primary" type="button" id="edClose">Done fixing</button></div>
     <div class="row2"><label for="edInsLen" style="flex-direction:row;align-items:center;gap:8px">Add a bar of<select id="edInsLen"></select>beats</label><button type="button" id="edInsBefore">before this bar</button><button type="button" id="edInsAfter">after this bar</button><button type="button" id="edDel">Remove this bar</button></div>
+    <div class="row2"><label for="edSplitAt" style="flex-direction:row;align-items:center;gap:8px">Split this bar before beat<select id="edSplitAt"></select></label><button type="button" id="edSplit">Split</button><button type="button" id="edJoin" title="Make this bar and the next one a single bar">Join with next bar</button></div>
     <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply" hidden>Set</button><span id="edAnchors"></span></div>
     <div class="lgrid" id="lyrGrid" hidden>
       <div class="lgtop"><label for="lgFrom">Bars</label><input type="number" id="lgFrom" min="1" step="1"> <label for="lgTo">to</label><input type="number" id="lgTo" min="1" step="1">
@@ -1483,6 +1484,7 @@ function openEditor(i,noFocus){
   $('edLenMsg').textContent=''; lineUI(i); $('edLocal').hidden=!!(typeof DB!=='undefined'&&DB&&DB.canSave!==false);
   if(!$('edInsLen').options.length || $('edInsLen').dataset.m!=String(ST.meter)){ $('edInsLen').innerHTML=Array.from({length:ST.meter+4},(_,k)=>k+1).map(n=>`<option value="${n}"${n===ST.meter?' selected':''}>${n}</option>`).join(''); $('edInsLen').dataset.m=ST.meter; }
   $('edDel').disabled=ST.song.bars.length<2;
+  { const L=bLen(i); $('edSplitAt').innerHTML=Array.from({length:Math.max(0,Math.ceil(L)-1)},(_,k)=>k+2).map(n=>`<option value="${n}"${n===Math.floor(L/2)+1?' selected':''}>${n}</option>`).join(''); $('edSplit').disabled=L<2; $('edJoin').disabled=i>=ST.song.bars.length-1; }
   const opts=['<option value="">(no change)</option>']; const seen=new Set();
   ST.events.forEach((e,j)=>{ if(e.k===0 && e.pass===0 && !seen.has(e.sec)){ seen.add(e.sec); opts.push(`<option value="${j}">${esc(e.label)}${ST.sections.filter(s=>s.label===e.label).length>1?' '+(ST.sections.slice(0,e.sec+1).filter(s=>s.label===e.label).length):''}</option>`); } });
   $('edSection').innerHTML=opts.join('');
@@ -1518,6 +1520,7 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
   E.forEach((e,ei)=>{
     if(e.op==='ins'){ const at=Math.max(0,Math.min(grid.length,e.at)), l=grid[grid.length-1], s0=at<grid.length?grid[at].s:(l?l.s+l.len:0);
       for(let k=at;k<grid.length;k++) grid[k].s+=e.len; grid.splice(at,0,{s:s0,len:e.len,ins:ei}); }
+    else if(e.op==='split'){ const g=grid[e.at], b=e.len-1; if(!g||b<=0||b>=g.len) return; grid.splice(e.at+1,0,{s:g.s+b,len:g.len-b}); g.len=b; } // CJ: a new bar line inside this bar; nothing else moves
     else if(e.op==='sec'){ const f=grid[e.from], t=grid[e.at]; if(!f||!t) return; for(const it of items) if(it.t==='s' && it.x>=f.s-1e-6 && it.x<f.s+f.len-1e-6) it.x=t.s; } // move a section name only (CJ): no chord moves
     else if(e.op==='len'){ // CJ: set this bar's beats; the beats left over (or borrowed) belong to the next bar, and bar lines settle back at the next short bar
       const at=e.at; if(at<0||at>=grid.length) return; const was=new Map(grid.slice(at).map(g=>[g,{s:g.s,len:g.len}])), g0=grid[at];
@@ -1541,11 +1544,14 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
   bars.splice(0,bars.length,...nb);
 }
 function shiftKeys(obj,at,d){ const o={}; for(const [k,v] of Object.entries(obj||{})){ const n=+k; if(d<0&&n===at) continue; o[n>=at+(d<0?1:0)?n+d:n]=v; } return o; }
-function barEdit(op,at,len){ pushUndo(); ST.barEdits=[...(ST.barEdits||[]), op==='ins'||op==='len'?{op,at,len}:op==='sec'?{op,at,from:len}:{op,at}];
+function barEdit(op,at,len){ pushUndo(); ST.barEdits=[...(ST.barEdits||[]), op==='ins'||op==='len'||op==='split'?{op,at,len}:op==='sec'?{op,at,from:len}:{op,at}];
   if(op==='len'||op==='sec'){ finish(true); openEditor(at,true); saveLast(); return; }
+  if(op==='split'){ ST.overrides=shiftKeys(ST.overrides,at+1,1); ST.breaks=shiftKeys(ST.breaks,at+1,1); const an={}; for(const [j,bar] of Object.entries(ST.anchors||{})){ const i=bar-1; an[j]=(i>at?i+1:i)+1; } ST.anchors=an; finish(true); openEditor(at,true); saveLast(); return; }
   const d=op==='ins'?1:-1; ST.overrides=shiftKeys(ST.overrides,at,d); ST.breaks=shiftKeys(ST.breaks,at,d);
   const an={}; for(const [j,bar] of Object.entries(ST.anchors||{})){ const i=bar-1; if(d<0&&i===at) continue; an[j]=(i>=at+(d<0?1:0)?i+d:i)+1; } ST.anchors=an;
   finish(true); const keep=Math.max(0,Math.min(ST.song.bars.length-1, op==='ins'?at:at)); openEditor(keep,true); saveLast(); }
+$('edSplit').addEventListener('click',()=>{ if(selBar<0) return; const at=selBar, L=bLen(at), bt=+$('edSplitAt').value; if(!(bt>1&&bt<=L)) return; barEdit('split',at,bt); $('edLenMsg').textContent=`Split bar ${at+1}: it's ${bt-1} beat${bt===2?'':'s'} now, and bar ${at+2} is the other ${L-bt+1}. No other bar line or chord moved.`; });
+$('edJoin').addEventListener('click',()=>{ if(selBar<0||selBar>=ST.song.bars.length-1) return; const at=selBar, a=bLen(at), b=bLen(at+1); barEdit('mrg',at+1); openEditor(at,true); $('edLenMsg').textContent=`Joined bars ${at+1} and ${at+2} into one ${a+b}-beat bar. No other bar line or chord moved.`; });
 $('edInsBefore').addEventListener('click',()=>{ if(selBar<0) return; const L=+$('edInsLen').value, at=selBar; barEdit('ins',at,L); $('edLenMsg').textContent=`Added a ${L}-beat bar as bar ${at+1}. The chords stay where they are in the music; only the bar lines moved.`; });
 $('edInsAfter').addEventListener('click',()=>{ if(selBar<0) return; const L=+$('edInsLen').value, at=selBar+1; barEdit('ins',at,L); $('edLenMsg').textContent=`Added a ${L}-beat bar as bar ${at+1}. The chords stay where they are in the music; only the bar lines moved.`; });
 $('edDel').addEventListener('click',()=>{ if(selBar<0||ST.song.bars.length<2) return; const at=selBar, b=ST.song.bars[at];

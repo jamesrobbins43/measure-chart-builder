@@ -655,7 +655,7 @@ function markChoruses(){ const on=chorusBars(); measEls.forEach((m,i)=>m.classLi
   else { const i=topBar(), row=measEls[0]?.parentElement; if(row) addCi(i,0.03,row,'Count in and play from the top',true); }
   $('rows').classList.toggle('cho-only',choOnly); }
 // every song starts with one bar of count-in, landing on the first bar that starts after 0 s
-function topBar(){ const BAR=ST.song.beat*ST.meter, b=ST.song.bars; let i=Math.max(0,Math.ceil(-ST.song.bar0/BAR-1e-6)); if(b[i]&&b[i].section==='Lead-in'){ while(i<b.length-1&&!b[i].chords.length) i++; } return i; } // count in to the first chord, past any lead-in
+function topBar(){ const BAR=ST.song.beat*ST.meter, b=ST.song.bars; return Math.max(0,Math.ceil(-ST.song.bar0/BAR-1e-6)); } // count in to the first full bar, lead-in included (CJ wants to hear the ambience before the intro)
 function atTop(t){ return t<=ST.song.bar0+topBar()*ST.song.beat*ST.meter+0.05; }
 function choStartBar(t){ const sp=chorusSpans(), s=sp.find(([a])=>Math.abs(a-0.03-t)<0.12); return s?Math.round((s[0]-ST.song.bar0)/(ST.song.beat*ST.meter)):null; }
 function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt) return; const t=offsetAt+(ctxNow()-startAt), sp=chorusSpans(); if(!sp.length) return;

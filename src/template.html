@@ -862,7 +862,7 @@ $('lgSave').addEventListener('click',()=>{
 // ---------- fixing ----------
 let editing=false, selBar=-1;
 $('editBtn').addEventListener('click',()=>{ editing=!editing; $('editBtn').setAttribute('aria-pressed',editing); $('editBtn').classList.toggle('primary',editing); $('editBtn').textContent=editing?'Done fixing':'Fix bars'; if(editing) openEditor(Math.max(0,Math.min(ST.song.bars.length-1,selBar>=0?selBar:barAt(songTime())))); else closeEditor(); });
-function onBar(i){ if(editing){ openEditor(i,true); cueBar(i); } else seekBar(i); }
+function onBar(i){ if(editing){ openEditor(i,true); cueBar(i); } else if(playing && i===barAt(songTime())) pause(); else seekBar(i); } // clicking the bar that's playing stops it (CJ)
 // while fixing, a click only moves the play position to that bar (no auto-play, CJ): Space or Play then plays from there
 function cueBar(i){ if(playing) pause(); pausedAt=Math.max(0,bT(i)-0.05); update(true,true); }
 // the E key turns Fix bars on and off from anywhere on the page (CJ). ⌘E is taken by the Claude extension in Chrome, so it's a plain E, ignored while typing

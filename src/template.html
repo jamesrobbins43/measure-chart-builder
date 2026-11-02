@@ -916,12 +916,13 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
   E.forEach((e,ei)=>{
     if(e.op==='ins'){ const at=Math.max(0,Math.min(grid.length,e.at)), l=grid[grid.length-1], s0=at<grid.length?grid[at].s:(l?l.s+l.len:0);
       for(let k=at;k<grid.length;k++) grid[k].s+=e.len; grid.splice(at,0,{s:s0,len:e.len,ins:ei}); }
+    else if(e.op==='mrg'){ if(e.at<1||e.at>=grid.length) return; grid[e.at-1].len+=grid[e.at].len; grid.splice(e.at,1); } // fold a bar's beats into the bar before it: no bar line after it moves
     else if(e.op==='del'){ if(e.at<0||e.at>=grid.length||grid.length<2) return; const [g]=grid.splice(e.at,1); for(let k=e.at;k<grid.length;k++) grid[k].s-=g.len; } });
   for(let l=grid[grid.length-1]; l.s+l.len<end0-1e-6; l=grid[grid.length-1]) grid.push({s:l.s+l.len,len:M0}); // keep the end of the song covered
   const nb=grid.map(g=>({chords:[],lyrics:[],section:null,s:g.s,len:g.len,s0:g.s0,ins:g.ins}));
   const find=x=>{ let lo=0,hi=nb.length-1; if(x<nb[0].s) return 0; while(lo<hi){ const m=(lo+hi+1)>>1; if(nb[m].s<=x+1e-6) lo=m; else hi=m-1; } return lo; };
   for(const it of items){ const i=find(it.x), b=nb[i], r=Math.max(0,it.x-b.s);
-    if(it.t==='c') b.chords.push([1+r,it.v]); else if(it.t==='w') b.lyrics.push([Math.round(r*4),it.v]); else if(!b.section) b.section=it.v; }
+    if(it.t==='c'){ const pc=b.chords[b.chords.length-1]; if(!pc||pc[1]!==it.v) b.chords.push([1+r,it.v]); } else if(it.t==='w') b.lyrics.push([Math.round(r*4),it.v]); else if(!b.section) b.section=it.v; }
   while(nb.length>1 && nb[nb.length-1].s>=end0-1e-6 && !nb[nb.length-1].chords.length && !nb[nb.length-1].section) nb.pop(); // nothing past the end of the music
   bars.splice(0,bars.length,...nb);
 }
@@ -932,7 +933,11 @@ function barEdit(op,at,len){ pushUndo(); ST.barEdits=[...(ST.barEdits||[]), op==
   finish(true); const keep=Math.max(0,Math.min(ST.song.bars.length-1, op==='ins'?at:at)); openEditor(keep,true); saveLast(); }
 $('edInsBefore').addEventListener('click',()=>{ if(selBar<0) return; const L=+$('edInsLen').value, at=selBar; barEdit('ins',at,L); $('edLenMsg').textContent=`Added a ${L}-beat bar as bar ${at+1}. The chords stay where they are in the music; only the bar lines moved.`; });
 $('edInsAfter').addEventListener('click',()=>{ if(selBar<0) return; const L=+$('edInsLen').value, at=selBar+1; barEdit('ins',at,L); $('edLenMsg').textContent=`Added a ${L}-beat bar as bar ${at+1}. The chords stay where they are in the music; only the bar lines moved.`; });
-$('edDel').addEventListener('click',()=>{ if(selBar<0||ST.song.bars.length<2) return; const at=selBar; barEdit('del',at); $('edLenMsg').textContent=`Removed bar ${at+1}. The chords stay where they are in the music; only the bar lines moved.`; });
+$('edDel').addEventListener('click',()=>{ if(selBar<0||ST.song.bars.length<2) return; const at=selBar, b=ST.song.bars[at];
+  // a short bar that shouldn't be there (CJ): its beats can't vanish from the recording, so they join the bar before it;
+  // sliding every later bar line would put the chords after it on the wrong beats
+  if(b.ins==null && bLen(at)<ST.meter && at>0){ const L=bLen(at); barEdit('mrg',at); $('edLenMsg').textContent=`Removed bar ${at+1}: its ${L} beat${L===1?'':'s'} joined bar ${at}. No other bar line or chord moved.`; return; }
+  barEdit('del',at); $('edLenMsg').textContent=`Removed bar ${at+1}. The chords stay where they are in the music; only the bar lines moved.`; });
 // line breaks (CJ): move a bar to the start of the next line, or back onto the end of the line above
 function rowStart(i){ return !!measEls[i] && measEls[i].parentElement?.firstElementChild===measEls[i]; }
 function lineUI(i){ const st=rowStart(i), prevRow=st&&i>0?measEls[i-1]?.parentElement:null;
@@ -947,8 +952,9 @@ $('edNextLine').addEventListener('click',()=>{ if(selBar>=0) setBreak(selBar,tru
 $('edPrevLine').addEventListener('click',()=>{ if(selBar>=0) setBreak(selBar,false); });
 // "Beats in this bar" (CJ): a bar of 2 at the end of a chorus that the line-up missed. Every bar after it moves,
 // so the line-up runs again with this bar held at that length; edits to later bars are cleared.
-$('edLenApply').addEventListener('click',()=>{
-  if(selBar<0) return; const L=+$('edLen').value, b=ST.song.bars[selBar], s0=b.s0??b.s??selBar*ST.meter;
+$('edLenApply').addEventListener('click',()=>{ if(selBar>=0) setBarLen(selBar,+$('edLen').value); });
+function setBarLen(selBar,L){
+  const b=ST.song.bars[selBar], s0=b.s0??b.s??selBar*ST.meter;
   if(L===bLen(selBar)){ $('edLenMsg').textContent='That is already its length.'; return; }
   if(b.ins!=null){ pushUndo(); ST.barEdits=JSON.parse(JSON.stringify(ST.barEdits)); ST.barEdits[b.ins].len=L; const keep=selBar; finish(true); openEditor(keep,true); $('edLenMsg').textContent=`Bar ${keep+1} is now ${L} beat${L===1?'':'s'}.`; return; } // a bar you added: just resize it
   pushUndo(); ST.barLens={...(ST.barLens||{})}; for(const k of Object.keys(ST.barLens)) if(+k>s0-1e-6 && +k<s0+bLen(selBar)-1e-6) delete ST.barLens[k];
@@ -956,7 +962,7 @@ $('edLenApply').addEventListener('click',()=>{
   const keep=selBar; for(const k of Object.keys(ST.overrides)) if(+k>=keep) delete ST.overrides[k]; ST.breaks={...(ST.breaks||{})}; for(const k of Object.keys(ST.breaks)) if(+k>keep) delete ST.breaks[k]; ST.barEdits=(ST.barEdits||[]).filter(e=>e.at<=keep);
   realign(); openEditor(keep);
   $('edLenMsg').textContent=`Bar ${keep+1} is now ${L} beat${L===1?'':'s'}, and the rest of the song re-lined up after it.`;
-});
+}
 function pinSection(){
   const j=$('edSection').value; if(j===''||selBar<0) return; const nm=$('edSection').selectedOptions[0]?.textContent||ST.events[j].label;
   pushUndo(); ST.anchors={...ST.anchors};

@@ -1130,7 +1130,7 @@ function render(forcePer){
           lh+=`<span style="min-width:calc(100% * ${span} / ${M})">${lyB[q].join(' ')}</span>`; q+=span; }
         h+=`<div class="lyr">${lh}</div>`; }
       m.innerHTML=h+'</div>';
-      m.addEventListener('click',()=>onBar(i)); m.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); onBar(i);} });
+      m.addEventListener('click',()=>onBar(i)); m.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); onBar(i);} });
       row.appendChild(m); measEls.push(m);
     }
     for(let k=idxs.length;k<perLine;k++){ const sp=document.createElement('div'); sp.className='spacer'; row.appendChild(sp); }
@@ -1279,7 +1279,7 @@ function markChoruses(){ const on=chorusBars(); measEls.forEach((m,i)=>m.classLi
     ci.innerHTML=h+'</div></div>'+'<div class="spacer"></div>'.repeat(Math.max(0,perLine-1)); row.before(ci);
     const m=ci.querySelector('.measure'); m.tabIndex=0; m.setAttribute('role','button'); m.setAttribute('aria-label',label);
     const go=()=>{ const t=Math.max(0,a-0.03); pausedAt=t; getAC().resume().then(()=>startAtTime(t,i)); };
-    m.addEventListener('click',go); m.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); go(); } }); };
+    m.addEventListener('click',go); m.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } }); };
   if(choOnly){ for(const [a] of chorusSpans()){ const i=barAt(a+0.01), row=measEls[i]?.parentElement; if(row) addCi(i,a,row,`Count in to bar ${i+1}`); } }
   else { const i=topBar(), row=measEls[0]?.parentElement; if(row) addCi(i,0.03,row,'Count in and play from the top',true); }
   $('rows').classList.toggle('cho-only',choOnly); }
@@ -1294,6 +1294,10 @@ function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt) return; const t=of
 let playerReady=false;
 function setupPlayer(){
   if(playerReady) { update(true); return; } playerReady=true;
+  // space bar = play / pause, wherever focus is (except while typing); it never re-clicks a bar or button (CJ)
+  const typing=t=>t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&!(t.tagName==='INPUT'&&/^(range|checkbox|radio|button)$/.test(t.type)));
+  document.addEventListener('keydown',e=>{ if(e.code!=='Space'&&e.key!==' ') return; if(typing(e.target)||$('result').hidden||e.metaKey||e.ctrlKey||e.altKey) return; e.preventDefault(); e.stopPropagation(); if(!e.repeat) $('play').click(); },true);
+  document.addEventListener('keyup',e=>{ if((e.code==='Space'||e.key===' ')&&!typing(e.target)&&!$('result').hidden) e.preventDefault(); },true);
   $('play').addEventListener('click',()=>{ if(playing) pause(); else getAC().resume().then(()=>{ const sb=choOnly?choStartBar(pausedAt):atTop(pausedAt)?topBar():null; startAtTime(atTop(pausedAt)&&!choOnly?0:pausedAt,sb); }); });
   // slider right = highlight sooner (CJ found the old direction confusing); userSync keeps its old meaning so saved settings still work
   const sv=$('sync'); sv.value=-userSync; const showSync=()=>$('syncV').textContent=`${userSync<0?'+':userSync>0?'−':''}${Math.abs(userSync)} ms`; showSync();

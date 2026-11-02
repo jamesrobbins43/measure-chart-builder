@@ -225,6 +225,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="group"><button type="button" id="editBtn" aria-pressed="false" title="Fix bars (press E)">Fix bars</button></div>
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button></div>
     <div class="group"><button type="button" id="dlPdf">Chart PDF</button><button type="button" id="dlVid" title="An MP4 of the chart with the beats lighting up and the click. No music.">Play-along video</button><span id="vidProgWrap" hidden style="display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)"><progress id="vidProg" max="100" value="0" style="width:140px;height:10px;accent-color:var(--accent)" aria-label="Video progress"></progress><b id="vidProgV">0%</b></span></div>
+    <div class="group" id="vidNote" hidden role="dialog" aria-labelledby="vidNoteT" style="flex-basis:100%;max-width:640px;padding:10px 12px;border:1px solid var(--rule);border-left:3px solid var(--accent);border-radius:8px;background:var(--paper);font-family:var(--f-ui);font-size:13px;gap:8px 10px"><span id="vidNoteT" style="flex-basis:100%">Please note: Due to licensing restrictions, this download contains only click and chord progressions, the lyrics and music have been removed.</span><button class="primary" type="button" id="vidGo">Continue</button><button type="button" id="vidCancel">Cancel</button></div>
     <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><span id="libMsg"></span></div>
     <div class="group"><button type="button" id="newBtn">New song</button> <button type="button" id="reportBtn">Report a problem</button></div>
     <p class="msg" id="msg"></p>
@@ -1749,7 +1750,11 @@ async function vidRealtime(pl,cv,g,prog){ // browsers without WebCodecs: record 
   rec.stop(); await stopped; ac.close();
   return {blob:new Blob(parts,{type:mime.split(';')[0]}), ext:mime.startsWith('video/mp4')?'mp4':'webm'};
 }
-$('dlVid').addEventListener('click',async()=>{
+// licensing note first (CJ); the video starts only after Continue
+$('dlVid').addEventListener('click',()=>{ $('vidNote').hidden=false; $('vidGo').focus(); });
+$('vidCancel').addEventListener('click',()=>{ $('vidNote').hidden=true; $('dlVid').focus(); });
+$('vidGo').addEventListener('click',()=>{ $('vidNote').hidden=true; makeVideo(); });
+async function makeVideo(){
   const btn=$('dlVid'); btn.disabled=true; $('msg').className='msg'; $('msg').textContent='Making the video…';
   try{
     if(playing) pause();
@@ -1763,7 +1768,7 @@ $('dlVid').addEventListener('click',async()=>{
     $('msg').textContent= ok?`Saved the play-along video (${(out.blob.size/1048576).toFixed(1)} MB).`:'Download was cancelled.';
   }catch(e){ console.warn(e); $('msg').className='msg warn'; $('msg').textContent="Couldn't make the video: "+(e.message||e); }
   $('vidProgWrap').hidden=true; btn.disabled=false;
-});
+}
 // song map shorthand for the PDF (CJ): V1, C1, TA, End; Intro, Interlude, Instrumental, Outro, Vamp, Tag stay whole words
 function mapLabel(l){ let rep=''; l=l.replace(/\s*\((\d+)\s*x\)\s*$/i,(m,n)=>{ rep=` (${n}x)`; return ''; }).trim();
   const m=l.match(/^(pre[- ]?chorus|verse|chorus|bridge|turn[- ]?around)\s*(\d*)$/i);

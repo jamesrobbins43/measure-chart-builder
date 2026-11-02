@@ -244,7 +244,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="row2" style="grid-column:auto / span 2"><label for="edLen" style="flex-direction:row;align-items:center;gap:8px">Beats in this bar:<select id="edLen"></select></label><button type="button" id="edLenApply">Apply</button><button type="button" id="edPrevLine" title="Put this bar at the end of the line above">Move to prior line</button><button type="button" id="edNextLine" title="Start a new line with this bar">Move to next line</button><span id="edLenMsg" role="status"></span></div>
     <div class="group"><span id="edLocal" hidden style="font-family:var(--f-ui);font-size:12px;color:var(--muted);align-self:center">Your fixes are saved on this computer only.</span><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button class="primary" type="button" id="edClose">Done fixing</button></div>
     <div class="row2"><label for="edInsLen" style="flex-direction:row;align-items:center;gap:8px">Add a bar of<select id="edInsLen"></select>beats</label><button type="button" id="edInsBefore">before this bar</button><button type="button" id="edInsAfter">after this bar</button><button type="button" id="edDel">Remove this bar</button></div>
-    <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply">Re-line up from here</button><span id="edAnchors"></span></div>
+    <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply" hidden>Set</button><span id="edAnchors"></span></div>
     <div class="lgrid" id="lyrGrid" hidden>
       <div class="lgtop"><label for="lgFrom">Bars</label><input type="number" id="lgFrom" min="1" step="1"> <label for="lgTo">to</label><input type="number" id="lgTo" min="1" step="1">
         <span class="lghint">Top box: a chord, in the 16th it's played on. Bottom box: each word or syllable (split words with a hyphen, like vic- tory). Leave a box empty for no change.</span></div>
@@ -1091,6 +1091,10 @@ function finish(keep){
   saveLast();
   ST.song=buildSong(ST.meta,ST.sections,ST.S,ST.P,ST.downPhase,ST.meter,ST.events,ST.al,ST.audio.duration,ST.vox);
   ST.song.bar0+=ST.nudge/1000; applyBarEdits(ST.song);
+  // a section name used more than once without a number (Interlude, Interlude) shows as Interlude 1, Interlude 2, like the Fix bars list (CJ)
+  { const base=l=>l.replace(/\s*\(\d+x\)\s*$/i,''), cnt={}, seen={};
+    ST.song.bars.forEach(b=>{ if(b.section && !/\d$/.test(base(b.section))) cnt[b.section]=(cnt[b.section]||0)+1; });
+    ST.song.bars.forEach(b=>{ const o=b.section; if(o && cnt[o]>1){ seen[o]=(seen[o]||0)+1; const rp=o.slice(base(o).length); b.section=base(o)+' '+seen[o]+rp; } }); }
   for(const [i,o] of Object.entries(ST.overrides)){ if(ST.song.bars[i]) Object.assign(ST.song.bars[i],o); }
   $('upload').hidden=true; $('result').hidden=false;
   $('songTitle').textContent=ST.meta.title||ST.songFile.name.replace(/\.[^.]+$/,'');
@@ -1474,7 +1478,7 @@ function openEditor(i,noFocus){
   if(!$('edInsLen').options.length || $('edInsLen').dataset.m!=String(ST.meter)){ $('edInsLen').innerHTML=Array.from({length:ST.meter+4},(_,k)=>k+1).map(n=>`<option value="${n}"${n===ST.meter?' selected':''}>${n}</option>`).join(''); $('edInsLen').dataset.m=ST.meter; }
   $('edDel').disabled=ST.song.bars.length<2;
   const opts=['<option value="">(no change)</option>']; const seen=new Set();
-  ST.events.forEach((e,j)=>{ if(e.k===0 && e.pass===0 && !seen.has(e.sec)){ seen.add(e.sec); opts.push(`<option value="${j}">${esc(e.label)}${ST.sections.filter(s=>s.label===e.label).length>1?' (#'+(ST.sections.slice(0,e.sec+1).filter(s=>s.label===e.label).length)+')':''}</option>`); } });
+  ST.events.forEach((e,j)=>{ if(e.k===0 && e.pass===0 && !seen.has(e.sec)){ seen.add(e.sec); opts.push(`<option value="${j}">${esc(e.label)}${ST.sections.filter(s=>s.label===e.label).length>1?' '+(ST.sections.slice(0,e.sec+1).filter(s=>s.label===e.label).length):''}</option>`); } });
   $('edSection').innerHTML=opts.join('');
   const n=Object.keys(ST.anchors).length; $('edAnchors').textContent=n?`${n} section start${n>1?'s':''} pinned`:'';
   $('editor').hidden=false; lgShow(true,noFocus);
@@ -1539,11 +1543,20 @@ $('edLenApply').addEventListener('click',()=>{
   realign(); openEditor(keep);
   $('edLenMsg').textContent=`Bar ${keep+1} is now ${L} beat${L===1?'':'s'}, and the rest of the song re-lined up after it.`;
 });
-$('edSecApply').addEventListener('click',()=>{
-  const j=$('edSection').value; if(j===''||selBar<0) return;
-  pushUndo(); ST.anchors={...ST.anchors}; ST.anchors[j]=selBar+1; ST.overrides={}; ST.breaks={}; ST.barEdits=(ST.barEdits||[]).filter(e=>e.at<=selBar); const keep=selBar; realign(); openEditor(keep);
-  $('msg').className='msg'; $('msg').textContent=`Pinned ${ST.events[j].label} to bar ${keep+1} and re-lined up the rest. Bar edits were cleared because bars may have moved.`;
-});
+function pinSection(){
+  const j=$('edSection').value; if(j===''||selBar<0) return; const nm=$('edSection').selectedOptions[0]?.textContent||ST.events[j].label;
+  pushUndo(); ST.anchors={...ST.anchors};
+  // the section after this bar stays where it is, so moving a start only moves that one boundary (CJ: Interlude 29-30, Verse 2 stays at 31)
+  const song=ST.song, path=ST.al?.path||[];
+  for(const p of path){ const e=ST.events[p.j]; if(!e||e.k!==0||String(p.j)===String(j)) continue; const s0=p.start-ST.downPhase, bi=song.bars.findIndex(b=>Math.abs((b.s0??b.s)-s0)<1e-6);
+    if(bi>selBar){ if(ST.anchors[p.j]==null) ST.anchors[p.j]=bi+1; break; } }
+  ST.anchors[j]=selBar+1; ST.overrides={}; ST.breaks={}; ST.barEdits=(ST.barEdits||[]).filter(e=>e.at<=selBar); const keep=selBar; realign(); openEditor(keep,true);
+  $('edSection').value='';
+  $('edLenMsg').textContent=`${nm} now starts at bar ${keep+1}; the section after it stayed where it was.`;
+}
+$('edSection').addEventListener('change',pinSection); // picking a section sets it right away (CJ)
+$('edSecApply').addEventListener('click',pinSection);
+
 // beat 1 / grid / tempo
 $('dbL').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+ST.meter-1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); realign(); });
 $('dbR').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); realign(); });

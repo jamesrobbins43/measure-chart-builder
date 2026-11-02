@@ -151,7 +151,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .lgbody{overflow-x:auto} .lgbar{display:grid;grid-template-columns:44px repeat(var(--n),minmax(46px,1fr));gap:2px;margin-bottom:6px;min-width:calc(44px + var(--n) * 48px)}
 .lgbar .lbn{font-family:var(--f-chord);font-weight:700;font-size:13px;color:var(--ink);align-self:end;padding-bottom:6px}
 .lgcell{display:grid;gap:2px} .lgcell span{font-size:10px;text-align:center;color:var(--muted)} .lgcell span.b{font-weight:700;color:var(--ink)} .lgcell.beat{border-left:2px solid var(--rule);padding-left:2px}
-.editor .lgcell input.lgc[type=text]{font-family:var(--f-chord);font-weight:700;font-size:14px} .editor .lgcell input[type=text]{width:100%;box-sizing:border-box;font-family:var(--f-lyric);font-size:13px;padding:4px 3px;border:1px solid var(--rule);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0}
+.editor .lgcell input.lgc.bad{border-color:var(--flag);background:color-mix(in srgb,var(--flag) 10%,var(--bg))} .editor .lgcell input.lgc[type=text]{font-family:var(--f-chord);font-weight:700;font-size:14px} .editor .lgcell input[type=text]{width:100%;box-sizing:border-box;font-family:var(--f-lyric);font-size:13px;padding:4px 3px;border:1px solid var(--rule);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0}
 .lgbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .editor .row2{font-family:var(--f-ui);grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12px;color:var(--muted)}
 @media (max-width:760px){ .editor .ein{grid-template-columns:1fr} .chordnow{margin-left:0} .cn b{font-size:28px} }
@@ -1389,6 +1389,10 @@ $('reportSend').addEventListener('click',async()=>{
 });
 // ---------- lyrics grid: type each word on its exact 16th (CJ) ----------
 const SIX=['','e','+','a'];
+// the grid's chord boxes take chord names only (C, F#m7, Bb/D, Gsus4, Dm7b5, N.C.), never words (CJ)
+// (uses the parser's own chord test, the same one that reads chords off the PDF)
+function lgMark(inp){ const v=inp.value.trim(), bad=!!v && !isChord(v); inp.classList.toggle('bad',bad); inp.setAttribute('aria-invalid',String(bad)); return !bad; }
+document.addEventListener('input',e=>{ const t=e.target; if(t.classList?.contains('lgc')){ t.value=t.value.replace(/\s+/g,''); lgMark(t); } });
 function lgBuild(){
   const nb=ST.song.bars.length, a=Math.max(1,Math.min(nb,+$('lgFrom').value||1)), z=Math.max(a,Math.min(nb,a+7,+$('lgTo').value||a));
   $('lgFrom').value=a; $('lgTo').value=z; let h='';
@@ -1406,6 +1410,8 @@ $('lgOpen').addEventListener('click',()=>lgShow($('lyrGrid').hidden));
 $('lgClose').addEventListener('click',()=>lgShow(false));
 for(const id of ['lgFrom','lgTo']) $(id).addEventListener('change',lgBuild);
 $('lgSave').addEventListener('click',()=>{
+  const bad=[...$('lgBody').querySelectorAll('input.lgc')].filter(inp=>!lgMark(inp));
+  if(bad.length){ $('lgMsg').textContent=`"${bad[0].value}" isn't a chord name. The top boxes only take chords like C, F#m7 or Bb/D; put words in the bottom boxes.`; bad[0].focus(); return; }
   let n=0; $('lgBody').querySelectorAll('.lgbar').forEach(row=>{ const i=+row.dataset.bar, lyrics=[], chords=[];
     row.querySelectorAll('input.lgw').forEach(inp=>{ const p=+inp.dataset.p; inp.value.trim().split(/\s+/).filter(Boolean).forEach(w=>lyrics.push([p,w])); });
     row.querySelectorAll('input.lgc').forEach(inp=>{ const p=+inp.dataset.p, c=inp.value.trim().split(/\s+/).filter(Boolean).pop(); if(c) chords.push([1+p/4,c]); }); // one chord per 16th

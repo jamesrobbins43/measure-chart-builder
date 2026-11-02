@@ -709,7 +709,7 @@ function setupPlayer(){
   $('play').addEventListener('click',()=>{ if(playing) pause(); else getAC().resume().then(()=>{ const sb=choOnly?choStartBar(pausedAt):atTop(pausedAt)?topBar():null; startAtTime(atTop(pausedAt)&&!choOnly?0:pausedAt,sb); }); });
   // slider right = highlight sooner (CJ found the old direction confusing); userSync keeps its old meaning so saved settings still work
   const sv=$('sync'); sv.value=-userSync; const showSync=()=>$('syncV').textContent=userSync?`${Math.abs(userSync)} ms ${userSync<0?'sooner':'later'}`:'in sync'; showSync();
-  sv.addEventListener('input',()=>{ userSync=-(+sv.value); showSync(); try{localStorage.setItem('mcb-sync',userSync)}catch(e){} update(true); });
+  sv.addEventListener('input',()=>{ userSync=-(+sv.value); showSync(); try{localStorage.setItem('mcb-sync',userSync)}catch(e){} update(true,true); }); // don't jump the page back to the paused bar while adjusting
   $('clickVol').addEventListener('input',()=>{ const v=+$('clickVol').value; $('clickV').textContent=v?v+'%':'off'; if(nodes) nodes.cg.gain.value=clickLevel(); });
   for(const id of STEMS) $(id).addEventListener('input',()=>{ showMix(); applyMix(); });
   const setMix=open=>{ $('mixer').hidden=!open; $('mixBtn').setAttribute('aria-expanded',String(open)); try{localStorage.setItem('mcb-mixer',open?'1':'0')}catch(e){} };
@@ -730,7 +730,7 @@ function quickScroll(y){ y=Math.max(0,Math.min(y,document.documentElement.scroll
   if(matchMedia('(prefers-reduced-motion: reduce)').matches){ window.scrollTo(0,y); return; }
   const job=++qsJob, t0=performance.now(), D=300;
   (function step(now){ if(job!==qsJob) return; const k=Math.min(1,(now-t0)/D), e=1-Math.pow(1-k,3); window.scrollTo(0,y0+d*e); if(k<1) requestAnimationFrame(step); })(t0); }
-function update(force){
+function update(force,noScroll){
   if(!ST.song) return;
   const song=ST.song, M=ST.meter, P=song.beat, t=songTime();
   $('time').textContent=`${fmt(t)} / ${fmt(ST.audio.duration)}`;
@@ -742,7 +742,7 @@ function update(force){
     document.querySelectorAll('.measure.cur').forEach(e=>e.classList.remove('cur'));
     const el=curEl;
     if(el && el.parentElement===aheadRow) aheadRow=null;
-    if(el){ el.classList.add('cur'); if(playing||force){ const r=el.getBoundingClientRect(), top=document.querySelector('.transport').getBoundingClientRect().bottom, bottom=$('editor').hidden?innerHeight:$('editor').getBoundingClientRect().top;
+    if(el){ el.classList.add('cur'); if(playing||(force&&!noScroll)){ const r=el.getBoundingClientRect(), top=document.querySelector('.transport').getBoundingClientRect().bottom, bottom=$('editor').hidden?innerHeight:$('editor').getBoundingClientRect().top;
       if(r.top<top+8||r.bottom>bottom-16) quickScroll(window.scrollY+r.top-top-10); } }
     $('where').textContent= ci||bar<0?'Count-in': bar>=song.bars.length?'End': `${song.bars[bar].sec||''} · bar ${bar+1}`;
     lastBar=key;
@@ -830,7 +830,7 @@ $('lgSave').addEventListener('click',()=>{
     row.querySelectorAll('input.lgw').forEach(inp=>{ const p=+inp.dataset.p; inp.value.trim().split(/\s+/).filter(Boolean).forEach(w=>lyrics.push([p,w])); });
     row.querySelectorAll('input.lgc').forEach(inp=>{ const p=+inp.dataset.p, c=inp.value.trim().split(/\s+/).filter(Boolean).pop(); if(c) chords.push([1+p/4,c]); }); // one chord per 16th
     const b=ST.song.bars[i]; ST.overrides[i]={chords, lyrics}; b.chords=chords; b.lyrics=lyrics; n++; });
-  render(); sectionCheck(); update(true); if(selBar>=0) openEditor(selBar); saveLast();
+  render(); sectionCheck(); update(true,true); if(selBar>=0) openEditor(selBar); saveLast();
   $('lgMsg').textContent=`Saved ${n} bar${n===1?'':'s'}.`;
 });
 // ---------- fixing ----------
@@ -862,7 +862,7 @@ $('edSave').addEventListener('click',()=>{
   const ls=$('edLyrics').value.split('|'); const lyrics=[];
   ls.slice(0,M).forEach((seg,q)=>{ const ws=seg.trim().split(/\s+/).filter(Boolean); ws.forEach((w,k)=>lyrics.push([q*4+Math.min(3,Math.floor(k*4/Math.max(1,ws.length))),w])); });
   ST.overrides[selBar]={chords,lyrics}; Object.assign(ST.song.bars[selBar],{chords,lyrics});
-  const keep=selBar; render(); update(true); openEditor(keep);
+  const keep=selBar; render(); update(true,true); openEditor(keep);
 });
 $('edSecApply').addEventListener('click',()=>{
   const j=$('edSection').value; if(j===''||selBar<0) return;

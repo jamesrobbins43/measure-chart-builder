@@ -122,7 +122,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .measure .sec{position:absolute;top:3px;left:26px;right:4px;overflow:hidden;text-overflow:ellipsis;font-family:var(--f-chord);font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;padding-left:6px;border-left:3px solid var(--c,var(--muted))}
 .g{display:grid;grid-template-columns:repeat(var(--m,4),minmax(0,1fr));grid-template-rows:auto auto 1fr;flex:1} /* chords, beat count, then lyrics (CJ) */
 .g.m3{grid-template-columns:repeat(3,minmax(0,1fr))} .g.m6{grid-template-columns:repeat(6,minmax(0,1fr))} .g.m2{grid-template-columns:repeat(2,minmax(0,1fr))}
-.ch{grid-row:1;font-family:var(--f-chord);font-weight:700;font-size:1.25em;padding:0 .3em 0 3px;min-height:1.3em;line-height:1.2}
+.ch{grid-row:1;font-family:var(--f-chord);font-weight:700;font-size:1.45em;padding:0 .3em 0 3px;min-height:1.3em;line-height:1.2}
 .ch .c1{white-space:nowrap;display:inline-block}
 .c1+.c1{margin-left:.2em}
 .c1.live{color:var(--accent)}
@@ -242,6 +242,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <h2 id="edTitle">Bar 1</h2>
     <div class="row2" style="grid-column:auto / span 2"><label for="edLen" style="flex-direction:row;align-items:center;gap:8px">Beats in this bar:<select id="edLen"></select></label><button type="button" id="edLenApply">Apply</button><button type="button" id="edPrevLine" title="Put this bar at the end of the line above">Move to prior line</button><button type="button" id="edNextLine" title="Start a new line with this bar">Move to next line</button><span id="edLenMsg" role="status"></span></div>
     <div class="group"><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button class="primary" type="button" id="edClose">Done fixing</button></div>
+    <div class="row2"><label for="edInsLen" style="flex-direction:row;align-items:center;gap:8px">Add a bar of<select id="edInsLen"></select>beats</label><button type="button" id="edInsBefore">before this bar</button><button type="button" id="edInsAfter">after this bar</button><button type="button" id="edDel">Remove this bar</button></div>
     <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply">Re-line up from here</button><span id="edAnchors"></span></div>
     <div class="lgrid" id="lyrGrid" hidden>
       <div class="lgtop"><label for="lgFrom">Bars</label><input type="number" id="lgFrom" min="1" step="1"> <label for="lgTo">to</label><input type="number" id="lgTo" min="1" step="1">
@@ -260,7 +261,7 @@ __ANALYSIS__
 // ---------- state ----------
 const $=id=>document.getElementById(id);
 const ST={songFile:null, chartFile:null, chartMode:'pdf', audio:null, mono:null, O:null, Cf:null, meta:null, sections:null, events:null,
-  P:0, beat0:0, downPhase:0, meter:4, nudge:0, anchors:{}, overrides:{}, barLens:{}, breaks:{}, song:null, al:null, S:null, shift:0, showRec:false};
+  P:0, beat0:0, downPhase:0, meter:4, nudge:0, anchors:{}, overrides:{}, barLens:{}, breaks:{}, barEdits:[], song:null, al:null, S:null, shift:0, showRec:false};
 const COLORS=[["Pre-Chorus","--prechorus"],["Prechorus","--prechorus"],["Intro","--intro"],["Chorus","--chorus"],["Interlude","--interlude"],["Turnaround","--interlude"],["Verse","--verse"],["Bridge","--bridge"],["Instrumental","--inst"],["Solo","--inst"],["Refrain","--refrain"],["Vamp","--refrain"],["Tag","--tag"],["Outro","--ending"],["Ending","--ending"]];
 const colorFor=n=>{ for(const [k,v] of COLORS) if((n||'').toLowerCase().startsWith(k.toLowerCase())) return `var(${v})`; return 'var(--muted)'; };
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
@@ -362,7 +363,7 @@ async function build(){
       ST.compound=ST.den===8 && ST.meter%3===0 && ST.meter>3; }
     ST.events=expandEvents(ST.sections); ST.env=songEnv(ST.mono,sr); ST.chartSig=chartSig(ST.events); ST.libId=null; ST.libDate=null;
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
-      Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, libId:v.libId||null, libDate:v.libDate||null});
+      Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null});
       s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); realign(false); return; }
     s=step('Checking the song library');
     const hit=chk(await libFind(ST.audio.duration,ST.env));
@@ -372,7 +373,7 @@ async function build(){
     const hint=+$('bpmIn').value || parsed.meta.bpm || 0;
     await new Promise(r=>setTimeout(r,20));
     const G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,hint,ST.meter):hint);
-    ST.P=G.P; ST.beat0=G.beat0; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; undoClear();
+    ST.P=G.P; ST.beat0=G.beat0; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear();
     s.done(`Tempo: ${(60/G.P).toFixed(1)} BPM`);
     s=step('Lining the chart up with the song');
     await new Promise(r=>setTimeout(r,20));
@@ -423,7 +424,7 @@ function applyLib(h){
   const t=v.beat0+h.lag, k=Math.floor(t/ST.P);
   ST.beat0=t-k*ST.P; ST.downPhase=(((v.downPhase+k)%ST.meter)+ST.meter)%ST.meter;
   ST.nudge=v.nudge||0;
-  ST.anchors=h.sameChart?{...(v.anchors||{})}:{}; ST.overrides=h.sameChart?JSON.parse(JSON.stringify(v.overrides||{})):{}; ST.barLens=h.sameChart?{...(v.barLens||{})}:{}; ST.breaks=h.sameChart?{...(v.breaks||{})}:{};
+  ST.anchors=h.sameChart?{...(v.anchors||{})}:{}; ST.overrides=h.sameChart?JSON.parse(JSON.stringify(v.overrides||{})):{}; ST.barLens=h.sameChart?{...(v.barLens||{})}:{}; ST.breaks=h.sameChart?{...(v.breaks||{})}:{}; ST.barEdits=h.sameChart?JSON.parse(JSON.stringify(v.barEdits||[])):[];
   ST.libId=h.id; ST.libDate=v.savedAt||null;
   return true;
 }
@@ -431,7 +432,7 @@ async function libSave(){
   if(!DB) return;
   const b=$('libSave'); b.disabled=true; $('libMsg').textContent='Saving…';
   const doc={dur:Math.round(ST.audio.duration*100)/100, env:ST.env, title:ST.meta.title||'', artist:ST.meta.artist||'', chartKey:ST.meta.key||'', chartSig:ST.chartSig,
-    P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, savedAt:new Date().toISOString()};
+    P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], savedAt:new Date().toISOString()};
   try{
     const ref=ST.libId?DB.collection('songs').doc(ST.libId):DB.collection('songs').doc();
     await ref.set(doc); ST.libId=ref.id; ST.libDate=doc.savedAt;
@@ -447,7 +448,7 @@ $('libFresh').addEventListener('click',async()=>{
   $('libFresh').disabled=true; $('libMsg').textContent='Working it out from scratch…';
   if(!ST.O) ST.O=await onsetEnvelope(ST.mono,22050,()=>{});
   const h0=+$('bpmIn').value||ST.meta.bpm||0; const G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,h0,ST.meter):h0);
-  ST.P=G.P; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; undoClear(); ST.libDate=null;
+  ST.P=G.P; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); ST.libDate=null;
   await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); $('libFresh').disabled=false; finish(true);
 });
 function libUI(){
@@ -483,7 +484,7 @@ function fineAlign(anchors){
 function realign(keep=true){
   ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration);
   // anchors are stored as bar numbers; convert to beats for this grid
-  const anchors={}; for(const [j,bar] of Object.entries(ST.anchors)) anchors[j]=ST.downPhase+(ST.song?.bars[bar-1]?.s??(bar-1)*ST.meter);
+  const anchors={}; for(const [j,bar] of Object.entries(ST.anchors)) anchors[j]=ST.downPhase+(ST.song?.bars[bar-1]?.s0??ST.song?.bars[bar-1]?.s??(bar-1)*ST.meter);
   ST.al=fineAlign(anchors);
   finish(keep);
 }
@@ -492,7 +493,7 @@ function finish(keep){
   lgDraft={};
   saveLast();
   ST.song=buildSong(ST.meta,ST.sections,ST.S,ST.P,ST.downPhase,ST.meter,ST.events,ST.al,ST.audio.duration,ST.vox);
-  ST.song.bar0+=ST.nudge/1000;
+  ST.song.bar0+=ST.nudge/1000; applyBarEdits(ST.song);
   for(const [i,o] of Object.entries(ST.overrides)){ if(ST.song.bars[i]) Object.assign(ST.song.bars[i],o); }
   $('upload').hidden=true; $('result').hidden=false;
   $('songTitle').textContent=ST.meta.title||ST.songFile.name.replace(/\.[^.]+$/,'');
@@ -873,6 +874,8 @@ function openEditor(i,noFocus){
   $('edTitle').textContent=`Bar ${i+1}`+(M!==ST.meter?` (${M} beats)`:'');
   $('edLen').innerHTML=Array.from({length:ST.meter+4},(_,k)=>k+1).map(n=>`<option value="${n}"${n===M?' selected':''}>${n}${n===ST.meter?' (normal)':''}</option>`).join('');
   $('edLenMsg').textContent=''; lineUI(i);
+  if(!$('edInsLen').options.length || $('edInsLen').dataset.m!=String(ST.meter)){ $('edInsLen').innerHTML=Array.from({length:ST.meter+4},(_,k)=>k+1).map(n=>`<option value="${n}"${n===ST.meter?' selected':''}>${n}</option>`).join(''); $('edInsLen').dataset.m=ST.meter; }
+  $('edDel').disabled=ST.song.bars.length<2;
   const opts=['<option value="">(no change)</option>']; const seen=new Set();
   ST.events.forEach((e,j)=>{ if(e.k===0 && e.pass===0 && !seen.has(e.sec)){ seen.add(e.sec); opts.push(`<option value="${j}">${esc(e.label)}${ST.sections.filter(s=>s.label===e.label).length>1?' (#'+(ST.sections.slice(0,e.sec+1).filter(s=>s.label===e.label).length)+')':''}</option>`); } });
   $('edSection').innerHTML=opts.join('');
@@ -886,16 +889,35 @@ $('edClose').addEventListener('click',()=>{ if(editing) $('editBtn').click(); el
   try{ new ResizeObserver(padEd).observe($('editor')); }catch(e){} new MutationObserver(padEd).observe($('editor'),{attributes:true,attributeFilter:['hidden']}); }
 // ---------- undo / redo for Fix bars (CJ): every bar length, section pin and grid save can be stepped back ----------
 var undoStack=[], redoStack=[];
-function snapFix(){ return {anchors:JSON.parse(JSON.stringify(ST.anchors||{})), overrides:JSON.parse(JSON.stringify(ST.overrides||{})), barLens:{...(ST.barLens||{})}, breaks:{...(ST.breaks||{})}, al:ST.al}; }
+function snapFix(){ return {anchors:JSON.parse(JSON.stringify(ST.anchors||{})), overrides:JSON.parse(JSON.stringify(ST.overrides||{})), barLens:{...(ST.barLens||{})}, breaks:{...(ST.breaks||{})}, barEdits:JSON.parse(JSON.stringify(ST.barEdits||[])), al:ST.al}; }
 function undoUI(){ const u=$('edUndo'), r=$('edRedo'); if(u) u.disabled=!undoStack.length; if(r) r.disabled=!redoStack.length; }
 function undoClear(){ undoStack=[]; redoStack=[]; undoUI(); }
 function pushUndo(){ undoStack.push(snapFix()); if(undoStack.length>50) undoStack.shift(); redoStack=[]; undoUI(); }
-function applySnap(x){ Object.assign(ST,{anchors:x.anchors, overrides:x.overrides, barLens:x.barLens, breaks:x.breaks||{}, al:x.al}); const keep=selBar; finish(true); if(keep>=0 && !$('editor').hidden) openEditor(Math.min(keep,ST.song.bars.length-1),true); undoUI(); }
+function applySnap(x){ Object.assign(ST,{anchors:x.anchors, overrides:x.overrides, barLens:x.barLens, breaks:x.breaks||{}, barEdits:x.barEdits||[], al:x.al}); const keep=selBar; finish(true); if(keep>=0 && !$('editor').hidden) openEditor(Math.min(keep,ST.song.bars.length-1),true); undoUI(); }
 function undoFix(){ if(!undoStack.length) return; redoStack.push(snapFix()); applySnap(undoStack.pop()); $('edLenMsg').textContent='Undid the last change.'; }
 function redoFix(){ if(!redoStack.length) return; undoStack.push(snapFix()); applySnap(redoStack.pop()); $('edLenMsg').textContent='Redid it.'; }
 $('edUndo').addEventListener('click',undoFix); $('edRedo').addEventListener('click',redoFix);
 document.addEventListener('keydown',e=>{ if(!editing || !(e.metaKey||e.ctrlKey) || e.altKey) return; const t=e.target; if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&t.type!=='range') return; // text boxes keep their own undo
   const k=e.key.toLowerCase(); if(k==='z'&&!e.shiftKey){ e.preventDefault(); undoFix(); } else if((k==='z'&&e.shiftKey)||k==='y'){ e.preventDefault(); redoFix(); } });
+// add / remove bars (CJ): laid over the line-up, so everything after the change moves along with its chords and sections.
+// ST.barEdits is an ordered list of {op:'ins',at,len} / {op:'del',at}, in the numbering left by the edits before it.
+function applyBarEdits(song){ const bars=song.bars; bars.forEach(b=>{ b.s0=b.s; });
+  (ST.barEdits||[]).forEach((e,ei)=>{
+    if(e.op==='ins'){ const at=Math.max(0,Math.min(bars.length,e.at)), l=bars[bars.length-1], s0=at<bars.length?bars[at].s:(l?l.s+l.len:0);
+      for(let k=at;k<bars.length;k++) bars[k].s+=e.len; bars.splice(at,0,{chords:[],lyrics:[],section:null,s:s0,len:e.len,ins:ei}); }
+    else if(e.op==='del'){ if(e.at<0||e.at>=bars.length||bars.length<2) return; const [g]=bars.splice(e.at,1);
+      if(g.section && bars[e.at] && !bars[e.at].section) bars[e.at].section=g.section; // the section starts on the next bar instead
+      for(let k=e.at;k<bars.length;k++) bars[k].s-=g.len;
+      const l=bars[bars.length-1]; bars.push({chords:[],lyrics:[],section:null,s:l.s+l.len,len:g.len}); } }); // keep the end of the song covered
+}
+function shiftKeys(obj,at,d){ const o={}; for(const [k,v] of Object.entries(obj||{})){ const n=+k; if(d<0&&n===at) continue; o[n>=at+(d<0?1:0)?n+d:n]=v; } return o; }
+function barEdit(op,at,len){ pushUndo(); ST.barEdits=[...(ST.barEdits||[]), op==='ins'?{op,at,len}:{op,at}];
+  const d=op==='ins'?1:-1; ST.overrides=shiftKeys(ST.overrides,at,d); ST.breaks=shiftKeys(ST.breaks,at,d);
+  const an={}; for(const [j,bar] of Object.entries(ST.anchors||{})){ const i=bar-1; if(d<0&&i===at) continue; an[j]=(i>=at+(d<0?1:0)?i+d:i)+1; } ST.anchors=an;
+  finish(true); const keep=Math.max(0,Math.min(ST.song.bars.length-1, op==='ins'?at:at)); openEditor(keep,true); saveLast(); }
+$('edInsBefore').addEventListener('click',()=>{ if(selBar<0) return; const L=+$('edInsLen').value, at=selBar; barEdit('ins',at,L); $('edLenMsg').textContent=`Added a ${L}-beat bar as bar ${at+1}. Use the grid to put chords in it.`; });
+$('edInsAfter').addEventListener('click',()=>{ if(selBar<0) return; const L=+$('edInsLen').value, at=selBar+1; barEdit('ins',at,L); $('edLenMsg').textContent=`Added a ${L}-beat bar as bar ${at+1}. Use the grid to put chords in it.`; });
+$('edDel').addEventListener('click',()=>{ if(selBar<0||ST.song.bars.length<2) return; const at=selBar; barEdit('del',at); $('edLenMsg').textContent=`Removed bar ${at+1}. Everything after it moved up a bar.`; });
 // line breaks (CJ): move a bar to the start of the next line, or back onto the end of the line above
 function rowStart(i){ return !!measEls[i] && measEls[i].parentElement?.firstElementChild===measEls[i]; }
 function lineUI(i){ const st=rowStart(i), prevRow=st&&i>0?measEls[i-1]?.parentElement:null;
@@ -911,22 +933,23 @@ $('edPrevLine').addEventListener('click',()=>{ if(selBar>=0) setBreak(selBar,fal
 // "Beats in this bar" (CJ): a bar of 2 at the end of a chorus that the line-up missed. Every bar after it moves,
 // so the line-up runs again with this bar held at that length; edits to later bars are cleared.
 $('edLenApply').addEventListener('click',()=>{
-  if(selBar<0) return; const L=+$('edLen').value, b=ST.song.bars[selBar], s0=b.s??selBar*ST.meter;
+  if(selBar<0) return; const L=+$('edLen').value, b=ST.song.bars[selBar], s0=b.s0??b.s??selBar*ST.meter;
   if(L===bLen(selBar)){ $('edLenMsg').textContent='That is already its length.'; return; }
+  if(b.ins!=null){ pushUndo(); ST.barEdits=JSON.parse(JSON.stringify(ST.barEdits)); ST.barEdits[b.ins].len=L; const keep=selBar; finish(true); openEditor(keep,true); $('edLenMsg').textContent=`Bar ${keep+1} is now ${L} beat${L===1?'':'s'}.`; return; } // a bar you added: just resize it
   pushUndo(); ST.barLens={...(ST.barLens||{})}; for(const k of Object.keys(ST.barLens)) if(+k>s0-1e-6 && +k<s0+bLen(selBar)-1e-6) delete ST.barLens[k];
   ST.barLens[s0]=L;
-  const keep=selBar; for(const k of Object.keys(ST.overrides)) if(+k>=keep) delete ST.overrides[k]; ST.breaks={...(ST.breaks||{})}; for(const k of Object.keys(ST.breaks)) if(+k>keep) delete ST.breaks[k];
+  const keep=selBar; for(const k of Object.keys(ST.overrides)) if(+k>=keep) delete ST.overrides[k]; ST.breaks={...(ST.breaks||{})}; for(const k of Object.keys(ST.breaks)) if(+k>keep) delete ST.breaks[k]; ST.barEdits=(ST.barEdits||[]).filter(e=>e.at<=keep);
   realign(); openEditor(keep);
   $('edLenMsg').textContent=`Bar ${keep+1} is now ${L} beat${L===1?'':'s'}, and the rest of the song re-lined up after it.`;
 });
 $('edSecApply').addEventListener('click',()=>{
   const j=$('edSection').value; if(j===''||selBar<0) return;
-  pushUndo(); ST.anchors={...ST.anchors}; ST.anchors[j]=selBar+1; ST.overrides={}; ST.breaks={}; const keep=selBar; realign(); openEditor(keep);
+  pushUndo(); ST.anchors={...ST.anchors}; ST.anchors[j]=selBar+1; ST.overrides={}; ST.breaks={}; ST.barEdits=(ST.barEdits||[]).filter(e=>e.at<=selBar); const keep=selBar; realign(); openEditor(keep);
   $('msg').className='msg'; $('msg').textContent=`Pinned ${ST.events[j].label} to bar ${keep+1} and re-lined up the rest. Bar edits were cleared because bars may have moved.`;
 });
 // beat 1 / grid / tempo
-$('dbL').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+ST.meter-1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; undoClear(); realign(); });
-$('dbR').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; undoClear(); realign(); });
+$('dbL').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+ST.meter-1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); realign(); });
+$('dbR').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); realign(); });
 $('keyChartSel').addEventListener('change',e=>{ ST.dispPC=+e.target.value; finish(true); });
 $('keyHearSel').addEventListener('change',e=>{ ST.hearPC=+e.target.value; applyHear(); });
 $('nudgeL').addEventListener('click',()=>{ ST.nudge-=10; finish(true); });
@@ -941,11 +964,11 @@ $('advApply').addEventListener('click',async()=>{ const b=$('advApply'); b.disab
     if(!ST.O) ST.O=await onsetEnvelope(ST.mono,22050,()=>{});
     await new Promise(r=>setTimeout(r,20));
     const h0=+$('bpmIn').value||ST.meta.bpm||0, G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,h0,ST.meter):h0);
-    ST.P=G.P; ST.beat0=G.beat0; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; undoClear(); ST.libDate=null;
+    ST.P=G.P; ST.beat0=G.beat0; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); ST.libDate=null;
     await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); finish(true);
   }catch(e){ console.warn(e); $('msg').className='msg warn'; $('msg').textContent="Couldn't redo it with those settings."; }
   b.disabled=false; });
-async function retempo(f){ ST.P*=f; ST.beat0=ST.beat0%ST.P; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; undoClear();
+async function retempo(f){ ST.P*=f; ST.beat0=ST.beat0%ST.P; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear();
   await fitSearch([ST.beat0,(ST.beat0+ST.P/2)%ST.P]); finish(true); }
 // ---------- keep the last song on this device, so a refresh doesn't lose it (stored only in this browser, never uploaded) ----------
 function idb(mode,fn){ return new Promise((res,rej)=>{ try{ const rq=indexedDB.open('mcb',1); rq.onupgradeneeded=()=>rq.result.createObjectStore('kv'); rq.onerror=()=>rej(rq.error);
@@ -954,7 +977,7 @@ let saveT=null;
 function saveLast(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(!ST.songFile) return;
   const rec={song:ST.songFile, songName:ST.songFile.name, chartMode:ST.chartMode, chart:ST.chartMode==='pdf'?ST.chartFile:null, chartName:ST.chartFile?.name||'', chartText:ST.chartMode==='text'?$('chartText').value:'',
     bpmIn:$('bpmIn').value, meterIn:$('meterIn').value,
-    state:{P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, libId:ST.libId, libDate:ST.libDate}, savedAt:Date.now()};
+    state:{P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], libId:ST.libId, libDate:ST.libDate}, savedAt:Date.now()};
   idb('readwrite',st=>st.put(rec,'last')).catch(e=>console.warn('could not keep the song for next time',e)); },400); }
 function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
 (async()=>{ try{ const r=await idb('readonly',st=>st.get('last')); if(!r||!r.song||!(r.chart||r.chartText)) return;

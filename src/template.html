@@ -144,6 +144,13 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .editor label{font-family:var(--f-ui);display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
 .editor input[type=text]{font:inherit;font-family:var(--f-mono);font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:7px 10px;min-width:0}
 .editor h2{font-size:16px;align-self:center}
+.lgrid{grid-column:1/-1;display:grid;gap:8px;font-family:var(--f-ui);font-size:12px;color:var(--muted);max-height:46vh;overflow:auto}
+.lgtop{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px} .lgtop input{width:64px;font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)} .lghint{flex-basis:100%}
+.lgbody{overflow-x:auto} .lgbar{display:grid;grid-template-columns:44px repeat(var(--n),minmax(46px,1fr));gap:2px;margin-bottom:6px;min-width:calc(44px + var(--n) * 48px)}
+.lgbar .lbn{font-family:var(--f-chord);font-weight:700;font-size:13px;color:var(--ink);align-self:end;padding-bottom:6px}
+.lgcell{display:grid;gap:2px} .lgcell span{font-size:10px;text-align:center;color:var(--muted)} .lgcell span.b{font-weight:700;color:var(--ink)} .lgcell.beat{border-left:2px solid var(--rule);padding-left:2px}
+.editor .lgcell input[type=text]{width:100%;box-sizing:border-box;font-family:var(--f-lyric);font-size:13px;padding:4px 3px;border:1px solid var(--rule);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0}
+.lgbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .editor .row2{font-family:var(--f-ui);grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12px;color:var(--muted)}
 @media (max-width:760px){ .editor .ein{grid-template-columns:1fr} .chordnow{margin-left:0} .cn b{font-size:28px} }
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
@@ -231,7 +238,13 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <label for="edChords">Chords by beat (. = no change, &amp;Eb = Eb on the "and" of that beat, Fm,Eb = two in one beat)<input type="text" id="edChords" autocomplete="off"></label>
     <label for="edLyrics">Lyrics by beat (separate beats with |)<input type="text" id="edLyrics" autocomplete="off"></label>
     <div class="group"><button class="primary" type="button" id="edSave">Save bar</button><button type="button" id="edClose">Close</button></div>
-    <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply">Re-line up from here</button><span id="edAnchors"></span></div>
+    <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply">Re-line up from here</button><span id="edAnchors"></span><button type="button" id="lgOpen" aria-expanded="false" aria-controls="lyrGrid">Lyrics grid</button></div>
+    <div class="lgrid" id="lyrGrid" hidden>
+      <div class="lgtop"><label for="lgFrom">Bars</label><input type="number" id="lgFrom" min="1" step="1"> <label for="lgTo">to</label><input type="number" id="lgTo" min="1" step="1">
+        <span class="lghint">Type each word (or syllable) in the 16th it's sung on. Leave a box empty for no new word.</span></div>
+      <div class="lgbody" id="lgBody"></div>
+      <div class="lgbtns"><button class="primary" type="button" id="lgSave">Save lyrics</button><button type="button" id="lgClose">Close grid</button><span id="lgMsg" role="status"></span></div>
+    </div>
   </div></div>
 </div>
 
@@ -785,6 +798,30 @@ $('reportSend').addEventListener('click',async()=>{
   try{ await sendReportRaw(d); $('reportMsg').textContent='Sent. Thank you!'; $('reportText').value=''; setTimeout(()=>{ $('report').hidden=true; },1800); }
   catch(e){ console.warn(e); $('reportMsg').textContent="Couldn't send just now. Try again in a moment."; b.disabled=false; }
 });
+// ---------- lyrics grid: type each word on its exact 16th (CJ) ----------
+const SIX=['','e','&','a'];
+function lgBuild(){
+  const nb=ST.song.bars.length, a=Math.max(1,Math.min(nb,+$('lgFrom').value||1)), z=Math.max(a,Math.min(nb,a+7,+$('lgTo').value||a));
+  $('lgFrom').value=a; $('lgTo').value=z; let h='';
+  for(let i=a-1;i<z;i++){ const L=bLen(i)*4, words=Array.from({length:L},()=>[]);
+    ST.song.bars[i].lyrics.forEach(([p,w])=>words[Math.min(L-1,Math.max(0,p))].push(w));
+    h+=`<div class="lgbar" style="--n:${L}" data-bar="${i}"><div class="lbn">${i+1}</div>`;
+    for(let p=0;p<L;p++){ const lab=p%4?SIX[p%4]:String(p/4+1);
+      h+=`<div class="lgcell${p%4?'':' beat'}"><span class="${p%4?'':'b'}">${lab}</span><input type="text" data-p="${p}" value="${esc(words[p].join(' '))}" aria-label="Bar ${i+1}, beat ${Math.floor(p/4)+1}${p%4?' '+SIX[p%4]:''}" autocomplete="off" spellcheck="false"></div>`; }
+    h+='</div>'; }
+  $('lgBody').innerHTML=h; $('lgMsg').textContent='';
+}
+function lgShow(open){ $('lyrGrid').hidden=!open; $('lgOpen').setAttribute('aria-expanded',String(open)); if(open){ $('lgFrom').value=selBar+1; $('lgTo').value=Math.min(ST.song.bars.length,selBar+2); lgBuild(); $('lgBody').querySelector('input')?.focus(); } }
+$('lgOpen').addEventListener('click',()=>lgShow($('lyrGrid').hidden));
+$('lgClose').addEventListener('click',()=>lgShow(false));
+for(const id of ['lgFrom','lgTo']) $(id).addEventListener('change',lgBuild);
+$('lgSave').addEventListener('click',()=>{
+  let n=0; $('lgBody').querySelectorAll('.lgbar').forEach(row=>{ const i=+row.dataset.bar, lyrics=[];
+    row.querySelectorAll('input').forEach(inp=>{ const p=+inp.dataset.p; inp.value.trim().split(/\s+/).filter(Boolean).forEach(w=>lyrics.push([p,w])); });
+    const b=ST.song.bars[i]; ST.overrides[i]={chords:ST.overrides[i]?.chords||b.chords, lyrics}; b.lyrics=lyrics; n++; });
+  render(); sectionCheck(); update(true); if(selBar>=0) openEditor(selBar); saveLast();
+  $('lgMsg').textContent=`Saved lyrics for ${n} bar${n===1?'':'s'}.`;
+});
 // ---------- fixing ----------
 let editing=false, selBar=-1;
 $('editBtn').addEventListener('click',()=>{ editing=!editing; $('editBtn').setAttribute('aria-pressed',editing); $('editBtn').classList.toggle('primary',editing); $('editBtn').textContent=editing?'Done fixing':'Fix bars'; if(!editing) closeEditor(); });
@@ -803,7 +840,7 @@ function openEditor(i){
   const n=Object.keys(ST.anchors).length; $('edAnchors').textContent=n?`${n} section start${n>1?'s':''} pinned`:'';
   $('editor').hidden=false; $('edChords').focus();
 }
-function closeEditor(){ $('editor').hidden=true; document.querySelectorAll('.measure.sel').forEach(e=>e.classList.remove('sel')); selBar=-1; }
+function closeEditor(){ lgShow(false); $('editor').hidden=true; document.querySelectorAll('.measure.sel').forEach(e=>e.classList.remove('sel')); selBar=-1; }
 $('edClose').addEventListener('click',closeEditor);
 $('edSave').addEventListener('click',()=>{
   if(selBar<0) return; const M=bLen(selBar);

@@ -242,7 +242,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
   <div class="editor" id="editor" hidden><div class="ein wrap">
     <h2 id="edTitle">Bar 1</h2>
     <div class="row2" style="grid-column:auto / span 2"><label for="edLen" style="flex-direction:row;align-items:center;gap:8px">Beats in this bar:<select id="edLen"></select></label><button type="button" id="edLenApply">Apply</button><button type="button" id="edPrevLine" title="Put this bar at the end of the line above">Move to prior line</button><button type="button" id="edNextLine" title="Start a new line with this bar">Move to next line</button><span id="edLenMsg" role="status"></span></div>
-    <div class="group"><span id="edLocal" hidden style="font-family:var(--f-ui);font-size:12px;color:var(--muted);align-self:center">Your fixes are saved on this computer only.</span><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button class="primary" type="button" id="edClose">Done fixing</button></div>
+    <div class="group"><button type="button" id="edPlay" title="Play / pause (Space)">Play</button><span id="edLocal" hidden style="font-family:var(--f-ui);font-size:12px;color:var(--muted);align-self:center">Your fixes are saved on this computer only.</span><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button class="primary" type="button" id="edClose">Done fixing</button></div>
     <div class="row2"><label for="edInsLen" style="flex-direction:row;align-items:center;gap:8px">Add a bar of<select id="edInsLen"></select>beats</label><button type="button" id="edInsBefore">before this bar</button><button type="button" id="edInsAfter">after this bar</button><button type="button" id="edDel">Remove this bar</button></div>
     <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply" hidden>Set</button><span id="edAnchors"></span></div>
     <div class="lgrid" id="lyrGrid" hidden>
@@ -536,7 +536,7 @@ function render(forcePer){
   for(const idxs of rows){
     const row=document.createElement('div'); row.className='row'; row.style.setProperty('--c',colorFor(song.bars[idxs[0]].sec));
     for(const i of idxs){
-      const b=song.bars[i], M=bLen(i), m=document.createElement('div'); m.className='measure'+(M<ST.meter?' short':''); m.tabIndex=0; m.dataset.i=i;
+      const b=song.bars[i], M=bLen(i), m=document.createElement('div'); m.className='measure'+(M<ST.meter?' short':''); m.tabIndex=0; m.dataset.i=i; if(M!==ST.meter) m.style.flex=`0 0 calc(100% / var(--per,8) * ${M/ST.meter})`; // width follows the beats (CJ)
       m.setAttribute('role','button'); m.setAttribute('aria-label',`Bar ${i+1}${b.section?', '+b.section:''}${M<ST.meter?`, ${M} beats`:''}`);
       m.style.setProperty('--c',colorFor(b.sec));
       let h=`<span class="num">${i+1}</span>`+(b.section?`<span class="sec">${esc(b.section)}</span>`:'');
@@ -556,7 +556,7 @@ function render(forcePer){
       m.addEventListener('click',()=>onBar(i)); m.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); onBar(i);} });
       row.appendChild(m); measEls.push(m);
     }
-    for(let k=idxs.length;k<perLine;k++){ const sp=document.createElement('div'); sp.className='spacer'; row.appendChild(sp); }
+    { const used=idxs.reduce((a,i)=>a+bLen(i)/ST.meter,0); if(used<perLine-1e-6){ const sp=document.createElement('div'); sp.className='spacer'; sp.style.flex=`0 0 calc(100% / var(--per,8) * ${perLine-used})`; row.appendChild(sp); } }
     rowsEl.appendChild(row);
   }
   fitLyrics(); markChoruses();
@@ -901,28 +901,38 @@ function pushUndo(){ undoStack.push(snapFix()); if(undoStack.length>50) undoStac
 function applySnap(x){ Object.assign(ST,{anchors:x.anchors, overrides:x.overrides, barLens:x.barLens, breaks:x.breaks||{}, barEdits:x.barEdits||[], al:x.al}); const keep=selBar; finish(true); if(keep>=0 && !$('editor').hidden) openEditor(Math.min(keep,ST.song.bars.length-1),true); undoUI(); }
 function undoFix(){ if(!undoStack.length) return; redoStack.push(snapFix()); applySnap(undoStack.pop()); $('edLenMsg').textContent='Undid the last change.'; }
 function redoFix(){ if(!redoStack.length) return; undoStack.push(snapFix()); applySnap(redoStack.pop()); $('edLenMsg').textContent='Redid it.'; }
-$('edUndo').addEventListener('click',undoFix); $('edRedo').addEventListener('click',redoFix);
+$('edUndo').addEventListener('click',undoFix);
+$('edPlay').addEventListener('click',()=>$('play').click()); new MutationObserver(()=>{ $('edPlay').textContent=$('play').textContent; }).observe($('play'),{childList:true,characterData:true,subtree:true}); // a Play button in the editor (CJ) $('edRedo').addEventListener('click',redoFix);
 document.addEventListener('keydown',e=>{ if(!editing || !(e.metaKey||e.ctrlKey) || e.altKey) return; const t=e.target; if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&t.type!=='range') return; // text boxes keep their own undo
   const k=e.key.toLowerCase(); if(k==='z'&&!e.shiftKey){ e.preventDefault(); undoFix(); } else if((k==='z'&&e.shiftKey)||k==='y'){ e.preventDefault(); redoFix(); } });
 // add / remove bars (CJ): laid over the line-up, so everything after the change moves along with its chords and sections.
 // ST.barEdits is an ordered list of {op:'ins',at,len} / {op:'del',at}, in the numbering left by the edits before it.
-function applyBarEdits(song){ const bars=song.bars; bars.forEach(b=>{ b.s0=b.s; });
-  (ST.barEdits||[]).forEach((e,ei)=>{
-    if(e.op==='ins'){ const at=Math.max(0,Math.min(bars.length,e.at)), l=bars[bars.length-1], s0=at<bars.length?bars[at].s:(l?l.s+l.len:0);
-      for(let k=at;k<bars.length;k++) bars[k].s+=e.len; bars.splice(at,0,{chords:[],lyrics:[],section:null,s:s0,len:e.len,ins:ei}); }
-    else if(e.op==='del'){ if(e.at<0||e.at>=bars.length||bars.length<2) return; const [g]=bars.splice(e.at,1);
-      if(g.section && bars[e.at] && !bars[e.at].section) bars[e.at].section=g.section; // the section starts on the next bar instead
-      for(let k=e.at;k<bars.length;k++) bars[k].s-=g.len;
-      const l=bars[bars.length-1]; bars.push({chords:[],lyrics:[],section:null,s:l.s+l.len,len:g.len}); } }); // keep the end of the song covered
+function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=>{ b.s0=b.s; });
+  const E=ST.barEdits||[]; if(!E.length||!bars.length) return;
+  // only the bar lines move: every chord, word and section start keeps its place in the music (CJ: adding a bar must never shift the chords after it)
+  const items=[]; bars.forEach(b=>{ b.chords.forEach(([bt,c])=>items.push({x:b.s+bt-1,t:'c',v:c})); b.lyrics.forEach(([p,w])=>items.push({x:b.s+p/4,t:'w',v:w})); if(b.section) items.push({x:b.s,t:'s',v:b.section}); });
+  const last0=bars[bars.length-1], end0=last0.s+last0.len;
+  const grid=bars.map(b=>({s:b.s,len:b.len,s0:b.s0}));
+  E.forEach((e,ei)=>{
+    if(e.op==='ins'){ const at=Math.max(0,Math.min(grid.length,e.at)), l=grid[grid.length-1], s0=at<grid.length?grid[at].s:(l?l.s+l.len:0);
+      for(let k=at;k<grid.length;k++) grid[k].s+=e.len; grid.splice(at,0,{s:s0,len:e.len,ins:ei}); }
+    else if(e.op==='del'){ if(e.at<0||e.at>=grid.length||grid.length<2) return; const [g]=grid.splice(e.at,1); for(let k=e.at;k<grid.length;k++) grid[k].s-=g.len; } });
+  for(let l=grid[grid.length-1]; l.s+l.len<end0-1e-6; l=grid[grid.length-1]) grid.push({s:l.s+l.len,len:M0}); // keep the end of the song covered
+  const nb=grid.map(g=>({chords:[],lyrics:[],section:null,s:g.s,len:g.len,s0:g.s0,ins:g.ins}));
+  const find=x=>{ let lo=0,hi=nb.length-1; if(x<nb[0].s) return 0; while(lo<hi){ const m=(lo+hi+1)>>1; if(nb[m].s<=x+1e-6) lo=m; else hi=m-1; } return lo; };
+  for(const it of items){ const i=find(it.x), b=nb[i], r=Math.max(0,it.x-b.s);
+    if(it.t==='c') b.chords.push([1+r,it.v]); else if(it.t==='w') b.lyrics.push([Math.round(r*4),it.v]); else if(!b.section) b.section=it.v; }
+  while(nb.length>1 && nb[nb.length-1].s>=end0-1e-6 && !nb[nb.length-1].chords.length && !nb[nb.length-1].section) nb.pop(); // nothing past the end of the music
+  bars.splice(0,bars.length,...nb);
 }
 function shiftKeys(obj,at,d){ const o={}; for(const [k,v] of Object.entries(obj||{})){ const n=+k; if(d<0&&n===at) continue; o[n>=at+(d<0?1:0)?n+d:n]=v; } return o; }
 function barEdit(op,at,len){ pushUndo(); ST.barEdits=[...(ST.barEdits||[]), op==='ins'?{op,at,len}:{op,at}];
   const d=op==='ins'?1:-1; ST.overrides=shiftKeys(ST.overrides,at,d); ST.breaks=shiftKeys(ST.breaks,at,d);
   const an={}; for(const [j,bar] of Object.entries(ST.anchors||{})){ const i=bar-1; if(d<0&&i===at) continue; an[j]=(i>=at+(d<0?1:0)?i+d:i)+1; } ST.anchors=an;
   finish(true); const keep=Math.max(0,Math.min(ST.song.bars.length-1, op==='ins'?at:at)); openEditor(keep,true); saveLast(); }
-$('edInsBefore').addEventListener('click',()=>{ if(selBar<0) return; const L=+$('edInsLen').value, at=selBar; barEdit('ins',at,L); $('edLenMsg').textContent=`Added a ${L}-beat bar as bar ${at+1}. Use the grid to put chords in it.`; });
-$('edInsAfter').addEventListener('click',()=>{ if(selBar<0) return; const L=+$('edInsLen').value, at=selBar+1; barEdit('ins',at,L); $('edLenMsg').textContent=`Added a ${L}-beat bar as bar ${at+1}. Use the grid to put chords in it.`; });
-$('edDel').addEventListener('click',()=>{ if(selBar<0||ST.song.bars.length<2) return; const at=selBar; barEdit('del',at); $('edLenMsg').textContent=`Removed bar ${at+1}. Everything after it moved up a bar.`; });
+$('edInsBefore').addEventListener('click',()=>{ if(selBar<0) return; const L=+$('edInsLen').value, at=selBar; barEdit('ins',at,L); $('edLenMsg').textContent=`Added a ${L}-beat bar as bar ${at+1}. The chords stay where they are in the music; only the bar lines moved.`; });
+$('edInsAfter').addEventListener('click',()=>{ if(selBar<0) return; const L=+$('edInsLen').value, at=selBar+1; barEdit('ins',at,L); $('edLenMsg').textContent=`Added a ${L}-beat bar as bar ${at+1}. The chords stay where they are in the music; only the bar lines moved.`; });
+$('edDel').addEventListener('click',()=>{ if(selBar<0||ST.song.bars.length<2) return; const at=selBar; barEdit('del',at); $('edLenMsg').textContent=`Removed bar ${at+1}. The chords stay where they are in the music; only the bar lines moved.`; });
 // line breaks (CJ): move a bar to the start of the next line, or back onto the end of the line above
 function rowStart(i){ return !!measEls[i] && measEls[i].parentElement?.firstElementChild===measEls[i]; }
 function lineUI(i){ const st=rowStart(i), prevRow=st&&i>0?measEls[i-1]?.parentElement:null;
@@ -1096,12 +1106,13 @@ function vidDraw(g,pl,tv){
   g.save(); g.beginPath(); g.rect(0,top-6,W,H-top+6); g.clip();
   const bw=(W-80)/PER;
   for(const row of rows){ const y=top+row.y-off; if(y>H||y+row.band+124<top-40) continue;
-    if(row.band){ g.font=`700 19px ${fChord}`; row.idx.forEach((i,k)=>{ const b=song.bars[i]; if(!b.section) return; g.fillStyle=colors[b.section]||mut; g.fillText(b.section.toUpperCase(), 40+k*bw+4, y+22); }); }
+    const xs=[]; { let x=40; row.idx.forEach(i=>{ xs.push(x); x+=bw*bLen(i)/M0; }); }
+    if(row.band){ g.font=`700 19px ${fChord}`; row.idx.forEach((i,k)=>{ const b=song.bars[i]; if(!b.section) return; g.fillStyle=colors[b.section]||mut; g.fillText(b.section.toUpperCase(), xs[k]+4, y+22); }); }
     const by=y+row.band;
-    row.idx.forEach((i,k)=>{ const b=song.bars[i], bm=bLen(i), x0=40+k*bw, beatW=(bw-24)/bm, cur=!ci&&!done&&i===bar;
-      if(cur){ g.fillStyle=soft; g.fillRect(x0,by,bw,116); }
-      g.strokeStyle='#d6dce5'; g.lineWidth=1; g.strokeRect(x0+0.5,by+0.5,bw,116);
-      g.fillStyle=colors[secAt[i]]||mut; g.fillRect(x0,by,bw,4);
+    row.idx.forEach((i,k)=>{ const b=song.bars[i], bm=bLen(i), x0=xs[k], bwB=bw*bm/M0, beatW=(bw-24)/M0, cur=!ci&&!done&&i===bar;
+      if(cur){ g.fillStyle=soft; g.fillRect(x0,by,bwB,116); }
+      g.strokeStyle='#d6dce5'; g.lineWidth=1; g.strokeRect(x0+0.5,by+0.5,bwB,116);
+      g.fillStyle=colors[secAt[i]]||mut; g.fillRect(x0,by,bwB,4);
       if(b.section){ g.fillStyle='#5a6370'; g.fillRect(x0,by,3,116); }
       g.font=`700 16px ${fChord}`; g.fillStyle=mut; g.fillText(String(i+1)+(bm!==M0?`  (${bm} beats)`:''), x0+10, by+24);
       let lastEnd=-1e9;
@@ -1211,11 +1222,12 @@ $('dlPdf').addEventListener('click',async()=>{
     for(const idx of rows){
       const hasSec=idx.some(i=>song.bars[i].section), need=rowH+(hasSec?secH:0);
       if(y+need>H-MG-10){ footer(); doc.addPage(); page++; y=MG; }
-      if(hasSec){ doc.setFont('helvetica','bold'); doc.setFontSize(7.5); idx.forEach((i,k)=>{ const b=song.bars[i]; if(!b.section) return; doc.setTextColor(...cssColor(colorFor(b.section))); doc.text(b.section.toUpperCase(), MG+k*bw+2, y+8); }); y+=secH; }
-      doc.setDrawColor(205); doc.setLineWidth(0.5); doc.line(MG, y+rowH, MG+bw*idx.length, y+rowH);
-      idx.forEach((i,k)=>{ const b=song.bars[i], M=b.len||M0, x0=MG+k*bw, beatW=bw/M;
-        doc.setDrawColor(...cssColor(colorFor(secAt[i]))); doc.setLineWidth(1.6); doc.line(x0, y, x0+bw, y);
-        doc.setDrawColor(b.section?90:215); doc.setLineWidth(b.section?1.2:0.5); doc.line(x0, y, x0, y+rowH); doc.setDrawColor(215); doc.setLineWidth(0.5); if(k===idx.length-1) doc.line(x0+bw, y, x0+bw, y+rowH);
+      const xs=[]; { let x=MG; idx.forEach(i=>{ xs.push(x); x+=bw*(song.bars[i].len||M0)/M0; }); xs.push(x); }
+      if(hasSec){ doc.setFont('helvetica','bold'); doc.setFontSize(7.5); idx.forEach((i,k)=>{ const b=song.bars[i]; if(!b.section) return; doc.setTextColor(...cssColor(colorFor(b.section))); doc.text(b.section.toUpperCase(), xs[k]+2, y+8); }); y+=secH; }
+      doc.setDrawColor(205); doc.setLineWidth(0.5); doc.line(MG, y+rowH, xs[xs.length-1], y+rowH);
+      idx.forEach((i,k)=>{ const b=song.bars[i], M=b.len||M0, x0=xs[k], bwB=xs[k+1]-xs[k], beatW=bwB/M;
+        doc.setDrawColor(...cssColor(colorFor(secAt[i]))); doc.setLineWidth(1.6); doc.line(x0, y, x0+bwB, y);
+        doc.setDrawColor(b.section?90:215); doc.setLineWidth(b.section?1.2:0.5); doc.line(x0, y, x0, y+rowH); doc.setDrawColor(215); doc.setLineWidth(0.5); if(k===idx.length-1) doc.line(x0+bwB, y, x0+bwB, y+rowH);
         doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(140); doc.text(String(i+1)+(M!==M0?` (${M} beats)`:''), x0+3, y+8);
         // chords
         let lastEnd=-1;

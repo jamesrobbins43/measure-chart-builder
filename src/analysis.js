@@ -218,9 +218,12 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   const loud=i=>Math.min(1,S.E[i]/(emax*0.08));
   // prefix sums per event
   const pre=events.map((e,j)=>{ const a=new Float32Array(T+1); for(let i=0;i<T;i++) a[i+1]=a[i]+((temps[j]?(raw(temps[j],i)-mean[i])*loud(i):0)+0.02)/sub; return a; }); // N.C. scores neutral, not penalised when the band keeps playing
-  const pos=i=>((i-downPhase)%meter+meter)%meter;
+  // short bars: in 4/4 a section can end with a 2-beat bar, which moves beat 1 by half a bar for the rest of the song.
+  // h = how many half-bar moves so far (mod 2); it can only change where a new section starts.
+  const H=(opt.short??true)&&meterBeats===4&&!opt.compound?2:1, HALF=meter/2, SHORT=opt.shortCost??0.4;
+  const pos=(i,h=0)=>((i-downPhase-h*HALF)%meter+meter)%meter;
   const grp=opt.compound?3:2; // compound meters group eighths in threes
-  const startBonus=i=>{ const p=pos(i); if(p%sub) return -0.3; const pb=p/sub; return pb===0?0.35:((meterBeats===4&&pb===2)||(opt.compound&&pb%3===0))?0.12:-0.08; };
+  const startBonus=(i,h)=>{ const p=pos(i,h); if(p%sub) return -0.3; const pb=p/sub; return pb===0?0.35:((meterBeats===4&&pb===2)||(opt.compound&&pb%3===0))?0.12:-0.08; };
   const durBonus=d=>(d%sub? -0.05 : (d/sub)%meterBeats===0?0.12:(d/sub)%grp===0?0.04:0);
   const NEG=-1e9, lam=0.0, REP=opt.rep??0.8, STR0=(opt.stretch??0.08)/sub;
   const sylls=events.map(e=>e.lines.reduce((a,l)=>a+l.reduce((x,w)=>x+syl(w),0),0)); // pickups into the next line are sung during this chord too
@@ -232,29 +235,39 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   // a chord line with no words (intro, interlude) is usually played a bar per chord, even when a bar is a rest
   const secOf=events.map(e=>e.sec+'/'+e.pass), words=e=>e.lines.some(l=>!l.pickup&&l.length), bare=events.map((e0,j)=>{ if(words(e0)||e0.quick) return false; // only short all-instrumental sections (busy instrumentals change chords mid-bar)
     const same=events.filter((e,k)=>secOf[k]===secOf[j]); return same.length<=4 && same.every(e=>!e.quick && !words(e)) ? same.length : 0; }), BF=0.4, barFit=(d,n)=>(d===meter?BF:(n<4&&d%meter===0)?0:-1) // four chords written for a bare line = four bars;
+  // pattern memory: a later verse/chorus usually holds each chord about as long as the first one did (opt.refDur, in beats)
+  const REF=opt.refDur||null, DEV=(opt.devCost??0.12)/sub;
   const quick=events.map(e=>!!e.quick), afterQuick=events.map((e,j)=>j>0&&!!events[j-1].quick);
   // a section can be played again right after itself (charts often write a repeat once)
   const firstOf=new Int32Array(N).fill(-1), lastOf=new Int32Array(N).fill(-1);
   { let i=0; while(i<N){ let k=i; while(k+1<N && events[k+1].sec===events[i].sec && events[k+1].pass===events[i].pass) k++; for(let q=i;q<=k;q++){ firstOf[q]=i; } lastOf[k]=i; i=k+1; } }
   // phrase memory: sections usually last a multiple of 4 bars, so a section that starts 4, 8, 12... bars
   // after the previous section started is preferred. Q = bar of the last section start, mod 4.
-  const PH=opt.phrase??0.6, Q=PH>0?4:1, W=T+1;
+  const PH=opt.phrase??0.6, Q0=PH>0?4:1, Q=Q0*H, W=T+1; // state q = phrase bar (mod 4) + Q0 * h
   const dp=new Float64Array(N*W*Q).fill(NEG), bpD=new Int16Array(N*W*Q), bpP=new Int32Array(N*W*Q), bpQ=new Int8Array(N*W*Q);
   const arrV=new Float64Array(N*W*Q).fill(NEG), arrF=new Int32Array(N*W*Q), arrQ=new Int8Array(N*W*Q);
   const at=(j,b,q)=>(j*W+b)*Q+q;
   const anchor={}; for(const [j,v] of Object.entries(opt.anchors||{})) anchor[j]=v*sub;
-  const barQ=a=>(((Math.floor((a-downPhase)/meter))%Q)+Q)%Q;
+  const barQ=(a,h)=>(((Math.floor((a-downPhase-h*HALF)/meter))%Q0)+Q0)%Q0;
   const isStart=j=>firstOf[j]===j;
   const repSrc=new Int32Array(N).fill(-1); for(let j=0;j<N;j++) if(isStart(j)) for(let k=j;k<N&&firstOf[k]===j;k++){ if(lastOf[k]===j){ repSrc[j]=k; break; } }
+  // a section written "4X" may be played fewer times: the next section can follow any pass from the second on
+  const SKIP=opt.skipCost??0.5, skipSrc=Array.from({length:N},()=>[]);
+  for(let j=1;j<N;j++){ const pe=events[j-1]; if(!isStart(j) || pe.sec===events[j].sec || !(pe.pass>0)) continue;
+    for(let k=0;k<j-1;k++){ const e=events[k], nx=events[k+1]; if(e.sec===pe.sec && e.pass>=1 && nx.pass===e.pass+1 && nx.sec===e.sec) skipSrc[j].push([k,SKIP*(pe.pass-e.pass)]); } }
   const fillArrive=a=>{ // best ways to be at the start of each event at beat a
     for(let j=0;j<N;j++){
       if(anchor[j]!==undefined && a!==anchor[j]) continue;
-      if(j===0){ if(opt.minT!=null && S.beats[Math.min(a,S.n-1)]<opt.minT) continue; const q=barQ(a); const i=at(0,a,q); arrV[i]=lam*a; arrF[i]=-1; arrQ[i]=q; continue; }
+      if(j===0){ if(opt.minT!=null && S.beats[Math.min(a,S.n-1)]<opt.minT) continue; const q=barQ(a,0); const i=at(0,a,q); arrV[i]=lam*a; arrF[i]=-1; arrQ[i]=q; continue; }
       if(!isStart(j)){ for(let q=0;q<Q;q++){ const v=dp[at(j-1,a,q)]; if(v>NEG/2){ const i=at(j,a,q); arrV[i]=v; arrF[i]=j-1; arrQ[i]=q; } } continue; }
-      const qn=barQ(a), onBar=((a-downPhase)%meter+meter)%meter===0, i=at(j,a,qn);
       const srcs=[[j-1,0]]; if(repSrc[j]>=0){ let nb=0; for(let k=j;k<N&&firstOf[k]===j;k++) if(bare[k]) nb++; srcs.push([repSrc[j],REP+BF*nb]); } // a repeat mustn't pay for itself with the bar-per-chord bonus
-      for(const [k,cost] of srcs) for(let q=0;q<Q;q++){ const v0=dp[at(k,a,q)]; if(v0<=NEG/2) continue;
-        const v=v0-cost-(onBar&&q===qn?0:PH); if(v>arrV[i]){ arrV[i]=v; arrF[i]=k; arrQ[i]=q; } }
+      for(const x of skipSrc[j]) srcs.push(x);
+      for(const [k,cost] of srcs) for(let s=0;s<Q;s++){ const v0=dp[at(k,a,s)]; if(v0<=NEG/2) continue; const q=s%Q0, h=(s/Q0)|0;
+        for(let h2=0;h2<H;h2++){
+          if(h2!==h && pos(a,h2)!==0) continue; // a short bar only ever ends right where this section starts on beat 1
+          const qn=barQ(a,h2), i=at(j,a,qn+Q0*h2), onBar=pos(a,h2)===0;
+          const v=v0-cost-(h2===h ? (onBar&&q===qn?0:PH) : SHORT+(q===barQ(a,h)?0:PH)); // after a short bar, count whole bars in the old grid
+          if(v>arrV[i]){ arrV[i]=v; arrF[i]=k; arrQ[i]=s; } } }
     }
   };
   for(let b=1;b<=T;b++){
@@ -264,19 +277,29 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
       for(let q=0;q<Q;q++){
         let best=NEG,bd=0,bf=-1,bq=0;
         for(let d=minD[j];d<=dm;d++){ const a=b-d, ia=at(j,a,q), pv=arrV[ia]; if(pv<=NEG/2) continue;
-          const v=pv+(P[b]-P[a])+(afterQuick[j]?0:startBonus(a))+(quick[j]?0:durBonus(d))+(bare[j]?barFit(d,bare[j]):0)-(d>maxNat[j]?(quick[j]?0.15:STR)*(d-maxNat[j]):0); if(v>best){best=v;bd=d;bf=arrF[ia];bq=arrQ[ia];} }
+          const v=pv+(P[b]-P[a])+(afterQuick[j]?0:startBonus(a,(q/Q0)|0))+(quick[j]?0:durBonus(d))+(bare[j]?barFit(d,bare[j]):0)-(d>maxNat[j]?(quick[j]?0.15:STR)*(d-maxNat[j]):0)-(REF&&REF[j]>0?DEV*Math.max(0,Math.abs(d-REF[j]*sub)-sub):0); if(v>best){best=v;bd=d;bf=arrF[ia];bq=arrQ[ia];} }
         const io=at(j,b,q); dp[io]=best; bpD[io]=bd; bpP[io]=bf; bpQ[io]=bq;
       }
     }
   }
   let bestEnd=0,bestQ=0,bv=NEG; for(let b=1;b<=T;b++) for(let q=0;q<Q;q++){ const v=dp[at(N-1,b,q)]+lam*(T-b); if(v>bv){bv=v;bestEnd=b;bestQ=q;} }
   const path=[]; let j=N-1, b=bestEnd, q=bestQ;
-  while(j>=0 && b>0){ const io=at(j,b,q), d=bpD[io], f=bpP[io], pq=bpQ[io]; path.push({j,start:b-d}); b-=d; if(j===0||f<0) break; j=f; q=pq; }
+  while(j>=0 && b>0){ const io=at(j,b,q), d=bpD[io], f=bpP[io], pq=bpQ[io]; path.push({j,start:b-d,h:(q/Q0)|0}); b-=d; if(j===0||f<0) break; j=f; q=pq; }
   path.reverse();
+  // half-bar moves along the path, in beats from the first downbeat (each one ends a 2-beat bar)
+  const moves=[]; for(let k=1;k<path.length;k++) if(path[k].h!==path[k-1].h) moves.push((path[k].start-downPhase)/sub);
   if(sub>1) for(const p of path) p.start/=sub;
-  return {path,end:bestEnd/sub,score:bv};
+  return {path,end:bestEnd/sub,score:bv,moves};
 }
 
+// reference length for each event from the first time its section type was played (Verse 1 for Verse 2, ...)
+function refDurations(events,al){
+  const key=e=>e.label.replace(/\s*\(\d+x\)\s*$/i,'').replace(/\s*\d+\s*$/,'').toLowerCase()+'|'+e.k;
+  const ref=new Map(), out=new Float32Array(events.length);
+  al.path.forEach((p,i)=>{ const e=events[p.j], d=(i+1<al.path.length?al.path[i+1].start:al.end)-p.start, kk=key(e), own=e.sec+'/'+e.pass;
+    const r=ref.get(kk); if(!r) ref.set(kk,{d,own}); else if(r.own!==own && !out[p.j]) out[p.j]=r.d; });
+  return out;
+}
 // which transposition of the chart best matches the recording (0 = same key)
 function keyShifts(S,events){
   const prof=new Float32Array(12); for(let i=0;i<S.n;i++) for(let k=0;k<12;k++) prof[k]+=S.C[i*12+k]*S.E[i];
@@ -304,9 +327,14 @@ function buildSong(meta,sections,S,P,downPhase,meter,events,al,dur,vox){
   // music end from energy
   const emax=Math.max(...S.E); let lastLoud=S.n-1; while(lastLoud>0 && S.E[lastLoud]<emax*0.03) lastLoud--;
   const endT=Math.max(beatT(al.end), beatT(lastLoud+1));
-  const nb=Math.max(1,Math.ceil((endT-bar0)/barLen-0.05));
-  const bars=Array.from({length:nb},()=>({chords:[],lyrics:[],section:null})); const usedOn=new Set(), phrases=[]; let pend=null, lastEnd=-1e9;
-  const place=(t)=>{ const q=Math.round((t-bar0)/(P/2)); return {bar:Math.floor(q/(meter*2)), half:((q%(meter*2))+meter*2)%(meter*2)}; };
+  // bar starts in beats from the first downbeat; a half-bar move (al.moves) ends a short bar there
+  const total=(endT-bar0)/P-0.05*meter, moves=(al.moves||[]).slice().sort((a,b)=>a-b), bs=[]; { let x=0, mi=0;
+    while(bs.length===0 || x<total){ bs.push(x); let nx=x+meter; while(mi<moves.length && moves[mi]<=x+1e-6) mi++; if(mi<moves.length && moves[mi]<nx-1e-6){ nx=moves[mi]; mi++; } x=nx; } }
+  const nb=bs.length;
+  const bars=bs.map((x,i)=>({chords:[],lyrics:[],section:null,s:x,len:(i+1<nb?bs[i+1]:x+meter)-x}));
+  const barOf=x=>{ if(x<bs[0]) return Math.floor(x/meter); let lo=0,hi=nb-1; while(lo<hi){ const m=(lo+hi+1)>>1; if(bs[m]<=x+1e-6) lo=m; else hi=m-1; } return lo; };
+  const nearBar=x=>{ const i=Math.max(0,barOf(x)); return (i+1<nb && bs[i+1]-x<x-bs[i]) ? i+1 : i; }; const usedOn=new Set(), phrases=[]; let pend=null, lastEnd=-1e9;
+  const place=(t)=>{ const x=Math.round((t-bar0)/(P/2))/2, bar=barOf(x); return {bar, half:bar<0?0:Math.round((x-bs[bar])*2)}; };
   al.path.forEach((p,k)=>{
     const e=events[p.j];
     const t0=beatT(p.start), t1=beatT(k+1<al.path.length?al.path[k+1].start:al.end);
@@ -314,7 +342,7 @@ function buildSong(meta,sections,S,P,downPhase,meter,events,al,dur,vox){
     const isFirst=e.k===0 && (e.pass===0 || jumped);
     let {bar,half}=place(t0); if(bar<0){bar=0;half=0;} if(bar>=nb) return;
     bars[bar].chords.push([1+half/2,e.chord]);
-    if(isFirst){ let sb=Math.max(0,Math.min(nb-1,Math.round((t0-bar0)/barLen))); while(sb<nb-1 && bars[sb].section) sb++; if(!bars[sb].section){ bars[sb].section=e.label; bars[sb].secIdx=e.sec; bars[sb].evIdx=p.j; } }
+    if(isFirst){ let sb=Math.max(0,Math.min(nb-1,nearBar((t0-bar0)/P))); while(sb<nb-1 && bars[sb].section) sb++; if(!bars[sb].section){ bars[sb].section=e.label; bars[sb].secIdx=e.sec; bars[sb].evIdx=p.j; } }
     // lyrics
     const main=e.lines.filter(l=>!l.pickup), pick=e.lines.filter(l=>l.pickup);
     const span=t1-t0, totSyl=main.reduce((a,l)=>a+l.reduce((x,w)=>x+syl(w),0),0)||1;
@@ -351,7 +379,7 @@ function buildSong(meta,sections,S,P,downPhase,meter,events,al,dur,vox){
   function snap(t){ if(!vox||!vox.onsets.length) return t; const lo=Math.max(lastEnd-0.02,t-barLen*0.75), hi=t+P*1.01; let best=null;
     for(const o of vox.onsets){ if(o<lo) continue; if(o>hi) break; if(!usedOn.has(o) && (best===null || Math.abs(o-t)<Math.abs(best-t))) best=o; }
     if(best===null) return t; usedOn.add(best); return best; }
-  function addWord(t,w){ t=Math.max(t,lastEnd); lastEnd=t+P/4*0.98; const q=Math.round((t-bar0)/(P/4)); const bar=Math.floor(q/(meter*4)); if(bar<0||bar>=nb) return; bars[bar].lyrics.push([((q%(meter*4))+meter*4)%(meter*4),w]); }
+  function addWord(t,w){ t=Math.max(t,lastEnd); lastEnd=t+P/4*0.98; const x=Math.round((t-bar0)/(P/4))/4, bar=barOf(x); if(bar<0||bar>=nb) return; bars[bar].lyrics.push([Math.min(bars[bar].len*4-1,Math.round((x-bs[bar])*4)),w]); }
   // keep each bar's words in order and in distinct 16ths
   for(const b of bars){ b.lyrics.sort((x,y)=>x[0]-y[0]); b.chords.sort((x,y)=>x[0]-y[0]);
     // collapse duplicate chord positions (keep last)

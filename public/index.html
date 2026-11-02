@@ -241,7 +241,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
   <div class="editor" id="editor" hidden><div class="ein wrap">
     <h2 id="edTitle">Bar 1</h2>
     <div class="row2" style="grid-column:auto / span 2"><label for="edLen" style="flex-direction:row;align-items:center;gap:8px">Beats in this bar:<select id="edLen"></select></label><button type="button" id="edLenApply">Apply</button><button type="button" id="edPrevLine" title="Put this bar at the end of the line above">Move to prior line</button><button type="button" id="edNextLine" title="Start a new line with this bar">Move to next line</button><span id="edLenMsg" role="status"></span></div>
-    <div class="group"><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button type="button" id="edClose">Done</button></div>
+    <div class="group"><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button class="primary" type="button" id="edClose">Done fixing</button></div>
     <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply">Re-line up from here</button><span id="edAnchors"></span></div>
     <div class="lgrid" id="lyrGrid" hidden>
       <div class="lgtop"><label for="lgFrom">Bars</label><input type="number" id="lgFrom" min="1" step="1"> <label for="lgTo">to</label><input type="number" id="lgTo" min="1" step="1">
@@ -1472,7 +1472,10 @@ function openEditor(i,noFocus){
   $('editor').hidden=false; lgShow(true,noFocus);
 }
 function closeEditor(){ lgShow(false); $('editor').hidden=true; document.querySelectorAll('.measure.sel').forEach(e=>e.classList.remove('sel')); selBar=-1; }
-$('edClose').addEventListener('click',closeEditor);
+$('edClose').addEventListener('click',()=>{ if(editing) $('editBtn').click(); else closeEditor(); }); // leaves Fix bars altogether (CJ)
+// the panel covers the bottom of the page, so pad the page by its height: every bar can still be scrolled into view (CJ: stuck at bar 81)
+{ const padEd=()=>{ document.body.style.paddingBottom=$('editor').hidden?'':($('editor').offsetHeight+16)+'px'; };
+  try{ new ResizeObserver(padEd).observe($('editor')); }catch(e){} new MutationObserver(padEd).observe($('editor'),{attributes:true,attributeFilter:['hidden']}); }
 // ---------- undo / redo for Fix bars (CJ): every bar length, section pin and grid save can be stepped back ----------
 var undoStack=[], redoStack=[];
 function snapFix(){ return {anchors:JSON.parse(JSON.stringify(ST.anchors||{})), overrides:JSON.parse(JSON.stringify(ST.overrides||{})), barLens:{...(ST.barLens||{})}, breaks:{...(ST.breaks||{})}, al:ST.al}; }

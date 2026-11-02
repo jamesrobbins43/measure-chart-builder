@@ -35,6 +35,7 @@ h1,h2{font-family:var(--f-chord);font-weight:700;letter-spacing:.02em;text-trans
 /* upload */
 .intro{max-width:980px;margin:0 auto;padding-block:32px 48px}
 .intro h1{font-size:30px}
+.tagline{font-family:var(--f-ui);font-weight:600;font-size:17px;color:var(--ink);margin:4px 0 0}
 .lede{font-family:var(--f-ui);color:var(--muted);max-width:62ch;margin:6px 0 22px;line-height:1.5}
 .drops{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
 .drop{position:relative;background:var(--paper);border:1.5px dashed var(--tick);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -161,6 +162,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 <!-- ===== upload ===== -->
 <section id="upload" class="intro wrap">
   <h1>Measure Chart Builder</h1>
+  <p class="tagline">Turn your chart into a play along track.</p>
   <p class="lede">Drop in a song and its chord chart. The builder finds the tempo and the bars, lines the chart's chords up with the recording, and gives you a chart that follows along as the song plays, with a click track you can switch on and download.</p>
   <div class="drops">
     <div class="drop" id="dropSong">

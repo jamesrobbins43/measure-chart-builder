@@ -1563,6 +1563,7 @@ $('edNextLine').addEventListener('click',()=>{ if(selBar>=0) setBreak(selBar,tru
 $('edPrevLine').addEventListener('click',()=>{ if(selBar>=0) setBreak(selBar,false); });
 // "Beats in this bar" (CJ): e.g. bar 28 is a bar of 2 and its other 2 beats start bar 29.
 $('edLenApply').addEventListener('click',()=>{ if(selBar>=0) setBarLen(selBar,+$('edLen').value); });
+$('edLen').addEventListener('change',()=>{ if(selBar>=0) setBarLen(selBar,+$('edLen').value); }); $('edLenApply').hidden=true; // picking the number makes the change right away (CJ)
 function setBarLen(selBar,L){
   const b=ST.song.bars[selBar], s0=b.s0??b.s??selBar*ST.meter;
   if(L===bLen(selBar)){ $('edLenMsg').textContent='That is already its length.'; return; }

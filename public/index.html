@@ -1658,9 +1658,9 @@ $('dlPdf').addEventListener('click',async()=>{
         let lastEnd=-1;
         b.chords.forEach(([beat,name])=>{ const f=beat%1, onAnd=f>=0.25&&f<0.75; let x=x0+3+(Math.floor(beat-1)+(onAnd?0.5:0))*beatW; x=Math.max(x,lastEnd+3);
           const [root,ext,bass]=chordParts(name); doc.setTextColor(21,25,31);
-          doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text(root, x, y+21); let cx=x+doc.getTextWidth(root);
-          if(ext){ doc.setFontSize(6.5); doc.text(ext, cx+0.5, y+16.5); cx+=doc.getTextWidth(ext)+1; }
-          if(bass){ doc.setFontSize(10); doc.text(bass, cx, y+21); cx+=doc.getTextWidth(bass); }
+          doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(root, x, y+22); let cx=x+doc.getTextWidth(root);
+          if(ext){ doc.setFontSize(7.5); doc.text(ext, cx+0.5, y+16.5); cx+=doc.getTextWidth(ext)+1; }
+          if(bass){ doc.setFontSize(12); doc.text(bass, cx, y+22); cx+=doc.getTextWidth(bass); }
           lastEnd=cx; });
         // beat count, with + where a chord lands on the "and"
         const ands=new Set(b.chords.filter(([bt])=>{ const f=bt%1; return f>=0.25&&f<0.75; }).map(([bt])=>Math.floor(bt-1)));

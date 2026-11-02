@@ -211,7 +211,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     </div>
   </div></div>
   <div class="toolbar wrap">
-    <div class="group">Beat 1 <button type="button" id="dbL" aria-label="Move beat 1 earlier">◀</button><button type="button" id="dbR" aria-label="Move beat 1 later">▶</button></div>
+    <div class="group" hidden>Beat 1 <button type="button" id="dbL" aria-label="Move beat 1 earlier">◀</button><button type="button" id="dbR" aria-label="Move beat 1 later">▶</button></div>
     <div class="group">Grid <button type="button" id="nudgeL" aria-label="Shift grid 10 ms earlier">−10 ms</button><b id="nudgeV">0</b><button type="button" id="nudgeR" aria-label="Shift grid 10 ms later">+10 ms</button></div>
     <div class="group"><span class="help" tabindex="0" role="img" aria-label="Help: If the highlighted beat counter is off, use this slider to sync it with the tempo." data-tip="If the highlighted beat counter is off, use this slider to sync it with the tempo.">?</span><label for="sync" style="display:inline-flex;align-items:center;gap:6px" aria-label="Beat highlight timing"><small>later</small><input id="sync" type="range" min="-400" max="250" step="10" value="0" style="width:90px;accent-color:var(--accent)"><small>sooner</small></label><b id="syncV">0 ms</b></div>
     <div class="group"><button type="button" id="advBtn" aria-expanded="false" aria-controls="advGroup">Advanced</button></div>

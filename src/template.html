@@ -224,7 +224,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="group" id="keyGroup"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <span id="keyMsg" class="keymsg" role="status"></span></div>
     <div class="group"><button type="button" id="editBtn" aria-pressed="false">Fix bars</button></div>
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button></div>
-    <div class="group"><button type="button" id="dlPdf">Chart PDF</button><label id="pdfLyrWrap" style="display:inline-flex;align-items:center;gap:4px"><input type="checkbox" id="pdfLyr" checked>with lyrics</label></div>
+    <div class="group"><button type="button" id="dlPdf">Chart PDF</button></div>
     <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><span id="libMsg"></span></div>
     <div class="group"><button type="button" id="newBtn">New song</button> <button type="button" id="reportBtn">Report a problem</button></div>
     <p class="msg" id="msg"></p>
@@ -502,7 +502,7 @@ function finish(keep){
   $('nudgeV').textContent=(ST.nudge>0?'+':'')+ST.nudge+' ms';
   $('beats').innerHTML=Array.from({length:ST.meter},(_,k)=>`<i class="${k?'':'one'}">${k+1}</i>`).join('');
   const chartBpm=ST.meta.bpm, got=60/ST.P;
-  $('editBtn').parentElement.hidden=!CAN_FIX; $('pdfLyrWrap').hidden=!CAN_FIX; // members get a chords-only PDF (CJ, licensing)
+  $('editBtn').parentElement.hidden=!CAN_FIX;
   $('msg').className='msg'; $('msg').textContent=CAN_FIX?'Check where each section starts. To fix one, click "Fix bars", click the bar where it really starts, and set it there.':'';
   const near=x=>Math.abs(got-x)/x<=0.04;
   if(chartBpm && !(near(chartBpm) || (ST.compound && (near(chartBpm*2)||near(chartBpm*3))))){ $('msg').className='msg warn'; $('msg').textContent=`The chart says ${chartBpm} BPM but the recording sounds like ${got.toFixed(1)}. If the chart looks rushed or dragged, open Advanced and try ½× or 2×, or type the tempo.`; }
@@ -1020,26 +1020,27 @@ function mapLabel(l){ let rep=''; l=l.replace(/\s*\((\d+)\s*x\)\s*$/i,(m,n)=>{ r
 $('dlPdf').addEventListener('click',async()=>{
   const btn=$('dlPdf'); btn.disabled=true; $('msg').className='msg'; $('msg').textContent='Making the PDF…';
   try{
-    const {jsPDF}=await jspdfLib(); const withLyr=CAN_FIX && $('pdfLyr').checked;
+    const {jsPDF}=await jspdfLib(); // chords only, never lyrics (CJ)
     const doc=new jsPDF({orientation:'landscape',unit:'pt',format:'legal'}), W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), MG=28, PER=8, bw=(W-2*MG)/PER;
     const song=ST.song, M0=ST.meter, title=$('songTitle').textContent, meta=$('songMeta').textContent;
-    const rowH=withLyr?52:38, secH=11; let y=MG, page=1;
+    const rowH=38, secH=11; let y=MG, page=1;
     const footer=()=>{ doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(120); doc.text(`${title} · page ${page}`, W-MG, H-14, {align:'right'}); };
     doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.setTextColor(21,25,31); doc.text(title.toUpperCase(), MG, y+12);
-    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(90); doc.text(meta+(withLyr?'':' · chords only'), MG, y+25); y+=38;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(90); doc.text(meta, MG, y+25); y+=38;
     // the song map along the top: every section in order
     const map=song.bars.filter(b=>b.section && !/^(lead[- ]?in|count[- ]?in)$/i.test(b.section)).map(b=>mapLabel(b.section));
     if(map.length){ doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(21,25,31); const lines=doc.splitTextToSize(map.join('   ·   '), W-2*MG); doc.text(lines, MG, y+2); y+=lines.length*13+8; }
-    const rows=[]; let sec=''; song.bars.forEach((b,i)=>{ if(b.section) sec=b.section; const cur=rows[rows.length-1]; if(!cur||b.section||cur.idx.length===PER) rows.push({idx:[i],sec}); else cur.idx.push(i); });
-    for(const r of rows){
-      const first=song.bars[r.idx[0]], hasSec=!!first.section, need=rowH+(hasSec?secH:0);
+    // bars run straight on, 8 a line, no gaps at section changes (CJ); a section's name sits over the bar it starts on
+    const secAt=[]; { let sc=''; song.bars.forEach((b,i)=>{ if(b.section) sc=b.section; secAt[i]=sc; }); }
+    const rows=[]; for(let i=0;i<song.bars.length;i+=PER) rows.push(Array.from({length:Math.min(PER,song.bars.length-i)},(_,k)=>i+k));
+    for(const idx of rows){
+      const hasSec=idx.some(i=>song.bars[i].section), need=rowH+(hasSec?secH:0);
       if(y+need>H-MG-10){ footer(); doc.addPage(); page++; y=MG; }
-      const col=cssColor(colorFor(r.sec));
-      if(hasSec){ doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...col); doc.text(first.section.toUpperCase(), MG+2, y+8); y+=secH; }
-      doc.setDrawColor(...col); doc.setLineWidth(1.6); doc.line(MG, y, MG+bw*r.idx.length, y);
-      doc.setDrawColor(205); doc.setLineWidth(0.5); doc.line(MG, y+rowH, MG+bw*r.idx.length, y+rowH);
-      r.idx.forEach((i,k)=>{ const b=song.bars[i], M=b.len||M0, x0=MG+k*bw, beatW=bw/M;
-        doc.setDrawColor(215); doc.setLineWidth(0.5); doc.line(x0, y, x0, y+rowH); if(k===r.idx.length-1) doc.line(x0+bw, y, x0+bw, y+rowH);
+      if(hasSec){ doc.setFont('helvetica','bold'); doc.setFontSize(8); idx.forEach((i,k)=>{ const b=song.bars[i]; if(!b.section) return; doc.setTextColor(...cssColor(colorFor(b.section))); doc.text(b.section.toUpperCase(), MG+k*bw+2, y+8); }); y+=secH; }
+      doc.setDrawColor(205); doc.setLineWidth(0.5); doc.line(MG, y+rowH, MG+bw*idx.length, y+rowH);
+      idx.forEach((i,k)=>{ const b=song.bars[i], M=b.len||M0, x0=MG+k*bw, beatW=bw/M;
+        doc.setDrawColor(...cssColor(colorFor(secAt[i]))); doc.setLineWidth(1.6); doc.line(x0, y, x0+bw, y);
+        doc.setDrawColor(b.section?90:215); doc.setLineWidth(b.section?1.2:0.5); doc.line(x0, y, x0, y+rowH); doc.setDrawColor(215); doc.setLineWidth(0.5); if(k===idx.length-1) doc.line(x0+bw, y, x0+bw, y+rowH);
         doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(140); doc.text(String(i+1)+(M!==M0?`  (${M} beats)`:''), x0+3, y+8);
         // chords
         let lastEnd=-1;
@@ -1053,19 +1054,11 @@ $('dlPdf').addEventListener('click',async()=>{
         const ands=new Set(b.chords.filter(([bt])=>{ const f=bt%1; return f>=0.25&&f<0.75; }).map(([bt])=>Math.floor(bt-1)));
         doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(130);
         for(let q=0;q<M;q++){ doc.text(String(q+1), x0+3+q*beatW, y+32); if(ands.has(q)){ doc.setFont('helvetica','bold'); doc.setTextColor(21,25,31); doc.text('+', x0+3+(q+0.5)*beatW, y+32); doc.setFont('helvetica','normal'); doc.setTextColor(130); } }
-        // lyrics: each word starts at its 16th, pushed along if the one before runs long; small text if the bar is crowded
-        if(withLyr && b.lyrics.length){ const ws=[...b.lyrics].sort((p,q)=>p[0]-q[0]);
-          let fs=8; doc.setFont('helvetica','normal');
-          const lay=fs=>{ doc.setFontSize(fs); const sp=doc.getTextWidth(' '), wd=ws.map(([,w])=>doc.getTextWidth(w)), xs=ws.map(([p])=>x0+3+p/4*beatW);
-            let lim=x0+bw-3; for(let j=ws.length-1;j>=0;j--){ xs[j]=Math.min(xs[j],lim-wd[j]); lim=xs[j]-sp; } // late words slide left to fit the bar
-            let end=x0+3-sp; return ws.map(([,w],j)=>{ const x=Math.max(xs[j],end+sp); end=x+wd[j]; return [x,w,end]; }); };
-          let L=lay(fs); while(fs>6 && L[L.length-1][2]>x0+bw-2){ fs-=0.5; L=lay(fs); }
-          doc.setTextColor(21,25,31); L.forEach(([x,w])=>doc.text(w, x, y+45)); }
       });
       y+=rowH+6;
     }
     footer();
-    const ok=await save(`${baseName()} - chart${withLyr?'':' (chords only)'}.pdf`, doc.output('blob'));
+    const ok=await save(`${baseName()} - chart.pdf`, doc.output('blob'));
     $('msg').textContent= ok?'Saved the chart PDF. It prints on legal paper, landscape.':'Download was cancelled.';
   }catch(e){ console.warn(e); $('msg').textContent="Couldn't make the PDF just now. Check your connection and try again."; }
   btn.disabled=false;

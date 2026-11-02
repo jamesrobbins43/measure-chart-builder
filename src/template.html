@@ -196,7 +196,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
   <div class="toolbar wrap">
     <div class="group">Beat 1 <button type="button" id="dbL" aria-label="Move beat 1 earlier">◀</button><button type="button" id="dbR" aria-label="Move beat 1 later">▶</button></div>
     <div class="group">Grid <button type="button" id="nudgeL" aria-label="Shift grid 10 ms earlier">−10 ms</button><b id="nudgeV">0</b><button type="button" id="nudgeR" aria-label="Shift grid 10 ms later">+10 ms</button></div>
-    <div class="group"><label for="sync" style="display:inline-flex;align-items:center;gap:6px">Sync <input id="sync" type="range" min="-250" max="400" step="10" value="0" style="width:90px;accent-color:var(--accent)"></label><b id="syncV">0 ms</b></div>
+    <div class="group"><label for="sync" style="display:inline-flex;align-items:center;gap:6px" title="Move right if the highlighted beats come late, left if they come early">Highlight <small>later</small><input id="sync" type="range" min="-400" max="250" step="10" value="0" style="width:90px;accent-color:var(--accent)"><small>sooner</small></label><b id="syncV">in sync</b></div>
     <div class="group"><button type="button" id="advBtn" aria-expanded="false" aria-controls="advGroup">Advanced</button></div>
     <div class="group adv" id="advGroup" hidden>Tempo <b id="bpmV"></b> <button type="button" id="halfBtn">½×</button><button type="button" id="dblBtn">2×</button>
       <label for="bpmIn">Set tempo <input type="number" id="bpmIn" min="40" max="220" step="1" placeholder="BPM"></label>
@@ -666,8 +666,9 @@ let playerReady=false;
 function setupPlayer(){
   if(playerReady) { update(true); return; } playerReady=true;
   $('play').addEventListener('click',()=>{ if(playing) pause(); else getAC().resume().then(()=>{ const sb=choOnly?choStartBar(pausedAt):atTop(pausedAt)?topBar():null; startAtTime(atTop(pausedAt)&&!choOnly?0:pausedAt,sb); }); });
-  const sv=$('sync'); sv.value=userSync; const showSync=()=>$('syncV').textContent=`${userSync>0?'+':''}${userSync} ms`; showSync();
-  sv.addEventListener('input',()=>{ userSync=+sv.value; showSync(); try{localStorage.setItem('mcb-sync',userSync)}catch(e){} update(true); });
+  // slider right = highlight sooner (CJ found the old direction confusing); userSync keeps its old meaning so saved settings still work
+  const sv=$('sync'); sv.value=-userSync; const showSync=()=>$('syncV').textContent=userSync?`${Math.abs(userSync)} ms ${userSync<0?'sooner':'later'}`:'in sync'; showSync();
+  sv.addEventListener('input',()=>{ userSync=-(+sv.value); showSync(); try{localStorage.setItem('mcb-sync',userSync)}catch(e){} update(true); });
   $('clickVol').addEventListener('input',()=>{ const v=+$('clickVol').value; $('clickV').textContent=v?v+'%':'off'; if(nodes) nodes.cg.gain.value=clickLevel(); });
   for(const id of STEMS) $(id).addEventListener('input',()=>{ showMix(); applyMix(); });
   const setMix=open=>{ $('mixer').hidden=!open; $('mixBtn').setAttribute('aria-expanded',String(open)); try{localStorage.setItem('mcb-mixer',open?'1':'0')}catch(e){} };

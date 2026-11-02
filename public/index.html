@@ -99,7 +99,7 @@ textarea{width:100%;box-sizing:border-box;min-height:180px;font-family:var(--f-m
 
 /* chart */
 main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full window width; text stays the same size, so wider windows give lyrics more room */
-.scroller{overflow-x:auto}
+.scroller{overflow-x:auto;overflow-y:hidden} #keyGroup select{font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)} .keymsg{color:var(--muted);font-size:12px}
 #chart{container-type:inline-size}
 #rows{font-size:12.5px}
 .row{display:flex;align-items:stretch;padding-left:1px;position:relative}
@@ -199,7 +199,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="group">Grid <button type="button" id="nudgeL" aria-label="Shift grid 10 ms earlier">−10 ms</button><b id="nudgeV">0</b><button type="button" id="nudgeR" aria-label="Shift grid 10 ms later">+10 ms</button></div>
     <div class="group"><label for="sync" style="display:inline-flex;align-items:center;gap:6px">Sync <input id="sync" type="range" min="-250" max="400" step="10" value="0" style="width:90px;accent-color:var(--accent)"></label><b id="syncV">0 ms</b></div>
     <div class="group">Tempo <b id="bpmV"></b> <button type="button" id="halfBtn">½×</button><button type="button" id="dblBtn">2×</button></div>
-    <div class="group" id="keyGroup" hidden>Chords in <button type="button" id="keyChart" aria-pressed="true">Chart key</button><button type="button" id="keyRec" aria-pressed="false">Recording key</button></div>
+    <div class="group" id="keyGroup"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <span id="keyMsg" class="keymsg" role="status"></span></div>
     <div class="group"><button type="button" id="editBtn" aria-pressed="false">Fix bars</button></div>
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button><button type="button" id="dlChart">Printable chart</button></div>
     <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><span id="libMsg"></span></div>
@@ -781,9 +781,37 @@ const COLORS=[["Pre-Chorus","--prechorus"],["Prechorus","--prechorus"],["Intro",
 const colorFor=n=>{ for(const [k,v] of COLORS) if((n||'').toLowerCase().startsWith(k.toLowerCase())) return `var(${v})`; return 'var(--muted)'; };
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
 const recKey=()=>transposeKey(ST.meta?.key||'C',ST.shift);
+// keys: the chart's key, the recording's key, the key the chords are shown in, and the key the music plays in (major names; a minor chart uses its relative major)
+const MAJ=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const chartPC=()=>{ const m=(ST.meta?.key||'C').match(/^([A-G][b#]?)(m(?!aj))?/); return m? (PC[m[1]]+(m[2]?3:0))%12 : 0; };
+const recPC=()=>(chartPC()+(ST.shift||0))%12, dispPC=()=>ST.dispPC??chartPC(), hearPC=()=>ST.hearPC??recPC();
+const hearSemis=()=>((hearPC()-recPC()+18)%12)-6; // -6..+5, the smaller move
+function keyUI(){
+  const c=chartPC(), r=recPC(), h=hearPC(), d=dispPC();
+  $('keyChartSel').innerHTML=MAJ.map((k,i)=>`<option value="${i}"${i===d?' selected':''}>${k}${i===c?' (chart)':''}${i===r&&r!==c?' (recording)':''}</option>`).join('');
+  $('keyHearSel').innerHTML=MAJ.map((k,i)=>{ const n=((i-r+18)%12)-6; return `<option value="${i}"${i===h?' selected':''}>${k}${n?` (${n>0?'+':''}${n})`:' (original)'}</option>`; }).join('');
+}
+let STM=null; const soundtouch=()=>STM||(STM=import('https://cdn.jsdelivr.net/npm/soundtouchjs@0.1.30/dist/soundtouch.js'));
+async function shiftBuffer(buf,semis,prog){ const {SoundTouch,SimpleFilter}=await soundtouch();
+  const n=buf.length, ch=buf.numberOfChannels, L=buf.getChannelData(0), R=ch>1?buf.getChannelData(1):L;
+  const st=new SoundTouch(); st.pitchSemitones=semis;
+  const src={extract(t,num,pos){ const m=Math.min(num,n-pos); for(let i=0;i<m;i++){ t[2*i]=L[pos+i]; t[2*i+1]=R[pos+i]; } return Math.max(0,m); }};
+  const f=new SimpleFilter(src,st), out=getAC().createBuffer(ch,n,buf.sampleRate), oL=out.getChannelData(0), oR=ch>1?out.getChannelData(1):null, tmp=new Float32Array(8192);
+  let w=0,k,t0=Date.now();
+  while(w<n && (k=f.extract(tmp,4096))>0){ const m=Math.min(k,n-w); for(let i=0;i<m;i++){ oL[w+i]=tmp[2*i]; if(oR) oR[w+i]=tmp[2*i+1]; } w+=m;
+    if(Date.now()-t0>40){ prog&&prog(w/n); await new Promise(r=>setTimeout(r,0)); t0=Date.now(); } }
+  return out; }
+let pitchJob=0;
+async function applyHear(){ const semis=hearSemis(), job=++pitchJob, msg=$('keyMsg');
+  try{ let a=ST.audioOrig||ST.audio, st=ST.stemsOrig||null;
+    if(semis){ msg.textContent='Changing key…'; const tot=st?4:1; let done=0; const pr=p=>{ if(job===pitchJob) msg.textContent=`Changing key… ${Math.round((done+p)/tot*100)}%`; };
+      a=await shiftBuffer(a,semis,pr); done++; if(job!==pitchJob) return;
+      if(st){ const o={}; for(const k of ['drums','bass','gtr']){ o[k]=await shiftBuffer(st[k],semis,pr); done++; if(job!==pitchJob) return; } st=o; } }
+    ST.audio=a; ST.stems=st; msg.textContent=''; if(playing) restartHere();
+  }catch(e){ console.warn(e); if(job===pitchJob){ msg.textContent="Couldn't change the key in this browser"; ST.hearPC=null; keyUI(); } } }
 function chordHTML(c){
   if(!c) return '–';
-  if(ST.showRec && ST.shift) c=transposeChord(c,ST.shift,recKey());
+  { const n=(dispPC()-chartPC()+12)%12; if(n) c=transposeChord(c,n,MAJ[dispPC()]); }
   const m=c.match(/^([A-G][b#]?)(m(?!aj))?(.*?)(\/[A-G][b#]?)?$/); if(!m) return esc(c);
   let ext=(m[3]||'').replace(/^\((.*)\)$/,'$1');
   return esc(m[1]+(m[2]||''))+(ext?`<sup>${esc(ext)}</sup>`:'')+esc(m[4]||'');
@@ -836,7 +864,7 @@ async function build(){
     s.done(`Chart: ${parsed.sections.length} sections${parsed.meta.key?', key '+parsed.meta.key:''}${parsed.meta.bpm?', '+parsed.meta.bpm+' BPM':''}`);
     s=step('Decoding the song');
     const ab=chk(await ST.songFile.arrayBuffer());
-    ST.audio=await new Promise((res,rej)=>getAC().decodeAudioData(ab,res,rej)); chk();
+    ST.audio=await new Promise((res,rej)=>getAC().decodeAudioData(ab,res,rej)); chk(); ST.audioOrig=ST.audio; ST.stemsOrig=null; ST.dispPC=null; ST.hearPC=null; pitchJob++; $('keyMsg').textContent='';
     const sr=22050, off=new OfflineAudioContext(2,Math.ceil(ST.audio.duration*sr),sr);
     const src=off.createBufferSource(); src.buffer=ST.audio; src.connect(off.destination); src.start();
     { const st=chk(await off.startRendering()), L=st.getChannelData(0), R=st.getChannelData(1), n=L.length; ST.mono=new Float32Array(n); let dif=0;
@@ -988,8 +1016,7 @@ function finish(keep){
   $('songTitle').textContent=ST.meta.title||ST.songFile.name.replace(/\.[^.]+$/,'');
   $('songMeta').textContent=[ST.meta.artist, ST.meta.key&&(ST.shift?`Chart in ${ST.meta.key}, recording in ${recKey()}`:'Key '+ST.meta.key), bpmLabel(), ST.meter+'/'+(ST.den||4), ST.song.bars.length+' bars'].filter(Boolean).join(' · ');
   $('bpmV').textContent=bpmLabel();
-  $('keyGroup').hidden=!ST.shift;
-  if(ST.shift){ $('keyChart').textContent=ST.meta.key||'Chart key'; $('keyRec').textContent=recKey(); $('keyChart').setAttribute('aria-pressed',String(!ST.showRec)); $('keyRec').setAttribute('aria-pressed',String(ST.showRec)); }
+  keyUI();
   $('nudgeV').textContent=(ST.nudge>0?'+':'')+ST.nudge+' ms';
   $('beats').innerHTML=Array.from({length:ST.meter},(_,k)=>`<i class="${k?'':'one'}">${k+1}</i>`).join('');
   const chartBpm=ST.meta.bpm, got=60/ST.P;
@@ -1095,13 +1122,13 @@ async function startStems(){
   $('drumV').title='Separating drums and bass…';
   try{
     const sr=22050, off=new OfflineAudioContext(2,Math.ceil(ST.audio.duration*sr),sr);
-    const src=off.createBufferSource(); src.buffer=ST.audio; src.connect(off.destination); src.start();
+    const src=off.createBufferSource(); src.buffer=ST.audioOrig||ST.audio; src.connect(off.destination); src.start();
     const st=await off.startRendering(); if(job!==stemJob) return;
     const R=await separateDrumsBass(st.getChannelData(0),st.numberOfChannels>1?st.getChannelData(1):st.getChannelData(0),sr,p=>{ if(job===stemJob) $('drumV').textContent=Math.round(p*100)+'%'; });
     if(job!==stemJob) return;
     const ac=getAC(), drums=ac.createBuffer(2,R.dL.length,sr), bass=ac.createBuffer(1,R.bass.length,sr), gtr=ac.createBuffer(2,R.gL.length,sr);
     drums.copyToChannel(R.dL,0); drums.copyToChannel(R.dR,1); bass.copyToChannel(R.bass,0); gtr.copyToChannel(R.gL,0); gtr.copyToChannel(R.gR,1);
-    ST.stems={drums,bass,gtr};
+    ST.stemsOrig={drums,bass,gtr}; ST.stems=ST.stemsOrig; if(hearSemis()) applyHear();
     STEMS.forEach(id=>$(id).disabled=false); showMix(); $('drumV').title='';
     // a part that's barely there gets a locked slider instead of one that seems to do nothing
     const rms=x=>{ let e=0,n=0; for(let i=0;i<x.length;i+=7){ e+=x[i]*x[i]; n++; } return Math.sqrt(e/Math.max(1,n)); };
@@ -1293,8 +1320,8 @@ $('edSecApply').addEventListener('click',()=>{
 // beat 1 / grid / tempo
 $('dbL').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+ST.meter-1)%ST.meter; ST.anchors={}; ST.overrides={}; realign(); });
 $('dbR').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+1)%ST.meter; ST.anchors={}; ST.overrides={}; realign(); });
-$('keyChart').addEventListener('click',()=>{ ST.showRec=false; finish(true); });
-$('keyRec').addEventListener('click',()=>{ ST.showRec=true; finish(true); });
+$('keyChartSel').addEventListener('change',e=>{ ST.dispPC=+e.target.value; finish(true); });
+$('keyHearSel').addEventListener('change',e=>{ ST.hearPC=+e.target.value; applyHear(); });
 $('nudgeL').addEventListener('click',()=>{ ST.nudge-=10; finish(true); });
 $('nudgeR').addEventListener('click',()=>{ ST.nudge+=10; finish(true); });
 $('halfBtn').addEventListener('click',()=>retempo(2));

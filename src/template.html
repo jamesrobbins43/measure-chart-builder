@@ -244,7 +244,7 @@ const hearSemis=()=>((hearPC()-recPC()+18)%12)-6; // -6..+5, the smaller move
 function keyUI(){
   const c=chartPC(), r=recPC(), h=hearPC(), d=dispPC();
   $('keyChartSel').innerHTML=MAJ.map((k,i)=>`<option value="${i}"${i===d?' selected':''}>${k}${i===c?' (chart)':''}${i===r&&r!==c?' (recording)':''}</option>`).join('');
-  $('keyHearSel').innerHTML=MAJ.map((k,i)=>{ const n=((i-r+18)%12)-6; return `<option value="${i}"${i===h?' selected':''}>${k}${n?` (${n>0?'+':''}${n})`:' (original)'}</option>`; }).join('');
+  $('keyHearSel').innerHTML=MAJ.map((k,i)=>{ const n=((i-r+18)%12)-6; return `<option value="${i}"${i===h?' selected':''}>${k}${n?` (${n>0?'+':''}${n})`:' (music)'}</option>`; }).join('');
 }
 let STM=null; const soundtouch=()=>STM||(STM=import('https://cdn.jsdelivr.net/npm/soundtouchjs@0.1.30/dist/soundtouch.js'));
 async function shiftBuffer(buf,semis,prog){ const {SoundTouch,SimpleFilter}=await soundtouch();

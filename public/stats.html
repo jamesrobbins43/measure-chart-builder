@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Song stats</title>
+<style>
+:root{--bg:#f6f7f9;--paper:#fff;--ink:#15191f;--muted:#5d6672;--rule:#d8dde4;--bar:#2f6fde;color-scheme:light}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Open Sans",system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px}
+h1{font-size:20px;margin:0 0 4px} h2{font-size:15px;margin:22px 0 8px} .muted{color:var(--muted);font-size:13px}
+.tiles{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+.tile{background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:10px 14px;min-width:120px}
+.tile b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--rule);font-size:13px} th{color:var(--muted);font-weight:600}
+td.n{text-align:right;font-variant-numeric:tabular-nums;width:70px} tr:last-child td{border-bottom:0}
+.days{display:flex;align-items:flex-end;gap:2px;height:90px;background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:10px}
+.days i{flex:1;background:var(--bar);border-radius:2px 2px 0 0;min-height:1px}
+select{font:inherit;padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--paper)}
+.wrap{overflow-x:auto}
+</style></head><body><main>
+<h1>Song stats</h1>
+<p class="muted">Every time someone loads a new song on the site. Your own loads (with the editor key) aren't counted. "People" counts browsers, not names.
+ Show the last <select id="days"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">year</option><option value="3650">all time</option></select></p>
+<p class="muted" id="state">Loading…</p>
+<div id="out" hidden>
+ <div class="tiles"><div class="tile"><b id="loads">0</b>songs loaded</div><div class="tile"><b id="people">0</b>people</div><div class="tile"><b id="distinct">0</b>different songs</div></div>
+ <h2>Songs loaded per day</h2><div class="days" id="chart"></div>
+ <h2>Most loaded songs</h2><div class="wrap"><table><thead><tr><th>#</th><th>Song</th><th>Artist</th><th class="n">Loads</th><th class="n">People</th><th>Last loaded</th></tr></thead><tbody id="rows"></tbody></table></div>
+</div>
+</main>
+<script>
+const key=(()=>{ try{ return localStorage.getItem('mcb-editor')||''; }catch(e){ return ''; } })();
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=id=>document.getElementById(id);
+async function load(){
+  if(!key){ $('state').textContent='This browser doesn\'t have your editor password yet. Open the tool once at measure-chart-builder.pages.dev/?editor= followed by your password, then come back here.'; return; }
+  const r=await fetch('/api/stats?days='+$('days').value,{headers:{'x-editor-key':key}});
+  if(!r.ok){ $('state').textContent=r.status===403?'This browser\'s editor password is not accepted.':'Could not load stats ('+r.status+').'; return; }
+  const d=await r.json(); $('state').hidden=true; $('out').hidden=false;
+  $('loads').textContent=d.total.loads; $('people').textContent=d.total.people; $('distinct').textContent=d.songs.length;
+  const byDay=Object.fromEntries(d.daily.map(x=>[x.day,x])), n=Math.min(d.days,90), max=Math.max(1,...d.daily.map(x=>x.loads)); let h='';
+  for(let i=n-1;i>=0;i--){ const day=new Date(Date.now()-i*864e5).toISOString().slice(0,10), v=byDay[day]?.loads||0; h+=`<i style="height:${v/max*100}%" title="${day}: ${v} song${v===1?'':'s'}"></i>`; }
+  $('chart').innerHTML=h;
+  $('rows').innerHTML=d.songs.length?d.songs.map((s,i)=>`<tr><td>${i+1}</td><td>${esc(s.title||'Untitled')}</td><td>${esc(s.artist)}</td><td class="n">${s.loads}</td><td class="n">${s.people}</td><td>${new Date(s.last).toLocaleDateString()}</td></tr>`).join(''):'<tr><td colspan="6" class="muted">No songs loaded in this period yet.</td></tr>';
+}
+$('days').addEventListener('change',load); load();
+</script></body></html>

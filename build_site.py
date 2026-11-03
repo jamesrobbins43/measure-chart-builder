@@ -24,6 +24,10 @@ assert 'let CAN_FIX=true;' in t  # Fix bars is on for members too (CJ): their fi
 old_rep="async function sendReportRaw(d){ if(!DB) throw new Error('no db'); await DB.collection('reports').doc().set(d); }"
 assert old_rep in t
 t=t.replace(old_rep,"async function sendReportRaw(d){ const r=await fetch('/api/reports',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(d)}); if(!r.ok) throw new Error('report '+r.status); }",1)
+# count each new song someone loads, for the editor's stats page (title from the chart, no audio, no names); the editor's own loads aren't counted
+old_use="function logUse(){}"
+assert old_use in t
+t=t.replace(old_use,"function logUse(){ if(DB&&DB.canSave) return; let who=''; try{ who=localStorage.getItem('mcb-who')||''; if(!who){ who=crypto.randomUUID(); localStorage.setItem('mcb-who',who); } }catch(e){} fetch('/api/stats',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({title:ST.meta.title||ST.songFile?.name?.replace(/\\.[^.]+$/,'')||'',artist:ST.meta.artist||'',key:ST.meta.key||'',dur:Math.round(ST.audio.duration),who})}).catch(()=>{}); }",1)
 # no downloads on the site (licensing)
 t=t.replace("let dl=null; (async()=>{ try{ dl=await window.claude?.use?.('downloads'); }catch(e){ dl=null; } })();","let dl=null;")
 assert '<div class="group" hidden>Download' in t

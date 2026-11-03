@@ -370,6 +370,7 @@ async function build(){
       // 6/8, 9/8, 12/8: count and click in eighth notes, accent every third
       ST.compound=ST.den===8 && ST.meter%3===0 && ST.meter>3; }
     ST.events=expandEvents(ST.sections); ST.env=songEnv(ST.mono,sr); ST.chartSig=chartSig(ST.events); ST.libId=null; ST.libDiag=null; ST.libSame=null; ST.libDate=null;
+    if(!ST.restore) try{ logUse(); }catch(e){}
     // CJ: the library wins over this browser's last chart unless this browser has fixes of its own that are newer
     if(ST.restore){ const v=ST.restore, own=(v.barEdits||[]).length+Object.keys(v.overrides||{}).length+Object.keys(v.anchors||{}).length+Object.keys(v.barLens||{}).length;
       const hit0=await libFind(ST.audio.duration,ST.env); chk();
@@ -859,6 +860,7 @@ function openReport(prefill){ $('report').hidden=false; $('reportMsg').textConte
 $('reportBtn').addEventListener('click',()=>openReport(''));
 $('reportCancel').addEventListener('click',()=>{ $('report').hidden=true; });
 // where a report goes: the artifact's database here; the site build swaps in its own server
+function logUse(){} // the site counts which songs people load (stats page); the artifact doesn't
 async function sendReportRaw(d){ if(!DB) throw new Error('no db'); await DB.collection('reports').doc().set(d); }
 $('reportSend').addEventListener('click',async()=>{
   const text=$('reportText').value.trim(); if(!text){ $('reportText').focus(); return; }

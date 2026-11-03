@@ -221,7 +221,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button></div>
     <div class="group"><button type="button" id="dlPdf">Chart PDF</button><button type="button" id="dlVid" title="An MP4 of the chart with the beats lighting up and the click. No music.">Play-along video</button><span id="vidProgWrap" hidden style="display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)"><progress id="vidProg" max="100" value="0" style="width:140px;height:10px;accent-color:var(--accent)" aria-label="Video progress"></progress><b id="vidProgV">0%</b></span></div>
     <div class="group" id="vidNote" hidden role="dialog" aria-labelledby="vidNoteT" style="flex-basis:100%;max-width:640px;padding:10px 12px;border:1px solid var(--rule);border-left:3px solid var(--accent);border-radius:8px;background:var(--paper);font-family:var(--f-ui);font-size:13px;gap:8px 10px"><span id="vidNoteT" style="flex-basis:100%">Please note: Due to licensing restrictions, this download contains only click and chord progressions, the lyrics and music have been removed.</span><button class="primary" type="button" id="vidGo">Continue</button><button type="button" id="vidCancel">Cancel</button></div>
-    <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><button type="button" id="libDel" hidden>Remove from library</button><span id="libMsg"></span></div>
+    <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><button type="button" id="libDel" hidden>Remove from library</button><button type="button" id="libImport" hidden title="Add songs saved in the Claude version of this tool">Import saved songs</button><input type="file" id="libImportFile" accept=".json,application/json" hidden><span id="libMsg"></span></div>
     <div class="group"><button type="button" id="newBtn">New song</button> <button type="button" id="reportBtn">Report a problem</button></div>
     <p class="msg" id="msg"></p>
     <div class="checks" id="checks" hidden role="status"></div>
@@ -983,7 +983,7 @@ async function build(){
 let DB=(()=>{
   let key=null; try{ const u=new URL(location.href), k=u.searchParams.get('editor'); if(k){ localStorage.setItem('mcb-editor',k); u.searchParams.delete('editor'); history.replaceState(null,'',u); } key=localStorage.getItem('mcb-editor'); }catch(e){}
   const err=(code)=>Object.assign(new Error(code),{code});
-  return { canSave:!!key, collection(){ const f={min:-1e9,max:1e9}; const api={
+  return { site:true, canSave:!!key, collection(){ const f={min:-1e9,max:1e9}; const api={
     where(field,op,v){ if(op==='>=') f.min=v; if(op==='<=') f.max=v; return api; },
     async get(){ const r=await fetch(`/api/songs?min=${f.min}&max=${f.max}`); if(!r.ok) throw err('unavailable'); const {songs}=await r.json(); return {docs:songs.map(s=>({id:s.id,data:()=>s}))}; },
     doc(id){ id=id||crypto.randomUUID(); return { id, async set(d){ const r=await fetch(`/api/songs/${encodeURIComponent(id)}`,{method:'PUT',headers:{'content-type':'application/json','x-editor-key':key||''},body:JSON.stringify(d)}); if(r.status===403) throw err('invalid_argument'); if(!r.ok) throw err('unavailable'); },
@@ -1063,9 +1063,16 @@ async function freshStart(){
   await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); $('libFresh').disabled=false; finish(true); saveLast();
 }
 $('libFresh').addEventListener('click',freshStart);
+// CJ: songs fixed in the Claude version live in that version's own library; this brings them into the site's library (editor key only)
+$('libImport').addEventListener('click',()=>$('libImportFile').click());
+$('libImportFile').addEventListener('change',async()=>{ const f=$('libImportFile').files[0]; $('libImportFile').value=''; if(!f) return;
+  let docs; try{ const j=JSON.parse(await f.text()); docs=(Array.isArray(j)?j:[j]).map(d=>d&&d.data&&d.data.env?d.data:d).filter(d=>d&&d.dur>0&&Array.isArray(d.env)); }catch(e){ docs=[]; }
+  if(!docs.length){ $('libMsg').textContent="That file doesn't have any saved songs in it."; return; }
+  let ok=0; for(const d of docs){ try{ await DB.collection('songs').doc().set(d); ok++; }catch(e){} }
+  $('libMsg').textContent=`Imported ${ok} of ${docs.length} song${docs.length===1?'':'s'}: ${docs.map(d=>d.title||'untitled').join(', ')}. Load a song again to use its fixes.`; });
 function libUI(){
   $('libGroup').hidden=!DB; $('libSave').hidden=!!DB && DB.canSave===false;
-  $('libFresh').hidden=!ST.libDate; $('libDel').hidden=!(ST.libId && DB && DB.canSave!==false);
+  $('libImport').hidden=!(DB && DB.site && DB.canSave); $('libFresh').hidden=!ST.libDate; $('libDel').hidden=!(ST.libId && DB && DB.canSave!==false);
   $('libMsg').textContent=ST.libDate?`Using fixes saved ${new Date(ST.libDate).toLocaleDateString()}.`:(DB&&DB.canSave===false?'':'Save once the bars look right, so this song lines up on its own next time.');
 }
 // ambience before the song proper (a pad swell, room noise): the chart can't start until the first clear attack

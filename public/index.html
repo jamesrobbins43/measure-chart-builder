@@ -245,7 +245,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
       <div class="lgtop"><label for="lgFrom">Bars</label><input type="number" id="lgFrom" min="1" step="1"> <label for="lgTo">to</label><input type="number" id="lgTo" min="1" step="1">
         <span class="lghint">Top box: a chord, in the 16th it's played on. Bottom box: each word or syllable (split words with a hyphen, like vic- tory). Leave a box empty for no change.</span></div>
       <div class="lgbody" id="lgBody"></div>
-      <div class="lgbtns"><button class="primary" type="button" id="lgSave">Save</button><span id="lgMsg" role="status"></span></div>
+      <div class="lgbtns"><button class="primary" type="button" id="lgSave">Save</button><button type="button" id="lgCopy" title="Repeat these bars' chords over the bars that follow, e.g. the other passes of a Bridge">Copy these chords to the next</button><input type="number" id="lgCopyN" min="1" max="64" value="12" style="width:4.5em" aria-label="How many bars to copy into"><span>bars</span><span id="lgMsg" role="status"></span></div>
     </div>
   </div></div>
 </div>
@@ -1094,7 +1094,7 @@ function refineChords(al){
     const a=P[i-1].start, z=P[i+1].start, st=P[i].start, lo=Math.max(a+1,st-2), hi=Math.min(z-1,st+2); if(hi<=lo) continue;
     const w0=Math.max(a,st-2.5), w1=Math.min(z,st+2.5);
     const score=c=>{ let v=0; for(let x=w0;x<w1-1e-6;x+=0.5){ v+=fit(x<c-1e-6?pe.chord:e.chord, Math.round(x*2)); } return v; };
-    let best=st, bv=score(st)+0.25; for(let c=Math.ceil(lo*2)/2;c<=hi+1e-6;c+=0.5){ const v=score(c); if(v>bv){ bv=v; best=c; } }
+    let best=st, bv=score(st)+0.25; for(let c=st-Math.floor(st-lo+1e-6);c<=hi+1e-6;c+=1){ const v=score(c); if(v>bv){ bv=v; best=c; } }
     P[i].start=best; }
   return al;
 }
@@ -1464,6 +1464,17 @@ function lgBuild(){
 }
 function lgShow(open,noFocus){ $('lyrGrid').hidden=!open; if(open){ $('lgFrom').value=selBar+1; $('lgTo').value=Math.min(ST.song.bars.length,selBar+2); lgBuild(); if(!noFocus) $('lgBody').querySelector('input')?.focus(); } }
 for(const id of ['lgFrom','lgTo']) $(id).addEventListener('change',lgBuild);
+// CJ (Bridge 4x): fix one pass in the grid, then repeat its chords over the passes after it. Words are left alone.
+$('lgCopy').addEventListener('click',()=>{
+  const a=(+$('lgFrom').value||1)-1, z=(+$('lgTo').value||a+1)-1, L=z-a+1, n=Math.max(1,Math.min(64,+$('lgCopyN').value||L)), nb=ST.song.bars.length;
+  $('lgSave').click(); if(/isn't a chord/.test($('lgMsg').textContent)) return;
+  const src=[]; for(let i=a;i<=z;i++) src.push(ST.song.bars[i].chords.map(c=>[...c]));
+  pushUndo(); ST.overrides={...ST.overrides}; let done=0;
+  for(let k=0;k<n && z+1+k<nb;k++){ const t=z+1+k, b=ST.song.bars[t], cs=src[k%L].filter(c=>c[0]<bLen(t)+1-1e-6);
+    ST.overrides[t]={...(ST.overrides[t]||{}), chords:cs}; b.chords=cs.map(c=>[...c]); done++; }
+  render(); sectionCheck(); update(true,true); markSel(); saveLast(); lgBuild();
+  $('lgMsg').textContent=`Copied the chords of bars ${a+1}–${z+1} into bars ${z+2}–${z+1+done}. Undo puts them back.`;
+});
 $('lgSave').addEventListener('click',()=>{
   const bad=[...$('lgBody').querySelectorAll('input.lgc')].filter(inp=>!lgMark(inp));
   if(bad.length){ $('lgMsg').textContent=`"${bad[0].value}" isn't a chord name. The top boxes only take chords like C, F#m7 or Bb/D; put words in the bottom boxes.`; bad[0].focus(); return; }

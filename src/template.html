@@ -216,7 +216,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
       <label for="bpmIn">Set tempo <input type="number" id="bpmIn" min="40" max="220" step="1" placeholder="BPM"></label>
       <label for="meterIn">Beats per bar <select id="meterIn"><option value="">From chart</option><option value="4">4</option><option value="3">3</option><option value="6">6</option><option value="2">2</option></select></label>
       <button type="button" id="advApply">Redo with these</button></div>
-    <div class="group" id="keyGroup"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <span id="keyMsg" class="keymsg" role="status"></span></div>
+    <div class="group" id="keyGroup"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <button type="button" id="numBtn" aria-pressed="false" title="Show chords as numbers (1 4 5 6m) in the chart's key">Numbers</button> <span id="keyMsg" class="keymsg" role="status"></span></div>
     <div class="group"><button type="button" id="editBtn" aria-pressed="false" title="Fix bars (press E)">Fix bars</button></div>
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button></div>
     <div class="group"><button type="button" id="dlPdf">Chart PDF</button><button type="button" id="dlVid" title="An MP4 of the chart with the beats lighting up and the click. No music.">Play-along video</button><span id="vidProgWrap" hidden style="display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)"><progress id="vidProg" max="100" value="0" style="width:140px;height:10px;accent-color:var(--accent)" aria-label="Video progress"></progress><b id="vidProgV">0%</b></span></div>
@@ -291,8 +291,17 @@ async function applyHear(){ const semis=hearSemis(), job=++pitchJob, msg=$('keyM
       if(st){ const o={}; for(const k of ['drums','bass','gtr']){ o[k]=await shiftBuffer(st[k],semis,pr); done++; if(job!==pitchJob) return; } st=o; } }
     ST.audio=a; ST.stems=st; msg.textContent=''; if(playing) restartHere();
   }catch(e){ console.warn(e); if(job===pitchJob){ msg.textContent="Couldn't change the key in this browser"; ST.hearPC=null; keyUI(); } } }
+// numbers instead of chord names (CJ): 1 4 5 6m, counted from the chart's key (a minor key counts from its relative major)
+let NUMS=false; try{ NUMS=localStorage.getItem('mcb-nums')==='1'; }catch(e){}
+const DEG=['1','b2','2','b3','3','4','#4','5','b6','6','b7','7'], degOf=r=>DEG[((PC[r]-chartPC())%12+12)%12];
+function numParts(c){ const m=c.match(/^([A-G][b#]?)(m(?!aj))?(.*?)(?:\/([A-G][b#]?))?$/); if(!m||PC[m[1]]==null) return null;
+  return [degOf(m[1])+(m[2]?'m':''), (m[3]||'').replace(/^\((.*)\)$/,'$1'), m[4]?'/'+degOf(m[4]):'']; }
+function numUI(){ $('numBtn').setAttribute('aria-pressed',NUMS?'true':'false'); $('numBtn').classList.toggle('on',NUMS); $('numBtn').textContent=NUMS?'Chord names':'Numbers'; }
+$('numBtn').addEventListener('click',()=>{ NUMS=!NUMS; try{ localStorage.setItem('mcb-nums',NUMS?'1':'0'); }catch(e){} numUI(); if(ST.song){ render(); update(true,true); markSel(); } });
+numUI();
 function chordHTML(c){
   if(!c) return '–';
+  if(NUMS){ const q=numParts(c); if(q) return esc(q[0])+(q[1]?`<sup>${esc(q[1])}</sup>`:'')+esc(q[2]); }
   { const n=(dispPC()-chartPC()+12)%12; if(n) c=transposeChord(c,n,MAJ[dispPC()]); }
   const m=c.match(/^([A-G][b#]?)(m(?!aj))?(.*?)(\/[A-G][b#]?)?$/); if(!m) return esc(c);
   let ext=(m[3]||'').replace(/^\((.*)\)$/,'$1');
@@ -1131,6 +1140,7 @@ $('dlClick').addEventListener('click',()=>exportAudio(false));
 // ---------- chart PDF (CJ): letter portrait, 8 bars a line, drawn as real text; members get chords only ----------
 const jspdfLib=()=>window.jspdf?Promise.resolve(window.jspdf):new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'; sc.onload=()=>res(window.jspdf); sc.onerror=()=>rej(new Error('jspdf')); document.head.appendChild(sc); });
 function chordParts(c){ if(!c) return ['–','',''];
+  if(NUMS){ const q=numParts(c); if(q) return q; }
   { const n=(dispPC()-chartPC()+12)%12; if(n) c=transposeChord(c,n,MAJ[dispPC()]); }
   const m=c.match(/^([A-G][b#]?)(m(?!aj))?(.*?)(\/[A-G][b#]?)?$/); if(!m) return [c,'',''];
   return [m[1]+(m[2]||''), (m[3]||'').replace(/^\((.*)\)$/,'$1'), m[4]||'']; }

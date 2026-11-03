@@ -367,7 +367,7 @@ async function build(){
     { const [tn,td]=(parsed.meta.time||'4/4').split('/').map(Number); ST.meter=+$('meterIn').value || tn || 4; ST.den=td||4;
       // 6/8, 9/8, 12/8: count and click in eighth notes, accent every third
       ST.compound=ST.den===8 && ST.meter%3===0 && ST.meter>3; }
-    ST.events=expandEvents(ST.sections); ST.env=songEnv(ST.mono,sr); ST.chartSig=chartSig(ST.events); ST.libId=null; ST.libDate=null;
+    ST.events=expandEvents(ST.sections); ST.env=songEnv(ST.mono,sr); ST.chartSig=chartSig(ST.events); ST.libId=null; ST.libDiag=null; ST.libSame=null; ST.libDate=null;
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
       Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null});
       s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); realign(false); return; }
@@ -417,13 +417,13 @@ async function libFind(dur,env){
   if(!DB) return undefined;
   try{
     const q=await DB.collection('songs').where('dur','>=',dur-3).where('dur','<=',dur+3).get();
-    let best=null;
-    for(const d of q.docs){ const v=d.data(); if(!v||!Array.isArray(v.env)) continue; const m=envMatch(v.env,env); if(!(m.corr>0.9)) continue; const nf=(v.barEdits||[]).length+Object.keys(v.overrides||{}).length+Object.keys(v.anchors||{}).length+Object.keys(v.barLens||{}).length;
+    let best=null; ST.libDiag={n:q.docs.length,top:0};
+    for(const d of q.docs){ const v=d.data(); if(!v||!Array.isArray(v.env)) continue; const m=envMatch(v.env,env); ST.libDiag.top=Math.max(ST.libDiag.top,m.corr||0); if(!(m.corr>0.9)) continue; const nf=(v.barEdits||[]).length+Object.keys(v.overrides||{}).length+Object.keys(v.anchors||{}).length+Object.keys(v.barLens||{}).length;
       // the same recording saved more than once: the copy with fixes wins over an empty one, then the newest (CJ)
       if(!best || m.corr>best.corr+0.01 || (Math.abs(m.corr-best.corr)<=0.01 && (nf>0)!==(best.nf>0) ? nf>0 : Math.abs(m.corr-best.corr)<=0.01 && String(v.savedAt||'')>String(best.v.savedAt||''))) best={...m,id:d.id,v,nf}; }
     if(best) best.sameChart=best.v.chartSig===ST.chartSig;
     return best;
-  }catch(e){ console.warn('library lookup failed',e); return undefined; }
+  }catch(e){ console.warn('library lookup failed',e); ST.libDiag={err:String(e&&e.message||e)}; return undefined; }
 }
 function applyLib(h){
   const v=h.v; if(!(v.P>0)) return false;
@@ -433,7 +433,7 @@ function applyLib(h){
   ST.beat0=t-k*ST.P; ST.downPhase=(((v.downPhase+k)%ST.meter)+ST.meter)%ST.meter;
   ST.nudge=v.nudge||0;
   ST.anchors=h.sameChart?{...(v.anchors||{})}:{}; ST.overrides=h.sameChart?JSON.parse(JSON.stringify(v.overrides||{})):{}; ST.barLens=h.sameChart?{...(v.barLens||{})}:{}; ST.breaks=h.sameChart?{...(v.breaks||{})}:{}; ST.barEdits=h.sameChart?JSON.parse(JSON.stringify(v.barEdits||[])):[];
-  ST.libId=h.id; ST.libDate=v.savedAt||null;
+  ST.libId=h.id; ST.libDate=v.savedAt||null; ST.libSame=!!h.sameChart;
   return true;
 }
 async function libSave(){
@@ -477,7 +477,8 @@ $('libImportFile').addEventListener('change',async()=>{ const f=$('libImportFile
 function libUI(){
   $('libGroup').hidden=!DB || !showChecks(); // members don't see the library at all (CJ) $('libSave').hidden=!!DB && DB.canSave===false;
   $('libImport').hidden=!(DB && DB.site && DB.canSave); $('libFresh').hidden=!ST.libDate; $('libDel').hidden=!(ST.libId && DB && DB.canSave!==false);
-  $('libMsg').textContent=ST.libDate?`Using fixes saved ${new Date(ST.libDate).toLocaleDateString()}.`:(DB&&DB.canSave===false?'':'Save once the bars look right, so this song lines up on its own next time.');
+  const dg=ST.libDiag, why=!dg?'':dg.err?` (Couldn't reach the library: ${dg.err}.)`:dg.n?` (Not matched: checked ${dg.n} saved song${dg.n===1?'':'s'} of this length, closest ${Math.round(dg.top*100)}%; it needs 90%.)`:' (No saved songs of this length.)';
+  $('libMsg').textContent=ST.libDate?`Using fixes saved ${new Date(ST.libDate).toLocaleDateString()}${ST.libSame===false?' (timing only: this PDF is different from the one saved)':''}.`:(why&&DB&&DB.canSave!==false)?'Not in the library yet.'+why:(DB&&DB.canSave===false?'':'Save once the bars look right, so this song lines up on its own next time.');
 }
 // ambience before the song proper (a pad swell, room noise): the chart can't start until the first clear attack
 function leadT(){ if(!ST.O) return 0; const e=ST.O.env, s=[...e].sort((a,b)=>a-b), p95=s[Math.floor(s.length*0.95)]||0; let i=0; while(i<e.length&&e[i]<0.8*p95) i++; return i/ST.O.fps+ST.O.offset; }

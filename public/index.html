@@ -1072,7 +1072,7 @@ async function fitSearch(b0s){
     await new Promise(r=>setTimeout(r,0));
   }
   ST.beat0=best.b0; ST.downPhase=best.ph; ST.S=best.S; ST.shift=best.sh;
-  ST.al=fineAlign({});
+  ST.al=refineChords(fineAlign({}));
 }
 // final pass on half beats (so pushed chords fit) and with 4-bar phrase awareness
 function fineAlign(anchors){
@@ -1083,11 +1083,26 @@ function fineAlign(anchors){
   const a1=alignEvents(S2,ST.events,ST.meter,ST.downPhase,o);
   return alignEvents(S2,ST.events,ST.meter,ST.downPhase,{...o,refDur:refDurations(ST.events,a1)});
 }
+// CJ (bar 90): the line-up sometimes puts a chord change a little late or early. Slide each change (not a section start)
+// up to 2 beats either way to where the recording's harmony actually changes; bar lines are not touched.
+function refineChords(al){
+  if(!al||!al.path||al.path.length<3||window.NOREF) return al; const S=beatSegments(ST.Cf,ST.P/2,ST.beat0,ST.audio.duration), sh=ST.shift||0, T={};
+  const tp=n=>T[n]!==undefined?T[n]:(T[n]=chordTemplate(n));
+  const fit=(n,h)=>{ const t=tp(n); if(!t||h<0||h>=S.n) return 0; let v=0; for(let k=0;k<12;k++) v+=t.t[k]*S.C[h*12+((k+sh)%12+12)%12]; return v+0.4*S.B[h*12+((t.bass+sh)%12+12)%12]; };
+  const P=al.path;
+  for(let i=1;i<P.length-1;i++){ const e=ST.events[P[i].j], pe=ST.events[P[i-1].j]; if(!e||!pe||!e.chord||!pe.chord||e.k===0||e.chord===pe.chord) continue;
+    const a=P[i-1].start, z=P[i+1].start, st=P[i].start, lo=Math.max(a+1,st-2), hi=Math.min(z-1,st+2); if(hi<=lo) continue;
+    const w0=Math.max(a,st-2.5), w1=Math.min(z,st+2.5);
+    const score=c=>{ let v=0; for(let x=w0;x<w1-1e-6;x+=0.5){ v+=fit(x<c-1e-6?pe.chord:e.chord, Math.round(x*2)); } return v; };
+    let best=st, bv=score(st)+0.25; for(let c=Math.ceil(lo*2)/2;c<=hi+1e-6;c+=0.5){ const v=score(c); if(v>bv){ bv=v; best=c; } }
+    P[i].start=best; }
+  return al;
+}
 function realign(keep=true){
   ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration);
   // anchors are stored as bar numbers; convert to beats for this grid
   const anchors={}; for(const [j,bar] of Object.entries(ST.anchors)) anchors[j]=ST.downPhase+(ST.song?.bars[bar-1]?.s0??ST.song?.bars[bar-1]?.s??(bar-1)*ST.meter);
-  ST.al=fineAlign(anchors);
+  ST.al=refineChords(fineAlign(anchors));
   finish(keep);
 }
 function bpmLabel(){ const b=Math.round(60/ST.P*10)/10; return ST.compound? `${b} BPM (eighth notes)` : b+' BPM'; }

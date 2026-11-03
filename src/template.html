@@ -820,11 +820,13 @@ function update(force,noScroll){
 function sectionSpans(){ const b=ST.song.bars, out=[]; b.forEach((x,i)=>{ if(x.section) out.push({label:x.section,bar:i,beats:0}); if(out.length) out[out.length-1].beats+=x.len||ST.meter; });
   out.forEach(o=>{ o.bars=Math.floor(o.beats/ST.meter+1e-6); o.extra=Math.round(o.beats-o.bars*ST.meter); }); return out; }
 let checksOk=new Set();
+const showChecks=()=>true; // the "Please double-check" notes: only for the editor (CJ); the public builds turn this off
 function sectionCheck(){
   const sig=ST.songFile?.name+'|'+ST.song.bars.length, el=$('checks');
   const flags=sectionSpans().filter((o,k,a)=>o.label!=='Lead-in' && !(k===a.length-1 && /ending|outro/i.test(o.label)) && o.bars%4!==0);
   ST.flags=flags;
   document.querySelectorAll('.measure .sec .flag').forEach(f=>f.remove());
+  if(!showChecks()){ el.hidden=true; return; }
   for(const f of flags){ const s=measEls[f.bar]?.querySelector('.sec'); if(s) s.insertAdjacentHTML('beforeend',`<span class="flag" title="${f.bars} bar${f.bars===1?'':'s'}: please double-check">⚑</span>`); }
   if(!flags.length || checksOk.has(sig)){ el.hidden=true; return; }
   el.innerHTML=`<b>⚑ Please double-check:</b> ${flags.map((f,k)=>`<a data-bar="${f.bar}">${esc(f.label)} (bar ${f.bar+1}) is ${f.bars} bar${f.bars===1?'':'s'}</a>`).join(', ')}. Most sections are 4, 8 or 16 bars long, so these may be off.

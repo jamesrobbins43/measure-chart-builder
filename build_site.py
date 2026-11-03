@@ -28,5 +28,8 @@ t=t.replace(old_rep,"async function sendReportRaw(d){ const r=await fetch('/api/
 t=t.replace("let dl=null; (async()=>{ try{ dl=await window.claude?.use?.('downloads'); }catch(e){ dl=null; } })();","let dl=null;")
 assert '<div class="group" hidden>Download' in t
 t=t.replace('with a click track you can switch on and download.','with a click track you can switch on.')
+# the "Please double-check" notes only show for the editor (CJ)
+assert 'const showChecks=()=>true;' in t
+t=t.replace('const showChecks=()=>true;','const showChecks=()=>!!(DB&&DB.canSave);',1)
 open(os.path.join(H,'public','index.html'),'w').write(t)
 print('ok',len(t))

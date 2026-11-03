@@ -1067,7 +1067,11 @@ $('edSecApply').addEventListener('click',pinSection);
 // beat 1 / grid / tempo
 $('dbL').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+ST.meter-1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); realign(); });
 $('dbR').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); realign(); });
-$('keyChartSel').addEventListener('change',e=>{ ST.dispPC=+e.target.value; finish(true); });
+$('keyChartSel').addEventListener('change',e=>{
+  // an open grid follows the new key (CJ), unsaved grid edits included
+  const open=!$('lyrGrid').hidden; let keep=null; if(open){ lgStash(); keep={}; for(const [i,[cs,ws]] of Object.entries(lgDraft)) keep[i]=[cs.map(v=>v&&isChord(v)?lgIn(v):v),ws]; }
+  ST.dispPC=+e.target.value; finish(true);
+  if(open){ for(const [i,[cs,ws]] of Object.entries(keep)) lgDraft[i]=[cs.map(v=>v&&isChord(v)?lgOut(v):v),ws]; $('lgBody').innerHTML=''; lgBuild(); } });
 $('keyHearSel').addEventListener('change',e=>{ ST.hearPC=+e.target.value; applyHear(); });
 $('nudgeL').addEventListener('click',()=>{ ST.nudge-=10; finish(true); });
 $('nudgeR').addEventListener('click',()=>{ ST.nudge+=10; finish(true); });

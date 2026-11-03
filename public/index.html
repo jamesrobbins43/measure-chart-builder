@@ -603,7 +603,8 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   const off=i=>offA[Math.max(0,Math.min(T+1,i))];
   const pos=(i,h=0)=>((i-downPhase-h*HALF-off(i))%meter+meter)%meter;
   const grp=opt.compound?3:2; // compound meters group eighths in threes
-  const startBonus=(i,h)=>{ const p=pos(i,h); if(p%sub) return -0.3; const pb=p/sub; return pb===0?0.35:((meterBeats===4&&pb===2)||(opt.compound&&pb%3===0))?0.12:-0.08; };
+  const SW=opt.startW??1; // CJ: after a hand-set bar, chord changes lean harder toward beat 1
+  const startBonus=(i,h)=>{ const p=pos(i,h); if(p%sub) return -0.3*SW; const pb=p/sub; return SW*(pb===0?0.35:((meterBeats===4&&pb===2)||(opt.compound&&pb%3===0))?0.12:-0.08); };
   const durBonus=d=>(d%sub? -0.05 : (d/sub)%meterBeats===0?0.12:(d/sub)%grp===0?0.04:0);
   const NEG=-1e9, lam=0.0, REP=opt.rep??0.8, STR0=(opt.stretch??0.08)/sub;
   const sylls=events.map(e=>e.lines.reduce((a,l)=>a+l.reduce((x,w)=>x+syl(w),0),0)); // pickups into the next line are sung during this chord too

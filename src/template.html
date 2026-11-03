@@ -754,8 +754,9 @@ function markChoruses(){ const on=chorusBars(); measEls.forEach((m,i)=>m.classLi
 function topBar(){ const BAR=ST.song.beat*ST.meter, b=ST.song.bars; return Math.max(0,Math.ceil(-ST.song.bar0/BAR-1e-6)); } // count in to the first full bar, lead-in included (CJ wants to hear the ambience before the intro)
 function atTop(t){ return t<=bT(topBar())+0.05; }
 function choStartBar(t){ const sp=chorusSpans(), s=sp.find(([a])=>Math.abs(a-0.03-t)<0.12); return s?barAt(s[0]+0.01):null; }
-function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt) return; const t=offsetAt+(ctxNow()-startAt), sp=chorusSpans(); if(!sp.length) return;
-  if(sp.some(([a,b])=>t>=a-0.2&&t<b)) return;
+function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt||(ciBar!=null&&ctxNow()<ciUntil+0.1)) return; const t=offsetAt+(ctxNow()-startAt), sp=chorusSpans(); if(!sp.length) return;
+  const lead=ST.song.beat*(ST.compound?3:1)+0.3; /* the music fades in a beat before the section starts */
+  if(sp.some(([a,b])=>t>=a-lead&&t<b)) return;
   const nx=sp.find(([a])=>a>t);
   if(nx) startAtTime(Math.max(0,nx[0]-0.03), barAt(nx[0]+0.01)); else { pause(); pausedAt=Math.max(0,sp[0][0]-0.03); update(true); } }
 let playerReady=false;

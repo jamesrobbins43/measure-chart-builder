@@ -960,10 +960,10 @@ async function build(){
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
       Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null});
       s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); realign(false); return; }
-    s=step('Checking the song library');
+    s=step(showChecks()?'Checking the song library':'Lining the chart up with the song');
     const hit=chk(await libFind(ST.audio.duration,ST.env));
-    if(hit && applyLib(hit)){ s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); building=false; ST.showRec=false; undoClear(); realign(false); return; }
-    if(hit===undefined) steps.lastElementChild?.remove(); else s.done('Not in the library yet');
+    if(hit && applyLib(hit)){ if(showChecks()) s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); realign(false); return; }
+    if(hit===undefined || !showChecks()) steps.lastElementChild?.remove(); else s.done('Not in the library yet');
     s=step('Finding the tempo');
     const hint=+$('bpmIn').value || parsed.meta.bpm || 0;
     await new Promise(r=>setTimeout(r,20));
@@ -1016,7 +1016,9 @@ async function libFind(dur,env){
   try{
     const q=await DB.collection('songs').where('dur','>=',dur-3).where('dur','<=',dur+3).get();
     let best=null;
-    for(const d of q.docs){ const v=d.data(); if(!v||!Array.isArray(v.env)) continue; const m=envMatch(v.env,env); if(m.corr>0.9 && (!best||m.corr>best.corr)) best={...m,id:d.id,v}; }
+    for(const d of q.docs){ const v=d.data(); if(!v||!Array.isArray(v.env)) continue; const m=envMatch(v.env,env); if(!(m.corr>0.9)) continue; const nf=(v.barEdits||[]).length+Object.keys(v.overrides||{}).length+Object.keys(v.anchors||{}).length+Object.keys(v.barLens||{}).length;
+      // the same recording saved more than once: the copy with fixes wins over an empty one, then the newest (CJ)
+      if(!best || m.corr>best.corr+0.01 || (Math.abs(m.corr-best.corr)<=0.01 && (nf>0)!==(best.nf>0) ? nf>0 : Math.abs(m.corr-best.corr)<=0.01 && String(v.savedAt||'')>String(best.v.savedAt||''))) best={...m,id:d.id,v,nf}; }
     if(best) best.sameChart=best.v.chartSig===ST.chartSig;
     return best;
   }catch(e){ console.warn('library lookup failed',e); return undefined; }
@@ -1071,7 +1073,7 @@ $('libImportFile').addEventListener('change',async()=>{ const f=$('libImportFile
   let ok=0; for(const d of docs){ try{ await DB.collection('songs').doc().set(d); ok++; }catch(e){} }
   $('libMsg').textContent=`Imported ${ok} of ${docs.length} song${docs.length===1?'':'s'}: ${docs.map(d=>d.title||'untitled').join(', ')}. Load a song again to use its fixes.`; });
 function libUI(){
-  $('libGroup').hidden=!DB; $('libSave').hidden=!!DB && DB.canSave===false;
+  $('libGroup').hidden=!DB || !showChecks(); // members don't see the library at all (CJ) $('libSave').hidden=!!DB && DB.canSave===false;
   $('libImport').hidden=!(DB && DB.site && DB.canSave); $('libFresh').hidden=!ST.libDate; $('libDel').hidden=!(ST.libId && DB && DB.canSave!==false);
   $('libMsg').textContent=ST.libDate?`Using fixes saved ${new Date(ST.libDate).toLocaleDateString()}.`:(DB&&DB.canSave===false?'':'Save once the bars look right, so this song lines up on its own next time.');
 }

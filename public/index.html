@@ -52,6 +52,10 @@ textarea{width:100%;box-sizing:border-box;min-height:180px;font-family:var(--f-m
 
 /* transport */
 .transport{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--rule)}
+.secnav{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin:0 auto;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.secnav:empty{display:none}
+.secnav button{flex:none;font-family:var(--f-ui);font-size:13px;padding:4px 11px;border-radius:999px;white-space:nowrap}
+.secnav button.on{background:var(--accent,#2b54d6);border-color:var(--accent,#2b54d6);color:#fff}
 .tin{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:10px;margin:0 auto}
 .titleblock{min-width:0}
 .titleblock h1{font-size:21px}
@@ -208,7 +212,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
       <div class="cn next"><small>Next</small><b id="next">–</b></div>
       <div class="where" id="where"></div>
     </div>
-  </div></div>
+  </div><nav class="secnav wrap" id="secNav" aria-label="Jump to a section (plays a four-count first)"></nav></div>
   <div class="toolbar wrap">
     <div class="group" hidden>Beat 1 <button type="button" id="dbL" aria-label="Move beat 1 earlier">◀</button><button type="button" id="dbR" aria-label="Move beat 1 later">▶</button></div>
     <div class="group" id="nudgeGroup">Grid <button type="button" id="nudgeL" aria-label="Shift grid 10 ms earlier">−10 ms</button><b id="nudgeV">0</b><button type="button" id="nudgeR" aria-label="Shift grid 10 ms later">+10 ms</button></div>
@@ -1250,7 +1254,7 @@ function render(forcePer){
     { const used=idxs.reduce((a,i)=>a+bLen(i)/ST.meter,0); if(used<perLine-1e-6){ const sp=document.createElement('div'); sp.className='spacer'; sp.style.flex=`0 0 calc(100% / var(--per,8) * ${perLine-used})`; row.appendChild(sp); } }
     rowsEl.appendChild(row);
   }
-  fitLyrics(); markChoruses();
+  fitLyrics(); markChoruses(); buildSecNav();
 }
 // keep a bar's words on one line so each word stays near its beat: tighten, then shrink a little; wrap only as a last resort
 function fitLyrics(){ for(const el of $('rows').querySelectorAll('.lyr')){ el.classList.remove('tight','wrap'); el.style.fontSize='';
@@ -1356,15 +1360,16 @@ function scheduleCut(param,ctxT0,songT0,level){
     param.setTargetAtTime(0, ctxT0+(b-songT0), 0.06); }
 }
 function vocalLevel(){ return +$('vocal').value/100; } function clickLevel(){ return (+$('clickVol').value/100)**1.5*1.4; }
-function startAtTime(t,countBar,keep){
+function startAtTime(t,countBar,keep,four){
   const ac=getAC(); stopSrc();
   nodes=buildGraph(ac,ac.destination,ST.audio,clickBuf,vocalLevel(),clickLevel(),ST.stems);
   offsetAt=Math.max(0,Math.min(t,ST.audio.duration-0.1)); ciBar=null;
   if(countBar!=null){ // one bar of clicks first, landing on the downbeat of countBar
     const P=ST.song.beat, M=ST.meter, down=bT(countBar), now=ac.currentTime+0.06;
-    const c0=keep?ciUntil-M*P:now; // keep: carry on a count-in that's already running
-    const FADE=P*Math.max(1,M-2); if(!keep) offsetAt=Math.max(0,down-FADE); // CJ: the music fades in from beat 3 of the count-in bar
-    ciUntil=c0+M*P; startAt=ciUntil-(down-offsetAt); ciBar=countBar; nodes.ci=countInSource(ac,Math.max(c0,now),Math.max(0,now-c0));
+    const N=four?4:M, Q=four?P*(ST.compound?3:1):P; // four: the section bar's "1, 2, 3, 4" (CJ), not a whole bar
+    const c0=keep?ciUntil-N*Q:now; // keep: carry on a count-in that's already running
+    const FADE=four?2*Q:P*Math.max(1,M-2); if(!keep) offsetAt=Math.max(0,down-FADE); // CJ: the music fades in from beat 3 of the count-in
+    ciUntil=c0+N*Q; ciN=N; ciQ=Q; ciFour=!!four; startAt=ciUntil-(down-offsetAt); ciBar=countBar; nodes.ci=countInSource(ac,Math.max(c0,now),Math.max(0,now-c0),N,Q,four);
     const g=nodes.fade.gain, f0=Math.max(now,ciUntil-FADE); g.setValueAtTime(0,now); g.setValueAtTime(0,f0); if(ciUntil>f0) g.linearRampToValueAtTime(1,ciUntil); else g.setValueAtTime(1,ciUntil);
     const cg=nodes.cg.gain, cl=cg.value; cg.setValueAtTime(0,now); cg.setValueAtTime(cl,ciUntil-0.02); } // the count-in plays its own clicks
   else startAt=ac.currentTime+0.06;
@@ -1374,13 +1379,17 @@ function startAtTime(t,countBar,keep){
   playing=true; $('play').textContent='Pause';
 }
 // rebuild the audio graph without losing our place (keeps a count-in going if one is running)
-function restartHere(){ if(ciBar!=null && getAC().currentTime<ciUntil-0.1) startAtTime(offsetAt,ciBar,true); else startAtTime(songTime()+userSync/1000); }
+function restartHere(){ if(ciBar!=null && getAC().currentTime<ciUntil-0.1) startAtTime(offsetAt,ciBar,true,ciFour); else startAtTime(songTime()+userSync/1000); }
 // count-in clicks (always audible, even with the click turned off)
-function countInSource(ac,when,skip=0){ const sr=ac.sampleRate, P=ST.song.beat, M=ST.meter, n=Math.ceil((M*P+0.1)*sr), buf=ac.createBuffer(1,n,sr), d=buf.getChannelData(0);
-  for(let k=0;k<M;k++){ const f=k===0?1800:(ST.compound&&k%3===0)?1500:1200, amp=k===0?0.6:0.42, s0=Math.round(k*P*sr);
+function countInSource(ac,when,skip=0,M=ST.meter,P=ST.song.beat,four=false){ const sr=ac.sampleRate, n=Math.ceil((M*P+0.1)*sr), buf=ac.createBuffer(1,n,sr), d=buf.getChannelData(0);
+  for(let k=0;k<M;k++){ const f=k===0?1800:(!four&&ST.compound&&k%3===0)?1500:1200, amp=k===0?0.6:0.42, s0=Math.round(k*P*sr);
     for(let i=0;i<sr*0.04&&s0+i<n;i++){ const tt=i/sr; d[s0+i]+=amp*Math.sin(2*Math.PI*f*tt)*Math.exp(-tt*80)*Math.min(1,i/20); } }
   const src=ac.createBufferSource(); src.buffer=buf; const g=ac.createGain(); g.gain.value=Math.max(clickLevel(),0.5); src.connect(g); g.connect(ac.destination); src.start(when,skip); return src; }
 function pause(){ pausedAt=songTime()+userSync/1000; playing=false; stopSrc(); $('play').textContent='Play'; update(true); }
+// section bar: jump to a section with a "1, 2, 3, 4" count before it starts (CJ)
+function jumpSection(i){ const t=bT(i); getAC().resume().then(()=>startAtTime(t,i,false,true)); pausedAt=t; update(true); }
+function buildSecNav(){ const nav=$('secNav'); if(!nav) return; secSp=ST.song?sectionSpans().filter((o,k,a)=>!k||o.label!==a[k-1].label):[]; // one button for a run of same-named sections lastSec=-2; nav.innerHTML='';
+  for(const sp of secSp){ const b=document.createElement('button'); b.type='button'; b.textContent=sp.label; b.title=`Go to ${sp.label} (bar ${sp.bar+1}) with a four-count`; b.onclick=()=>jumpSection(sp.bar); nav.appendChild(b); } }
 function seekBar(i){ const t=Math.max(0,bT(i)-0.05); getAC().resume().then(()=>startAtTime(t)); pausedAt=t; update(true); }
 // choruses only: play each chorus and jump straight to the next one
 let choOnly=false, choKind='chorus'; // CJ: Verses only works the same way
@@ -1439,7 +1448,7 @@ function setupPlayer(){
   (function loop(){ if(playing){ choCheck(); update(false); } requestAnimationFrame(loop); })();
   update(true);
 }
-let lastBar=-2,lastBeat=-1,liveCh=null,aheadRow=null,qsJob=0,lastKeyB=null,ciBar=null,ciUntil=0,lastCi=false;
+let lastBar=-2,lastBeat=-1,liveCh=null,aheadRow=null,qsJob=0,lastKeyB=null,ciBar=null,ciUntil=0,ciN=4,ciQ=0.5,ciFour=false,lastCi=false,secSp=[],lastSec=-2;
 // fast eased scroll (~0.3 s) that keeps up with the music; instant if the viewer prefers reduced motion
 function quickScroll(y){ y=Math.max(0,Math.min(y,document.documentElement.scrollHeight-innerHeight)); const y0=window.scrollY, d=y-y0; if(Math.abs(d)<4) return;
   if(matchMedia('(prefers-reduced-motion: reduce)').matches){ window.scrollTo(0,y); return; }
@@ -1452,7 +1461,10 @@ function update(force,noScroll){
   if(editing) $('edNowT').textContent=fmtT(Math.max(0,t));
   let bar=barAt(t), beat=Math.max(0,Math.floor((t-bT(bar))/P+1e-6)); beat=bar<0||bar>=song.bars.length?((beat%M)+M)%M:Math.min(bLen(bar)-1,beat);
   const ci=playing && ciBar!=null && ctxNow()<ciUntil; // one-bar count-in before a chorus: show the chorus's first bar counting down
-  if(ci){ bar=ciBar; beat=Math.max(0,Math.min(M-1, M-Math.ceil((ciUntil-ctxNow())/P-1e-6))); }
+  if(ci){ bar=ciBar; beat=Math.max(0,Math.min(M-1,ciN-1, ciN-Math.ceil((ciUntil-ctxNow())/ciQ-1e-6))); if(ciFour&&ST.compound) beat=(beat*3)%M; }
+  { let si=-1; for(let k=0;k<secSp.length;k++){ if(secSp[k].bar<=bar) si=k; else break; } // section bar: light up the section that's playing (CJ)
+    if(si!==lastSec||force){ lastSec=si; const nav=$('secNav'); [...nav.children].forEach((b,k)=>{ b.classList.toggle('on',k===si); if(k===si) b.setAttribute('aria-current','true'); else b.removeAttribute('aria-current'); });
+      const on=nav.children[si]; if(on){ const l=on.offsetLeft-nav.offsetLeft, r=l+on.offsetWidth; if(l<nav.scrollLeft||r>nav.scrollLeft+nav.clientWidth) nav.scrollTo({left:Math.max(0,l-40),behavior:'smooth'}); } } }
   const ciEl=ci?document.querySelector(`#rows .cirow[data-bar="${ciBar}"] .measure`):null, curEl=ciEl||measEls[bar], key=ciEl?'ci'+bar:bar;
   if(key!==lastBar||force){
     document.querySelectorAll('.measure.cur').forEach(e=>e.classList.remove('cur'));

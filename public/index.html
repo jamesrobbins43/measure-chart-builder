@@ -99,6 +99,7 @@ textarea{width:100%;box-sizing:border-box;min-height:180px;font-family:var(--f-m
 [hidden]{display:none!important}
 .msg{font-family:var(--f-ui);font-size:13px;color:var(--muted);flex-basis:100%;margin:0}
 .checks{flex-basis:100%;font-family:var(--f-ui);font-size:13px;line-height:1.5;color:var(--ink);background:color-mix(in srgb,var(--flag) 8%,var(--paper));border:1px solid color-mix(in srgb,var(--flag) 45%,var(--rule));border-radius:8px;padding:10px 12px}
+.checks{position:relative;padding-right:40px} .checks .chkX{position:absolute;top:6px;right:6px;width:28px;height:28px;padding:0;border-radius:50%;font-size:18px;line-height:1;background:none;border:0;color:var(--muted);cursor:pointer} .checks .chkX:hover{color:var(--ink);background:color-mix(in srgb,var(--flag) 12%,transparent)}
 .checks b{color:var(--flag)} .checks a{color:inherit;text-decoration:underline;cursor:pointer} .checks .cbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .report{flex-basis:100%;display:grid;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted);max-width:640px}
 .report textarea{min-height:80px;font-family:var(--f-ui);font-size:13px;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:8px 10px}
@@ -154,6 +155,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .lgbar.draft .lbn{color:var(--accent)} .lgcell{display:grid;gap:2px} .lgcell span{font-size:10px;text-align:center;color:var(--muted)} .lgcell span.b{font-weight:700;color:var(--ink)} .lgcell.beat{border-left:2px solid var(--rule);padding-left:2px}
 .editor .lgcell input.lgc.bad{border-color:var(--flag);background:color-mix(in srgb,var(--flag) 10%,var(--bg))} .editor .lgcell input.lgc[type=text]{font-family:var(--f-chord);font-weight:700;font-size:14px} .editor .lgcell input[type=text]{width:100%;box-sizing:border-box;font-family:var(--f-lyric);font-size:13px;padding:4px 3px;border:1px solid var(--rule);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0}
 .lgbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.editor.min .ein>:not(h2):not(.group){display:none!important} .editor.nogrid .lgrid{display:none!important} /* CJ: room to see the chart */
 .editor .row2{font-family:var(--f-ui);grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12px;color:var(--muted)}
 @media (max-width:760px){ .editor .ein{grid-template-columns:1fr} .chordnow{margin-left:0} .cn b{font-size:28px} }
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
@@ -243,7 +245,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
   <div class="editor" id="editor" hidden><div class="ein wrap">
     <h2 id="edTitle">Bar 1</h2>
     <div class="row2" style="grid-column:auto / span 2"><label for="edLen" style="flex-direction:row;align-items:center;gap:8px">Beats in this bar:<select id="edLen"></select></label><button type="button" id="edLenApply">Apply</button><button type="button" id="edPrevLine" title="Put this bar at the end of the line above">Move to prior line</button><button type="button" id="edNextLine" title="Start a new line with this bar">Move to next line</button><span id="edLenMsg" role="status"></span></div>
-    <div class="group"><button type="button" id="edPlay" title="Play / pause (Space or P)">Play</button><span id="edLocal" hidden style="font-family:var(--f-ui);font-size:12px;color:var(--muted);align-self:center">Your fixes are saved on this computer only.</span><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button class="primary" type="button" id="edClose">Done fixing</button></div>
+    <div class="group"><button type="button" id="edPlay" title="Play / pause (Space or P)">Play</button><span id="edLocal" hidden style="font-family:var(--f-ui);font-size:12px;color:var(--muted);align-self:center">Your fixes are saved on this computer only.</span><button type="button" id="edUndo" disabled title="Undo the last change (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="edRedo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button><button type="button" id="edGridT" aria-expanded="true" title="Show or hide the chord and lyric boxes">Hide grid</button><button type="button" id="edMin" aria-expanded="true" title="Fold the fix tools away to see more of the chart">Hide tools</button><button class="primary" type="button" id="edClose">Done fixing</button></div>
     <div class="row2"><label for="edInsLen" style="flex-direction:row;align-items:center;gap:8px">Add a bar of<select id="edInsLen"></select>beats</label><button type="button" id="edInsBefore">before this bar</button><button type="button" id="edInsAfter">after this bar</button><button type="button" id="edDel">Remove this bar</button></div>
     <div class="row2"><label for="edSplitAt" style="flex-direction:row;align-items:center;gap:8px">Split this bar before beat<select id="edSplitAt"></select></label><button type="button" id="edSplit">Split</button><button type="button" id="edJoin" title="Make this bar and the next one a single bar">Join with next bar</button></div>
     <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply" hidden>Set</button><span id="edAnchors"></span></div>
@@ -1515,11 +1517,12 @@ function sectionCheck(){
   if(!showChecks()){ el.hidden=true; return; }
   for(const f of flags){ const s=measEls[f.bar]?.querySelector('.sec'); if(s) s.insertAdjacentHTML('beforeend',`<span class="flag" title="${f.bars} bar${f.bars===1?'':'s'}: please double-check">⚑</span>`); }
   if(!flags.length || checksOk.has(sig)){ el.hidden=true; return; }
-  el.innerHTML=`<b>⚑ Please double-check:</b> ${flags.map((f,k)=>`<a data-bar="${f.bar}">${esc(f.label)} (bar ${f.bar+1}) is ${f.bars} bar${f.bars===1?'':'s'}</a>`).join(', ')}. Most sections are 4, 8 or 16 bars long, so these may be off.
+  el.innerHTML=`<button type="button" class="chkX" id="chkX" aria-label="Close this note" title="Close">×</button><b>⚑ Please double-check:</b> ${flags.map((f,k)=>`<a data-bar="${f.bar}">${esc(f.label)} (bar ${f.bar+1}) is ${f.bars} bar${f.bars===1?'':'s'}</a>`).join(', ')}. Most sections are 4, 8 or 16 bars long, so these may be off.
     <div class="cbtns"><button type="button" id="chkOk">Looks right</button><button type="button" id="chkBad">Something's wrong</button></div>`;
   el.hidden=false;
   el.querySelectorAll('a[data-bar]').forEach(a=>a.addEventListener('click',()=>{ const i=+a.dataset.bar; pausedAt=Math.max(0,bT(i)-0.05); update(true); measEls[i]?.scrollIntoView({block:'center',behavior:'smooth'}); }));
   $('chkOk').addEventListener('click',()=>{ checksOk.add(sig); el.hidden=true; });
+  $('chkX').addEventListener('click',()=>{ checksOk.add(sig); el.hidden=true; }); // CJ: an X to close it and save room; the ⚑ flags on the bars stay
   $('chkBad').addEventListener('click',()=>openReport(flags.map(f=>`${f.label} (bar ${f.bar+1}) is ${f.bars} bar${f.bars===1?'':'s'} but should be `).join('\n')));
 }
 function openReport(prefill){ $('report').hidden=false; $('reportMsg').textContent=''; $('reportSend').disabled=false; const t=$('reportText'); if(prefill&&!t.value) t.value=prefill; t.focus(); }
@@ -1632,6 +1635,17 @@ function moveUI(i){ const b=ST.song.bars, {st,nx,pv}=secBounds(i), r=(a,z)=>a===
   $('edMoveRow').hidden=!okP&&!okN; }
 $('edToPrev').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {st,pv}=secBounds(i), b=ST.song.bars, to=b[pv]?.section, nm=b[st].section, n=i-st+1; barEdit('sec',i+1,st); openEditor(i,true); $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${to}; ${nm} now starts at bar ${i+2}. No chords moved.`; });
 $('edToNext').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {nx}=secBounds(i), b=ST.song.bars, nm=b[nx].section, n=nx-i; barEdit('sec',i,nx); $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${nm}; it now starts at bar ${i+1}. No chords moved.`; });
+// CJ: save space while fixing: fold the tools or the grid away (remembered), and tuck the mixer up while Fix bars is open
+{ const get=k=>{ try{ return localStorage.getItem(k)==='1'; }catch(e){ return false; } }, put=(k,v)=>{ try{ localStorage.setItem(k,v?'1':'0'); }catch(e){} };
+  const setMin=v=>{ $('editor').classList.toggle('min',v); $('edMin').textContent=v?'Show tools':'Hide tools'; $('edMin').setAttribute('aria-expanded',String(!v)); put('mcb-edmin',v); };
+  const setGrid=v=>{ $('editor').classList.toggle('nogrid',v); $('edGridT').textContent=v?'Show grid':'Hide grid'; $('edGridT').setAttribute('aria-expanded',String(!v)); put('mcb-nogrid',v); };
+  setMin(get('mcb-edmin')); setGrid(get('mcb-nogrid'));
+  $('edMin').addEventListener('click',()=>setMin(!$('editor').classList.contains('min')));
+  $('edGridT').addEventListener('click',()=>setGrid(!$('editor').classList.contains('nogrid'))); }
+let mixWas=null;
+new MutationObserver(()=>{ const open=!$('editor').hidden;
+  if(open && mixWas===null){ mixWas=!$('mixer').hidden; if(mixWas) $('mixBtn').click(); }
+  else if(!open && mixWas!==null){ if(mixWas && $('mixer').hidden) $('mixBtn').click(); mixWas=null; } }).observe($('editor'),{attributes:true,attributeFilter:['hidden']});
 function closeEditor(){ lgShow(false); $('editor').hidden=true; document.querySelectorAll('.measure.sel').forEach(e=>e.classList.remove('sel')); selBar=-1; }
 $('edClose').addEventListener('click',()=>{ if(editing) $('editBtn').click(); else closeEditor(); }); // leaves Fix bars altogether (CJ)
 // the panel covers the bottom of the page, so pad the page by its height: every bar can still be scrolled into view (CJ: stuck at bar 81)

@@ -1,0 +1,29 @@
+name: Deploy analysis server
+on:
+  push:
+    branches: [main]
+    paths: ["server/**", ".github/workflows/deploy-server.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check the Modal keys are set
+        run: |
+          if [ -z "$MODAL_TOKEN_ID" ] || [ -z "$MODAL_TOKEN_SECRET" ]; then echo "Add MODAL_TOKEN_ID and MODAL_TOKEN_SECRET under Settings > Secrets and variables > Actions"; exit 1; fi
+      - run: pip install "modal==1.6.3" fastapi numpy
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Deploy
+        run: modal deploy server/app.py
+      - name: Test with a made-up song
+        run: python server/smoke.py

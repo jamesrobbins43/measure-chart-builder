@@ -877,9 +877,9 @@ async function shiftBuffer(buf,semis,prog){ const {SoundTouch,SimpleFilter}=awai
 let pitchJob=0;
 async function applyHear(){ const semis=hearSemis(), job=++pitchJob, msg=$('keyMsg');
   try{ let a=ST.audioOrig||ST.audio, st=ST.stemsOrig||null;
-    if(semis){ msg.textContent='Changing key…'; const tot=st?4:1; let done=0; const pr=p=>{ if(job===pitchJob) msg.textContent=`Changing key… ${Math.round((done+p)/tot*100)}%`; };
+    if(semis){ msg.textContent='Changing key…'; const tot=st?1+Object.values(st).filter(Boolean).length:1; let done=0; const pr=p=>{ if(job===pitchJob) msg.textContent=`Changing key… ${Math.round((done+p)/tot*100)}%`; };
       a=await shiftBuffer(a,semis,pr); done++; if(job!==pitchJob) return;
-      if(st){ const o={}; for(const k of ['drums','bass','gtr']){ o[k]=await shiftBuffer(st[k],semis,pr); done++; if(job!==pitchJob) return; } st=o; } }
+      if(st){ const o={}; for(const k of Object.keys(st)){ if(!st[k]) continue; o[k]=await shiftBuffer(st[k],semis,pr); done++; if(job!==pitchJob) return; } st=o; } }
     ST.audio=a; ST.stems=st; msg.textContent=''; if(playing) restartHere();
   }catch(e){ console.warn(e); if(job===pitchJob){ msg.textContent="Couldn't change the key in this browser"; ST.hearPC=null; keyUI(); } } }
 // numbers instead of chord names (CJ): 1 4 5 6m, counted from the chart's key (a minor key counts from its relative major)
@@ -907,7 +907,7 @@ function setupDrop(dropId,inputId,nameId,kind){
   d.addEventListener('dragover',e=>{e.preventDefault(); d.classList.add('over');});
   d.addEventListener('dragleave',()=>d.classList.remove('over'));
   d.addEventListener('drop',e=>{e.preventDefault(); d.classList.remove('over'); if(e.dataTransfer.files[0]) take(e.dataTransfer.files[0]);});
-  function take(f){ cancelBuild(); if(ST.restore){ ST.restore=null; $('reopenNote')?.remove(); } ST[kind]=f; $(nameId).textContent=f.name; d.classList.add('has'); if(kind==='chartFile'){ ST.chartMode='pdf'; $('chartText').hidden=true; } ready(); }
+  function take(f){ cancelBuild(); if(ST.restore){ ST.restore=null; $('reopenNote')?.remove(); } ST[kind]=f; if(kind==='songFile') srvWarm(); $(nameId).textContent=f.name; d.classList.add('has'); if(kind==='chartFile'){ ST.chartMode='pdf'; $('chartText').hidden=true; } ready(); }
 }
 setupDrop('dropSong','songFile','songName','songFile');
 setupDrop('dropChart','chartFile','chartName','chartFile');
@@ -929,6 +929,35 @@ async function readPdf(file){
   return parseLines(pdfItemsToLines(pages));
 }
 
+// ---------- analysis server (site only): real part separation + a trained chord model (CJ, 2026-11-05) ----------
+const SERVER=''; // the site build puts its server address here; the artifact has none and keeps working in the browser
+let warmed=false; function srvWarm(){ if(!SERVER||warmed) return; warmed=true; fetch(SERVER+'/warm').catch(()=>{}); }
+async function srvAnalyze(file){
+  const r=await fetch(SERVER+'/analyze',{method:'POST',headers:{'content-type':'text/plain'},body:file});
+  if(!r.ok) throw new Error('server '+r.status);
+  const buf=await r.arrayBuffer(), dv=new DataView(buf);
+  if(String.fromCharCode(...new Uint8Array(buf,0,4))!=='MCB1') throw new Error('bad reply');
+  const n=dv.getUint32(4,true), meta=JSON.parse(new TextDecoder().decode(new Uint8Array(buf,8,n))), base=8+n, stems={};
+  for(const x of meta.stems) stems[x.name]=buf.slice(base+x.offset,base+x.offset+x.length);
+  return {meta,stems};
+}
+// how far the server's copy of the song runs behind ours (server time = our time + lag) (MP3 decoders can trim the start differently), in seconds
+function srvLag(orig,parts){ const sr=orig.sampleRate, D=4, a=orig.getChannelData(0), n=parts[0].length; const L=Math.min(a.length,n);
+  let best=0,bl=0; const t0=Math.floor(L*0.3), W=Math.min(5*sr,L-t0-4096); if(W<sr) return 0;
+  const sum=new Float32Array(W+8192); for(const p of parts){ const c=p.getChannelData(0); for(let i=0;i<W+8192&&t0-4096+i<c.length;i++) if(t0-4096+i>=0) sum[i]+=c[t0-4096+i]; }
+  for(let lag=-4096;lag<=4096;lag+=D){ let s=0; for(let i=0;i<W;i+=D) s+=a[t0+i]*sum[i+4096+lag]; if(s>best){best=s;bl=lag;} }
+  return bl/sr; }
+// a parts buffer moved by lag seconds so it lines up with the song we play
+function shiftParts(ac,b,lag){ const k=Math.round(lag*b.sampleRate); if(!k) return b; const o=ac.createBuffer(b.numberOfChannels,b.length,b.sampleRate);
+  for(let c=0;c<b.numberOfChannels;c++){ const x=b.getChannelData(c), y=o.getChannelData(c); if(k>0) y.set(x.subarray(0,x.length-k),k); else y.set(x.subarray(-k)); } return o; }
+// the chord evidence the page aligns to: the server's (trained model on the music without drums and vocals) blended with our own
+function blendCf(loc,m,lag){ const out={...loc,C:new Float32Array(loc.C.length),B:new Float32Array(loc.B.length)}, S=m.chroma, nS=S.frames;
+  const nz=(v,o,len)=>{ let q=0; for(let k=0;k<12;k++) q+=v[o+k]**2; return Math.sqrt(q)||1; };
+  for(let f=0;f<loc.frames;f++){ const t=loc.offset+f/loc.fps+lag, j=Math.max(0,Math.min(nS-1,Math.round((t-S.offset)*S.fps)));
+    const lq=nz(loc.C,f*12), sq=nz(S.C,j*12); let lb=0; for(let k=0;k<12;k++) lb=Math.max(lb,loc.B[f*12+k]);
+    for(let k=0;k<12;k++){ out.C[f*12+k]=0.35*loc.C[f*12+k]/lq+0.65*S.C[j*12+k]/sq; out.B[f*12+k]=0.3*loc.B[f*12+k]/(lb||1)+0.7*S.B[j*12+k]; } }
+  return out; }
+
 // ---------- build ----------
 let AC=null;
 const getAC=()=>AC||(AC=new (window.AudioContext||window.webkitAudioContext)());
@@ -938,6 +967,8 @@ let buildGen=0, building=false; const CANCEL={cancel:true};
 function cancelBuild(){ if(!building) return; buildGen++; building=false; ST.restore=null; steps.innerHTML=''; ready(); }
 async function build(){
   $('buildBtn').disabled=true; steps.innerHTML=''; const my=++buildGen; building=true; const chk=v=>{ if(my!==buildGen) throw CANCEL; return v; };
+  ST.srv=null; ST.srvStems=null; ST.CfLocal=null; ST.CfSrv=null; ST.cfSrc='local';
+  const srvP=SERVER&&ST.songFile? srvAnalyze(ST.songFile).then(r=>(ST.srvMs=Date.now()-t0srv,r)).catch(e=>{ console.warn('analysis server',e); return null; }) : null, t0srv=Date.now();
   try{
     let s=step('Reading the chart');
     const parsed = ST.chartMode==='text' ? parseLines(textToLines($('chartText').value)) : chk(await readPdf(ST.chartFile));
@@ -953,7 +984,18 @@ async function build(){
       for(let i=0;i<n;i++){ ST.mono[i]=(L[i]+R[i])*0.5; if(i%50===0) dif+=Math.abs(L[i]-R[i]); } ST.st22=dif>1e-3*n/50?[L,R]:null; }
     s.done(`Song: ${fmt(ST.audio.duration)}`);
     s=step('Listening for the beat'); ST.O=chk(await onsetEnvelope(ST.mono,sr,p=>s.prog(p))); s.done();
-    s=step('Listening for the chords'); ST.Cf=chk(await chromaFrames(ST.mono,sr,p=>s.prog(p))); s.done();
+    s=step('Listening for the chords'); ST.Cf=chk(await chromaFrames(ST.mono,sr,p=>s.prog(p))); s.done(); ST.CfLocal=ST.Cf;
+    if(srvP){ s=step('Separating the parts and reading the chords'); const tick=setInterval(()=>s.prog(Math.min(0.95,(Date.now()-t0srv)/40000)),500);
+      const r=chk(await Promise.race([srvP,new Promise(res=>setTimeout(()=>res(null),90000))])); clearInterval(tick);
+      if(r){ try{ const ac=getAC(), dec=async k=>r.stems[k]?await ac.decodeAudioData(r.stems[k].slice(0)):null;
+          const parts={}; for(const k of ['vocals','drums','bass','guitar','piano']) parts[k]=await dec(k); chk();
+          const lag=srvLag(ST.audio,Object.values(parts).filter(Boolean));
+          for(const k in parts) if(parts[k]) parts[k]=shiftParts(ac,parts[k],-lag); // the server's copy runs lag s behind ours: pull its parts forward
+          ST.srv=r.meta; ST.srvLag=lag; ST.srvStems={drums:parts.drums,bass:parts.bass,gtr:parts.guitar,vocals:parts.vocals,piano:parts.piano};
+          ST.CfSrv=blendCf(ST.CfLocal,r.meta,lag); ST.Cf=ST.CfSrv; ST.cfSrc='srv';
+          s.done(showChecks()?`Server: ${(ST.srvMs/1000).toFixed(1)} s (parts lined up ${Math.round(lag*1000)} ms)`:''); if(!showChecks()) steps.lastElementChild?.remove(); }
+        catch(e){ if(e===CANCEL) throw e; console.warn('server reply',e); steps.lastElementChild?.remove(); } }
+      else steps.lastElementChild?.remove(); }
     ST.vox=null; if(ST.st22){ s=step('Listening for where the singing starts'); try{ ST.vox=chk(await vocalOnsets(ST.st22[0],ST.st22[1],sr,p=>s.prog(p))); s.done(); }catch(e){ if(e===CANCEL) throw e; console.warn(e); s.done(); } ST.st22=null; }
     { const [tn,td]=(parsed.meta.time||'4/4').split('/').map(Number); ST.meter=+$('meterIn').value || tn || 4; ST.den=td||4;
       // 6/8, 9/8, 12/8: count and click in eighth notes, accent every third
@@ -965,7 +1007,7 @@ async function build(){
       const hit0=await libFind(ST.audio.duration,ST.env); chk();
       if(hit0 && (!own || Date.parse(hit0.v.savedAt||0)>(ST.restoreAt||0))){ ST.restore=null; if(applyLib(hit0)){ s=step(showChecks()?'Checking the song library':'Lining the chart up with the song'); if(showChecks()) s.done('Found this song in the library'); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); realign(false); return; } } }
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
-      Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null}); setOrder(v.order);
+      Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null}); setOrder(v.order); useCf(v.cf);
       s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); realign(false); return; }
     s=step(showChecks()?'Checking the song library':'Lining the chart up with the song');
     const hit=chk(await libFind(ST.audio.duration,ST.env));
@@ -1030,6 +1072,8 @@ async function libFind(dur,env){
     return best;
   }catch(e){ console.warn('library lookup failed',e); ST.libDiag={err:String(e&&e.message||e)}; return undefined; }
 }
+// fixes saved before the server existed were made against the page's own chord reading, so they keep it
+function useCf(src){ if(src==='srv'&&ST.CfSrv){ ST.Cf=ST.CfSrv; ST.cfSrc='srv'; } else if(ST.CfLocal){ ST.Cf=ST.CfLocal; ST.cfSrc='local'; } }
 function applyLib(h){
   const v=h.v; if(!(v.P>0)) return false;
   ST.P=v.P; ST.meter=v.meter||ST.meter; ST.shift=v.shift||0; if(v.den){ ST.den=v.den; ST.compound=!!v.compound; }
@@ -1038,14 +1082,14 @@ function applyLib(h){
   ST.beat0=t-k*ST.P; ST.downPhase=(((v.downPhase+k)%ST.meter)+ST.meter)%ST.meter;
   ST.nudge=v.nudge||0;
   ST.anchors=h.sameChart?{...(v.anchors||{})}:{}; ST.overrides=h.sameChart?JSON.parse(JSON.stringify(v.overrides||{})):{}; ST.barLens=h.sameChart?{...(v.barLens||{})}:{}; ST.breaks=h.sameChart?{...(v.breaks||{})}:{}; ST.barEdits=h.sameChart?JSON.parse(JSON.stringify(v.barEdits||[])):[]; setOrder(h.sameChart?v.order:null);
-  ST.libId=h.id; ST.libDate=v.savedAt||null; ST.libSame=!!h.sameChart;
+  ST.libId=h.id; ST.libDate=v.savedAt||null; ST.libSame=!!h.sameChart; useCf(h.sameChart?v.cf:'srv');
   return true;
 }
 async function libSave(){
   if(!DB) return;
   const b=$('libSave'); b.disabled=true; $('libMsg').textContent='Saving…';
   const doc={dur:Math.round(ST.audio.duration*100)/100, env:ST.env, title:ST.meta.title||'', artist:ST.meta.artist||'', chartKey:ST.meta.key||'', chartSig:ST.chartSig,
-    P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, savedAt:new Date().toISOString()};
+    P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', savedAt:new Date().toISOString()};
   try{
     const ref=ST.libId?DB.collection('songs').doc(ST.libId):DB.collection('songs').doc();
     await ref.set(doc); ST.libId=ref.id; ST.libDate=doc.savedAt;
@@ -1243,12 +1287,14 @@ function buildGraph(ac,dest,songBuffer,clickBuffer,vocal,clickGain,stems){
   s.connect(split);
   if(songBuffer.numberOfChannels>1){ split.connect(merge,0,0); split.connect(merge,1,1); split.connect(mid,0); split.connect(mid,1); }
   else { split.connect(merge,0,0); split.connect(merge,0,1); split.connect(mid,0); split.connect(mid,0); }
-  mid.connect(hp); hp.connect(lp); lp.connect(cut); cut.connect(merge,0,0); cut.connect(merge,0,1);
+  let vs=null;
+  if(stems&&stems.vocals){ vs=ac.createBufferSource(); vs.buffer=stems.vocals; vs.connect(cut); cut.connect(master); }
+  else { mid.connect(hp); hp.connect(lp); lp.connect(cut); cut.connect(merge,0,0); cut.connect(merge,0,1); }
   merge.connect(master); master.connect(bus);
   let c=null, cg=ac.createGain(); cg.gain.value=clickGain; cg.connect(dest);
   if(clickBuffer){ c=ac.createBufferSource(); c.buffer=clickBuffer; c.connect(cg); }
-  const start=(when,off)=>{ s.start(when,off); c&&c.start(when,off); ds&&ds.start(when,off); bsrc&&bsrc.start(when,off); gsrc&&gsrc.start(when,off); };
-  return {s,c,cut,cg,ds,bsrc,gsrc,dg,bg,gg,master,fade,start};
+  const start=(when,off)=>{ s.start(when,off); vs&&vs.start(when,off); c&&c.start(when,off); ds&&ds.start(when,off); bsrc&&bsrc.start(when,off); gsrc&&gsrc.start(when,off); };
+  return {s,c,cut,cg,ds,bsrc,gsrc,dg,bg,gg,vs,master,fade,start};
 }
 const SOFTCLIP=(()=>{ const n=4097, c=new Float32Array(n); for(let i=0;i<n;i++){ const x=(i/(n-1))*2-1, ax=Math.abs(x); c[i]=ax<=0.8? x : Math.sign(x)*(0.8+0.2*Math.tanh((ax-0.8)/0.2)); } return c; })();
 function mixGains(){ return {d:+$('drumVol').value/100, b:+$('bassVol').value/100, g:+$('gtrVol').value/100, o:+$('restVol').value/100}; }
@@ -1258,6 +1304,10 @@ function applyMix(){ if(!nodes) return; const mx=mixGains(); nodes.master.gain.v
 let stemJob=0; const STEMS=['drumVol','bassVol','gtrVol','restVol'];
 async function startStems(){
   const job=++stemJob; ST.stems=null;
+  if(ST.srvStems && ST.srvStems.drums){ ST.stemsOrig=ST.srvStems; ST.stems=ST.stemsOrig; if(hearSemis()) applyHear(); STEMS.forEach(id=>{ $(id).disabled=false; $(id).closest('.strip').title=''; }); showMix(); $('drumV').title='';
+    const lv=ST.srv?.levels||{}, ref=Math.max(1e-6,...Object.values(lv));
+    for(const [id,out,k,what] of [['drumVol','drumV','drums','drums'],['bassVol','bassV','bass','bass'],['gtrVol','gtrV','guitar','guitars']]) if((lv[k]||0)/ref<0.04){ $(id).value=100; $(id).disabled=true; $(out).textContent='none'; $(id).closest('.strip').title=`No ${what} found in this song`; }
+    if(playing) restartHere(); return; }
   STEMS.forEach(id=>$(id).disabled=true); ['drumV','bassV','gtrV','restV'].forEach(id=>$(id).textContent='…');
   $('drumV').title='Separating drums and bass…';
   try{
@@ -1282,7 +1332,7 @@ async function startStems(){
 function showMix(){ const m=mixGains(); const lock=id=>$(id).disabled&&ST.stems; if(!lock('drumVol')) $('drumV').textContent=Math.round(m.d*100)+'%'; if(!lock('bassVol')) $('bassV').textContent=Math.round(m.b*100)+'%'; if(!lock('gtrVol')) $('gtrV').textContent=Math.round(m.g*100)+'%'; $('restV').textContent=Math.round(m.o*100)+'%'; }
 function ctxNow(){ const ac=getAC(); if(ac.getOutputTimestamp){ const ts=ac.getOutputTimestamp(); if(ts.contextTime>0) return ts.contextTime+(performance.now()-ts.performanceTime)/1000; } return ac.currentTime-(ac.outputLatency||ac.baseLatency||0); }
 function songTime(){ return (playing? offsetAt+(ctxNow()-startAt) : pausedAt) - userSync/1000; }
-function stopSrc(){ ciBar=null; if(nodes){ for(const n of [nodes.s,nodes.c,nodes.ds,nodes.bsrc,nodes.gsrc,nodes.ci]) if(n){ try{n.onended=null;n.stop();}catch(e){} } nodes=null; } }
+function stopSrc(){ ciBar=null; if(nodes){ for(const n of [nodes.s,nodes.c,nodes.ds,nodes.bsrc,nodes.gsrc,nodes.vs,nodes.ci]) if(n){ try{n.onended=null;n.stop();}catch(e){} } nodes=null; } }
 // the vocal cut only works while someone is singing (bars with lyrics), so instrumental parts keep centred guitars and keys
 function singSpans(){
   const song=ST.song; if(!song) return []; const out=[];
@@ -1293,6 +1343,7 @@ function singSpans(){
 function scheduleCut(param,ctxT0,songT0,level){
   const full=-(1-level), spans=singSpans();
   param.cancelScheduledValues(0);
+  if(ST.stems&&ST.stems.vocals){ param.setValueAtTime(full,ctxT0); return; } // separated singing: no need to guess where the words are
   const inside=t=>spans.some(([a,b])=>t>=a&&t<b);
   param.setValueAtTime(inside(songT0)?full:0, ctxT0);
   if(level>=1) return;
@@ -1716,7 +1767,7 @@ let saveT=null;
 function saveLast(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(!ST.songFile) return;
   const rec={song:ST.songFile, songName:ST.songFile.name, chartMode:ST.chartMode, chart:ST.chartMode==='pdf'?ST.chartFile:null, chartName:ST.chartFile?.name||'', chartText:ST.chartMode==='text'?$('chartText').value:'',
     bpmIn:$('bpmIn').value, meterIn:$('meterIn').value,
-    state:{P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, libId:ST.libId, libDate:ST.libDate}, savedAt:Date.now()};
+    state:{P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', libId:ST.libId, libDate:ST.libDate}, savedAt:Date.now()};
   idb('readwrite',st=>st.put(rec,'last')).catch(e=>console.warn('could not keep the song for next time',e)); },400); }
 function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
 (async()=>{ try{ const r=await idb('readonly',st=>st.get('last')); if(!r||!r.song||!(r.chart||r.chartText)) return;

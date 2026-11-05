@@ -54,8 +54,8 @@ textarea{width:100%;box-sizing:border-box;min-height:180px;font-family:var(--f-m
 .transport{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--rule)}
 .secnav{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin:0 auto;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
 .secnav:empty{display:none}
-.secnav button{flex:none;font-family:var(--f-ui);font-size:13px;padding:4px 11px;border-radius:999px;white-space:nowrap}
-.secnav button.on{background:var(--accent,#2b54d6);border-color:var(--accent,#2b54d6);color:#fff}
+.secnav button{flex:none;border-left:4px solid var(--c,var(--rule));font-family:var(--f-ui);font-size:13px;padding:4px 11px;border-radius:999px;white-space:nowrap}
+.secnav button.on{background:var(--c,var(--accent));border-color:var(--c,var(--accent));color:#fff;font-weight:600} /* each section lights up in its own chart color (CJ) */
 .tin{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:10px;margin:0 auto}
 .titleblock{min-width:0}
 .titleblock h1{font-size:21px}
@@ -791,7 +791,7 @@ function pause(){ pausedAt=songTime()+userSync/1000; playing=false; stopSrc(); $
 // section bar: jump to a section with a "1, 2, 3, 4" count before it starts (CJ)
 function jumpSection(i){ const t=bT(i); getAC().resume().then(()=>startAtTime(t,i,false,true)); pausedAt=t; update(true); }
 function buildSecNav(){ const nav=$('secNav'); if(!nav) return; secSp=ST.song?sectionSpans().filter((o,k,a)=>!k||o.label!==a[k-1].label):[]; // one button for a run of same-named sections lastSec=-2; nav.innerHTML='';
-  for(const sp of secSp){ const b=document.createElement('button'); b.type='button'; b.textContent=sp.label; b.title=`Go to ${sp.label} (bar ${sp.bar+1}) with a four-count`; b.onclick=()=>jumpSection(sp.bar); nav.appendChild(b); } }
+  for(const sp of secSp){ const b=document.createElement('button'); b.type='button'; b.textContent=sp.label; b.style.setProperty('--c',colorFor(sp.label)); b.title=`Go to ${sp.label} (bar ${sp.bar+1}) with a four-count`; b.onclick=()=>jumpSection(sp.bar); nav.appendChild(b); } }
 function seekBar(i){ const t=Math.max(0,bT(i)-0.05); getAC().resume().then(()=>startAtTime(t)); pausedAt=t; update(true); }
 // choruses only: play each chorus and jump straight to the next one
 let choOnly=false, choKind='chorus'; // CJ: Verses only works the same way

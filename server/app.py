@@ -109,6 +109,12 @@ class Analyzer:
             for iv in QUAL[QLIST[q]]:
                 T[i, (r + iv) % 12] = 1.0
         self.tmpl = T
+        # first CQT call compiles librosa's helpers; do it now instead of on a member's song
+        import librosa
+        z = np.random.default_rng(0).standard_normal(22050 * 2).astype(np.float32) * 0.01
+        librosa.cqt(z, sr=22050, n_bins=144, bins_per_octave=24, hop_length=2048)
+        librosa.cqt(z, sr=22050, n_bins=48, bins_per_octave=12, hop_length=2048, fmin=librosa.note_to_hz("E1"))
+        librosa.resample(z, orig_sr=44100, target_sr=22050); librosa.feature.rms(y=z, frame_length=4096, hop_length=2048)
         self.load_s = round(time.time() - t, 2)
         print("models loaded in", self.load_s, "s on", torch.cuda.get_device_name(0) if self.dev == "cuda" else "cpu", flush=True)
 
@@ -117,7 +123,7 @@ class Analyzer:
         import numpy as np, torch
         import librosa
         print("librosa", librosa.__version__, flush=True)
-        tm = {}; t0 = time.time()
+        tm = {"gpu": torch.cuda.get_device_name(0) if self.dev == "cuda" else "cpu"}; t0 = time.time()
         x = decode(data); dur = x.shape[1] / SR; tm["decode"] = round(time.time() - t0, 2); print("decode", tm["decode"], "s", flush=True)
         if dur > 15 * 60: raise ValueError("song longer than 15 minutes")
 

@@ -26,4 +26,8 @@ jobs:
       - name: Deploy
         run: modal deploy server/app.py
       - name: Test with a made-up song
-        run: python server/smoke.py
+        run: |
+          (timeout 900 modal app logs chart-play-along > server.log 2>&1 &)
+          timeout 840 python server/smoke.py; rc=$?
+          sleep 5; echo "----- server log -----"; tail -n 150 server.log
+          exit $rc

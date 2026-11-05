@@ -200,39 +200,50 @@ class Analyzer:
     def analyze(self, data: bytes) -> bytes:
         return self.run(data)
 
-    @modal.asgi_app()
-    def api(self):
-        from fastapi import FastAPI, Request
-        from fastapi.middleware.cors import CORSMiddleware
-        from fastapi.responses import JSONResponse, Response
-        web = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-        web.add_middleware(CORSMiddleware, allow_origins=sorted(ORIGINS), allow_methods=["GET", "POST"], allow_headers=["content-type"], max_age=86400)
+    @modal.method()
+    def ping(self) -> float:
+        return self.load_s
 
-        @web.get("/warm")
-        def warm():  # the page calls this when it opens, so the GPU is ready by the time a song is picked
-            return {"ok": True, "load_s": self.load_s}
 
-        @web.post("/analyze")
-        async def analyze(request: Request):
-            if request.headers.get("origin", "") not in ORIGINS:
-                return JSONResponse({"error": "not allowed"}, 403)
-            ip = (request.headers.get("x-forwarded-for", "") or "?").split(",")[0].strip()
-            hr, day = time.strftime("%Y%m%d%H", time.gmtime()), time.strftime("%Y%m%d", time.gmtime())
-            ki, kd = f"ip:{ip}:{hr}", f"day:{day}"
-            ni, nd = counts.get(ki, 0) + 1, counts.get(kd, 0) + 1
-            if ni > LIMITS["per_ip_hour"] or nd > LIMITS["per_day"]:
-                return JSONResponse({"error": "busy"}, 429)
-            counts[ki] = ni; counts[kd] = nd
-            data = await request.body()
-            if not data or len(data) > 60_000_000:
-                return JSONResponse({"error": "bad size"}, 413)
-            try:
-                out = self.run(data)
-            except Exception as e:  # noqa: BLE001
-                print("analyze failed:", repr(e))
-                return JSONResponse({"error": "could not read that song"}, 422)
-            finally:
-                del data
-            return Response(out, media_type="application/octet-stream")
+web_image = modal.Image.debian_slim(python_version="3.11").pip_install("fastapi[standard]")
 
-        return web
+
+@app.function(image=web_image, timeout=330, max_containers=10)
+@modal.concurrent(max_inputs=20)
+@modal.asgi_app()
+def api():
+    from fastapi import FastAPI, Request
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse, Response
+    web = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    web.add_middleware(CORSMiddleware, allow_origins=sorted(ORIGINS), allow_methods=["GET", "POST"], allow_headers=["content-type"], max_age=86400)
+
+    @web.get("/warm")
+    async def warm():  # the page calls this when it opens, so the GPU is ready by the time a song is picked
+        await Analyzer().ping.spawn.aio()  # starts a GPU container in the background
+        return {"ok": True}
+
+    @web.post("/analyze")
+    async def analyze(request: Request):
+        if request.headers.get("origin", "") not in ORIGINS:
+            return JSONResponse({"error": "not allowed"}, 403)
+        ip = (request.headers.get("x-forwarded-for", "") or "?").split(",")[0].strip()
+        hr, day = time.strftime("%Y%m%d%H", time.gmtime()), time.strftime("%Y%m%d", time.gmtime())
+        ki, kd = f"ip:{ip}:{hr}", f"day:{day}"
+        ni, nd = (await counts.get.aio(ki, 0)) + 1, (await counts.get.aio(kd, 0)) + 1
+        if ni > LIMITS["per_ip_hour"] or nd > LIMITS["per_day"]:
+            return JSONResponse({"error": "busy"}, 429)
+        await counts.put.aio(ki, ni); await counts.put.aio(kd, nd)
+        data = await request.body()
+        if not data or len(data) > 60_000_000:
+            return JSONResponse({"error": "bad size"}, 413)
+        try:
+            out = await Analyzer().analyze.remote.aio(data)
+        except Exception as e:  # noqa: BLE001
+            print("analyze failed:", repr(e))
+            return JSONResponse({"error": "could not read that song"}, 422)
+        finally:
+            del data
+        return Response(out, media_type="application/octet-stream")
+
+    return web

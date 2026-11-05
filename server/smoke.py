@@ -26,7 +26,7 @@ print("round trip", round(wall, 1), "s; server timings", meta["timings"], "model
 print("beats", len(meta["beats"]), "first", meta["beats"][:4], "downbeats", meta["downbeats"][:4])
 print("chords", [c for c in meta["chords"] if c[1] - c[0] > 0.5][:12])
 print("stems", [(s["name"], s["length"]) for s in meta["stems"]], "reply", len(out), "bytes")
-try: print("WEB URL", A.api.get_web_url())
+try: print("WEB URL", modal.Function.from_name("chart-play-along", "api").get_web_url())
 except Exception as e: print("web url lookup failed", e)
 found = {c[2] for c in meta["chords"] if c[1] - c[0] > 0.5}
 ok = {"C", "G", "A:min", "F"} <= found and len(meta["beats"]) > 40

@@ -243,7 +243,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="row2"><label for="edInsLen" style="flex-direction:row;align-items:center;gap:8px">Add a bar of<select id="edInsLen"></select>beats</label><button type="button" id="edInsBefore">before this bar</button><button type="button" id="edInsAfter">after this bar</button><button type="button" id="edDel">Remove this bar</button></div>
     <div class="row2"><label for="edSplitAt" style="flex-direction:row;align-items:center;gap:8px">Split this bar before beat<select id="edSplitAt"></select></label><button type="button" id="edSplit">Split</button><button type="button" id="edJoin" title="Make this bar and the next one a single bar">Join with next bar</button></div>
     <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply" hidden>Set</button><span id="edAnchors"></span></div>
-    <div class="row2" id="edTimeRow"><label for="edTimeSec" style="flex-direction:row;align-items:center;gap:8px">Or by time:<select id="edTimeSec"></select></label><label for="edTime" style="flex-direction:row;align-items:center;gap:6px">starts at<input type="text" id="edTime" inputmode="decimal" placeholder="0:21.5" style="width:6.5em" autocomplete="off" aria-describedby="edTimeHelp"></label><button type="button" id="edTimeNow" title="Use where the song is playing right now">Now</button><button type="button" id="edTimeSet">Set</button><span id="edTimeHelp" style="font-size:12px;color:var(--muted)">Type a time like 0:21.5, or press Now while it plays.</span></div>
+    <div class="row2" id="edTimeRow"><label for="edTimeSec" style="flex-direction:row;align-items:center;gap:8px"><b>Section Marker:</b><select id="edTimeSec"></select></label><label for="edTime" style="flex-direction:row;align-items:center;gap:6px">starts at<input type="text" id="edTime" inputmode="decimal" placeholder="0:21.5" style="width:6.5em" autocomplete="off" aria-describedby="edTimeHelp"></label><button type="button" id="edTimeNow" title="Use where the song is playing right now">Now</button><span style="font-family:var(--f-ui);font-size:13px">Song is at <b id="edNowT" style="font-variant-numeric:tabular-nums">0:00.0</b></span><button type="button" id="edTimeSet">Set</button><span id="edTimeHelp" style="font-size:12px;color:var(--muted)">Type a time like 0:21.5, or press Now while it plays.</span></div>
     <div class="lgrid" id="lyrGrid" hidden>
       <div class="lgtop"><label for="lgFrom">Bars</label><input type="number" id="lgFrom" min="1" step="1"> <label for="lgTo">to</label><input type="number" id="lgTo" min="1" step="1">
         <span class="lghint">Top box: a chord, in the 16th it's played on. Bottom box: each word or syllable (split words with a hyphen, like vic- tory). Leave a box empty for no change.</span></div>
@@ -1445,7 +1445,8 @@ function quickScroll(y){ y=Math.max(0,Math.min(y,document.documentElement.scroll
 function update(force,noScroll){
   if(!ST.song) return;
   const song=ST.song, M=ST.meter, P=song.beat, t=songTime();
-  $('time').textContent=`${fmt(t)} / ${fmt(ST.audio.duration)}`;
+  $('time').textContent=`${editing?fmtT(Math.max(0,t)):fmt(t)} / ${fmt(ST.audio.duration)}`; // tenths while fixing, to read section start times (CJ)
+  if(editing) $('edNowT').textContent=fmtT(Math.max(0,t));
   let bar=barAt(t), beat=Math.max(0,Math.floor((t-bT(bar))/P+1e-6)); beat=bar<0||bar>=song.bars.length?((beat%M)+M)%M:Math.min(bLen(bar)-1,beat);
   const ci=playing && ciBar!=null && ctxNow()<ciUntil; // one-bar count-in before a chorus: show the chorus's first bar counting down
   if(ci){ bar=ciBar; beat=Math.max(0,Math.min(M-1, M-Math.ceil((ciUntil-ctxNow())/P-1e-6))); }
@@ -1593,7 +1594,7 @@ function markSel(){ document.querySelectorAll('.measure.sel').forEach(e=>e.class
 function openEditor(i,noFocus){
   selBar=i; markSel();
   const M=bLen(i);
-  $('edTitle').textContent=`Bar ${i+1}`+(M!==ST.meter?` (${M} beats)`:'');
+  $('edTitle').textContent=`Bar ${i+1}`+(M!==ST.meter?` (${M} beats)`:'')+` · starts at ${fmtT(Math.max(0,bT(i)))}`;
   $('edLen').innerHTML=Array.from({length:ST.meter+4},(_,k)=>k+1).map(n=>`<option value="${n}"${n===M?' selected':''}>${n}${n===ST.meter?' (normal)':''}</option>`).join('');
   $('edLenMsg').textContent=''; lineUI(i); $('edLocal').hidden=!!(typeof DB!=='undefined'&&DB&&DB.canSave!==false);
   if(!$('edInsLen').options.length || $('edInsLen').dataset.m!=String(ST.meter)){ $('edInsLen').innerHTML=Array.from({length:ST.meter+4},(_,k)=>k+1).map(n=>`<option value="${n}"${n===ST.meter?' selected':''}>${n}</option>`).join(''); $('edInsLen').dataset.m=ST.meter; }

@@ -976,7 +976,9 @@ function cancelBuild(){ if(!building) return; buildGen++; building=false; ST.res
 async function build(){
   $('buildBtn').disabled=true; steps.innerHTML=''; const my=++buildGen; building=true; const chk=v=>{ if(my!==buildGen) throw CANCEL; return v; };
   ST.srv=null; ST.srvStems=null; ST.CfLocal=null; ST.CfSrv=null; ST.cfSrc='local';
-  const srvP=SERVER&&ST.songFile? srvAnalyze(ST.songFile).then(r=>(ST.srvMs=Date.now()-t0srv,r)).catch(e=>{ console.warn('analysis server',e); return null; }) : null, t0srv=Date.now();
+  // CJ: reopening a song skips the listening it already did (beat, chords, singing, the server's parts), kept in this browser
+  const AK=anaKey(ST.songFile), A=await anaGet(AK); let srvR=null;
+  const srvP=A&&A.srv? Promise.resolve(A.srv) : SERVER&&ST.songFile? srvAnalyze(ST.songFile).then(r=>(ST.srvMs=Date.now()-t0srv,r)).catch(e=>{ console.warn('analysis server',e); return null; }) : null, t0srv=Date.now();
   try{
     let s=step('Reading the chart');
     const parsed = ST.chartMode==='text' ? parseLines(textToLines($('chartText').value)) : chk(await readPdf(ST.chartFile));
@@ -991,11 +993,11 @@ async function build(){
     { const st=chk(await off.startRendering()), L=st.getChannelData(0), R=st.getChannelData(1), n=L.length; ST.mono=new Float32Array(n); let dif=0;
       for(let i=0;i<n;i++){ ST.mono[i]=(L[i]+R[i])*0.5; if(i%50===0) dif+=Math.abs(L[i]-R[i]); } ST.st22=dif>1e-3*n/50?[L,R]:null; }
     s.done(`Song: ${fmt(ST.audio.duration)}`);
-    s=step('Listening for the beat'); ST.O=chk(await onsetEnvelope(ST.mono,sr,p=>s.prog(p))); s.done();
-    s=step('Listening for the chords'); ST.Cf=chk(await chromaFrames(ST.mono,sr,p=>s.prog(p))); s.done(); ST.CfLocal=ST.Cf;
+    s=step('Listening for the beat'); ST.O=A?.O||chk(await onsetEnvelope(ST.mono,sr,p=>s.prog(p))); s.done();
+    s=step('Listening for the chords'); ST.Cf=A?.Cf||chk(await chromaFrames(ST.mono,sr,p=>s.prog(p))); s.done(); ST.CfLocal=ST.Cf;
     if(srvP){ s=step('Separating the parts and reading the chords'); const tick=setInterval(()=>s.prog(Math.min(0.95,(Date.now()-t0srv)/40000)),500);
       const r=chk(await Promise.race([srvP,new Promise(res=>setTimeout(()=>res(null),90000))])); clearInterval(tick);
-      if(r){ try{ const ac=getAC(), dec=async k=>r.stems[k]?await ac.decodeAudioData(r.stems[k].slice(0)):null;
+      if(r){ srvR=r; try{ const ac=getAC(), dec=async k=>r.stems[k]?await ac.decodeAudioData(r.stems[k].slice(0)):null;
           const parts={}; for(const k of ['vocals','drums','bass','guitar','piano']) parts[k]=await dec(k); chk();
           const lag=srvLag(ST.audio,Object.values(parts).filter(Boolean));
           for(const k in parts) if(parts[k]) parts[k]=shiftParts(ac,parts[k],-lag); // the server's copy runs lag s behind ours: pull its parts forward
@@ -1004,7 +1006,9 @@ async function build(){
           s.done(showChecks()?`Server: ${(ST.srvMs/1000).toFixed(1)} s (parts lined up ${Math.round(lag*1000)} ms)`:''); if(!showChecks()) steps.lastElementChild?.remove(); }
         catch(e){ if(e===CANCEL) throw e; console.warn('server reply',e); steps.lastElementChild?.remove(); } }
       else steps.lastElementChild?.remove(); }
-    ST.vox=null; if(ST.st22){ s=step('Listening for where the singing starts'); try{ ST.vox=chk(await vocalOnsets(ST.st22[0],ST.st22[1],sr,p=>s.prog(p))); s.done(); }catch(e){ if(e===CANCEL) throw e; console.warn(e); s.done(); } ST.st22=null; }
+    ST.vox=null; if(A&&A.vox!==undefined){ ST.vox=A.vox; ST.st22=null; }
+    if(ST.st22){ s=step('Listening for where the singing starts'); try{ ST.vox=chk(await vocalOnsets(ST.st22[0],ST.st22[1],sr,p=>s.prog(p))); s.done(); }catch(e){ if(e===CANCEL) throw e; console.warn(e); s.done(); } ST.st22=null; }
+    if(AK && (!A || (srvR && !A.srv))) anaPut({key:AK, O:ST.O, Cf:ST.CfLocal, vox:ST.vox, srv:srvR});
     { const [tn,td]=(parsed.meta.time||'4/4').split('/').map(Number); ST.meter=+$('meterIn').value || tn || 4; ST.den=td||4;
       // 6/8, 9/8, 12/8: count and click in eighth notes, accent every third
       ST.compound=ST.den===8 && ST.meter%3===0 && ST.meter>3; }
@@ -1824,6 +1828,11 @@ async function retempo(f){ ST.P*=f; ST.beat0=ST.beat0%ST.P; ST.anchors={}; ST.ov
 function idb(mode,fn){ return new Promise((res,rej)=>{ try{ const rq=indexedDB.open('mcb',1); rq.onupgradeneeded=()=>rq.result.createObjectStore('kv'); rq.onerror=()=>rej(rq.error);
   rq.onsuccess=()=>{ const tx=rq.result.transaction('kv',mode), st=tx.objectStore('kv'), r=fn(st); tx.oncomplete=()=>res(r&&r.result); tx.onerror=()=>rej(tx.error); }; }catch(e){ rej(e); } }); }
 let saveT=null;
+// the listening results for the last song (one song only, so it doesn't fill the browser)
+const anaKey=f=>f?(f.name||'')+'|'+f.size:'';
+async function anaGet(k){ if(!k) return null; try{ const r=await idb('readonly',st=>st.get('ana')); return r&&r.key===k&&r.v===ANA_V?r:null; }catch(e){ return null; } }
+function anaPut(rec){ idb('readwrite',st=>st.put({...rec,v:ANA_V},'ana')).catch(e=>console.warn('could not keep the listening results',e)); }
+const ANA_V=1; // bump when onsetEnvelope / chromaFrames / vocalOnsets / the server reply change
 function saveLast(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(!ST.songFile) return;
   const rec={song:ST.songFile, songName:ST.songFile.name, chartMode:ST.chartMode, chart:ST.chartMode==='pdf'?ST.chartFile:null, chartName:ST.chartFile?.name||'', chartText:ST.chartMode==='text'?$('chartText').value:'',
     bpmIn:$('bpmIn').value, meterIn:$('meterIn').value,

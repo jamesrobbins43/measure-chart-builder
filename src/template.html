@@ -575,7 +575,8 @@ function refineChords(al){
     const a=P[i-1].start, z=P[i+1].start, st=P[i].start, lo=Math.max(a+1,st-2), hi=Math.min(z-1,st+2); if(hi<=lo) continue;
     const w0=Math.max(a,st-2.5), w1=Math.min(z,st+2.5);
     const score=c=>{ let v=0; for(let x=w0;x<w1-1e-6;x+=0.5){ v+=fit(x<c-1e-6?pe.chord:e.chord, Math.round(x*2)); } return v; };
-    let best=st, bv=score(st)+0.25; for(let c=st-Math.floor(st-lo+1e-6);c<=hi+1e-6;c+=1){ const v=score(c); if(v>bv){ bv=v; best=c; } }
+    const onG=c=>!ST.compound||e.quick||(((Math.round(c)-ST.downPhase)%3)+3)%3===0; // 6/8: a change may only slide to a big beat (CJ, I Believe)
+    let best=st, bv=score(st)+(onG(st)?0.25:-1e9); for(let c=st-Math.floor(st-lo+1e-6);c<=hi+1e-6;c+=1){ if(!onG(c)) continue; const v=score(c); if(v>bv){ bv=v; best=c; } }
     P[i].start=best; }
   return al;
 }

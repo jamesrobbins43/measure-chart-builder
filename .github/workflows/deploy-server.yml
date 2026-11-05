@@ -27,7 +27,6 @@ jobs:
         run: |
           if [ -z "$MODAL_TOKEN_ID" ] || [ -z "$MODAL_TOKEN_SECRET" ]; then echo "Add MODAL_TOKEN_ID and MODAL_TOKEN_SECRET under Settings > Secrets and variables > Actions"; exit 1; fi
       - run: pip install "modal==1.6.3" fastapi numpy
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: Stop the old server
         if: ${{ inputs.fresh }}
         run: modal app stop chart-play-along --yes || true

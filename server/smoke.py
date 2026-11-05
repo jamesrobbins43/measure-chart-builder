@@ -12,9 +12,11 @@ y = np.concatenate([chord(n, bar) for _, n in prog] * 4)
 kick = np.exp(-np.arange(int(SR * 0.12)) / (SR * 0.03)) * np.sin(2 * np.pi * 55 * np.arange(int(SR * 0.12)) / SR)
 for b in range(0, len(y) - len(kick), SR // 2): y[b:b + len(kick)] += 0.8 * kick
 y = (0.4 * y / np.abs(y).max()).astype(np.float32)
-import subprocess
-data = subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ac", "1", "-ar", str(SR), "-i", "pipe:0", "-b:a", "128k", "-f", "mp3", "pipe:1"],
-                      input=y.tobytes(), capture_output=True, check=True).stdout
+import io, wave
+buf = io.BytesIO()
+with wave.open(buf, "wb") as w:  # a WAV file, so the test needs no encoder here
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes((y * 32767).astype("<i2").tobytes())
+data = buf.getvalue()
 
 print("test song", len(data), "bytes; calling the server (a cold start loads the models first)", flush=True)
 A = modal.Cls.from_name("chart-play-along", "Analyzer")()

@@ -590,6 +590,9 @@ function finish(keep){
     ST.song.bars.forEach(b=>{ if(b.section && !/\d$/.test(base(b.section))) cnt[b.section]=(cnt[b.section]||0)+1; });
     ST.song.bars.forEach(b=>{ const o=b.section; if(o && cnt[o]>1){ seen[o]=(seen[o]||0)+1; const rp=o.slice(base(o).length); b.section=base(o)+' '+seen[o]+rp; } }); }
   for(const [i,o] of Object.entries(ST.overrides)){ if(ST.song.bars[i]) Object.assign(ST.song.bars[i],o); }
+  // CJ (Same God): the same chord twice in a row inside one bar is redundant; keep the first (the one on beat 1) and drop the repeat
+  { const key=c=>{ const m=String(c).match(/^([A-G][b#]?)(.*?)(?:\/([A-G][b#]?))?$/); return m&&PC[m[1]]!=null? PC[m[1]]+'|'+m[2]+'|'+(m[3]?PC[m[3]]:'') : c; };
+    for(const b of ST.song.bars) if(b.chords.length>1) b.chords=b.chords.filter((c,k,a)=>!k||key(c[1])!==key(a[k-1][1])); }
   $('upload').hidden=true; $('result').hidden=false;
   $('songTitle').textContent=ST.meta.title||ST.songFile.name.replace(/\.[^.]+$/,'');
   $('songMeta').textContent=[ST.meta.artist, ST.meta.key&&(ST.shift?`Chart in ${ST.meta.key}, recording in ${recKey()}`:'Key '+ST.meta.key), bpmLabel(), ST.meter+'/'+(ST.den||4), ST.song.bars.length+' bars'].filter(Boolean).join(' · ');

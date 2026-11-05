@@ -60,9 +60,12 @@ ROOTS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 
 
 def decode(data: bytes):
-    import numpy as np
-    p = subprocess.run(["ffmpeg", "-v", "error", "-i", "pipe:0", "-f", "f32le", "-ac", "2", "-ar", str(SR), "pipe:1"],
-                       input=data, capture_output=True, check=True)
+    """Decoded through a RAM-only temp file (some formats need seeking); it is deleted straight away."""
+    import numpy as np, tempfile
+    with tempfile.NamedTemporaryFile(dir="/dev/shm", suffix=".bin") as f:
+        f.write(data); f.flush()
+        p = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", f.name, "-f", "f32le", "-ac", "2", "-ar", str(SR), "pipe:1"],
+                           capture_output=True, check=True, timeout=60)
     x = np.frombuffer(p.stdout, dtype=np.float32).reshape(-1, 2).T.copy()
     return x  # (2, T)
 
@@ -71,7 +74,7 @@ def mp3(x, kbps=112) -> bytes:
     import numpy as np
     pcm = np.ascontiguousarray(np.clip(x.T, -1, 1).astype(np.float32)).tobytes()
     p = subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ac", str(x.shape[0]), "-ar", str(SR), "-i", "pipe:0",
-                        "-codec:a", "libmp3lame", "-b:a", f"{kbps}k", "-f", "mp3", "pipe:1"], input=pcm, capture_output=True, check=True)
+                        "-codec:a", "libmp3lame", "-b:a", f"{kbps}k", "-f", "mp3", "pipe:1"], input=pcm, capture_output=True, check=True, timeout=120)
     return p.stdout
 
 
@@ -110,7 +113,10 @@ class Analyzer:
         print("models loaded in", self.load_s, "s on", torch.cuda.get_device_name(0) if self.dev == "cuda" else "cpu", flush=True)
 
     def run(self, data: bytes):
-        import numpy as np, torch, librosa
+        print("song received", len(data), "bytes", flush=True)
+        import numpy as np, torch
+        import librosa
+        print("librosa", librosa.__version__, flush=True)
         tm = {}; t0 = time.time()
         x = decode(data); dur = x.shape[1] / SR; tm["decode"] = round(time.time() - t0, 2); print("decode", tm["decode"], "s", flush=True)
         if dur > 15 * 60: raise ValueError("song longer than 15 minutes")

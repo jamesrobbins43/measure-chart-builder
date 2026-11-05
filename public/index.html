@@ -247,6 +247,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="row2"><label for="edInsLen" style="flex-direction:row;align-items:center;gap:8px">Add a bar of<select id="edInsLen"></select>beats</label><button type="button" id="edInsBefore">before this bar</button><button type="button" id="edInsAfter">after this bar</button><button type="button" id="edDel">Remove this bar</button></div>
     <div class="row2"><label for="edSplitAt" style="flex-direction:row;align-items:center;gap:8px">Split this bar before beat<select id="edSplitAt"></select></label><button type="button" id="edSplit">Split</button><button type="button" id="edJoin" title="Make this bar and the next one a single bar">Join with next bar</button></div>
     <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply" hidden>Set</button><span id="edAnchors"></span></div>
+    <div class="row2" id="edMoveRow"><span style="font-family:var(--f-ui);font-size:13px;align-self:center">Bars in the wrong section:</span><button type="button" id="edToPrev" title="This bar and the bars before it in its section become the end of the section before"></button><button type="button" id="edToNext" title="This bar and the bars after it in its section become the start of the section after"></button></div>
     <div class="row2" id="edTimeRow"><label for="edTimeSec" style="flex-direction:row;align-items:center;gap:8px"><b>Section Marker:</b><select id="edTimeSec"></select></label><label for="edTime" style="flex-direction:row;align-items:center;gap:6px">starts at<input type="text" id="edTime" inputmode="decimal" placeholder="0:21.5" style="width:6.5em" autocomplete="off" aria-describedby="edTimeHelp"></label><button type="button" id="edTimeNow" title="Use where the song is playing right now">Now</button><span style="font-family:var(--f-ui);font-size:13px">Song is at <b id="edNowT" style="font-variant-numeric:tabular-nums">0:00.0</b></span><button type="button" id="edTimeSet">Set</button><span id="edTimeHelp" style="font-size:12px;color:var(--muted)">Type a time like 0:21.5, or press Now while it plays.</span></div>
     <div class="lgrid" id="lyrGrid" hidden>
       <div class="lgtop"><label for="lgFrom">Bars</label><input type="number" id="lgFrom" min="1" step="1"> <label for="lgTo">to</label><input type="number" id="lgTo" min="1" step="1">
@@ -1618,9 +1619,19 @@ function openEditor(i,noFocus){
   const opts=['<option value="">(no change)</option>']; const seen=new Set();
   ST.events.forEach((e,j)=>{ const bi=ST.order?ST.order[e.sec]:e.sec, base=ST.base||ST.sections; if(e.k===0 && e.pass===0 && !seen.has(bi)){ seen.add(bi); opts.push(`<option value="${j}">${esc(e.label)}${base.filter(s=>s.label===e.label).length>1?' '+(base.slice(0,bi+1).filter(s=>s.label===e.label).length):''}</option>`); } });
   $('edSection').innerHTML=opts.join(''); { const v=$('edTimeSec').value; $('edTimeSec').innerHTML=opts.join('').replace('(no change)','(pick a section)'); $('edTimeSec').value=v; }
+  moveUI(i);
   const n=Object.keys(ST.anchors).length; $('edAnchors').textContent=n?`${n} section start${n>1?'s':''} pinned`:'';
   $('editor').hidden=false; lgShow(true,noFocus);
 }
+// CJ: bars that landed in the wrong section move to the section before or after; only the section name moves, never a chord
+function secBounds(i){ const b=ST.song.bars; let st=i; while(st>0&&!b[st].section) st--; let nx=i+1; while(nx<b.length&&!b[nx].section) nx++; let pv=st-1; while(pv>0&&!b[pv].section) pv--; return {st,nx,pv:st>0&&b[Math.max(0,pv)]?.section?pv:-1}; }
+function moveUI(i){ const b=ST.song.bars, {st,nx,pv}=secBounds(i), r=(a,z)=>a===z?`bar ${a+1}`:`bars ${a+1}–${z+1}`;
+  const P=$('edToPrev'), N=$('edToNext');
+  const okP=!!b[st]?.section && pv>=0 && i+1<nx; P.hidden=!okP; if(okP) P.textContent=`Give ${r(st,i)} to ${b[pv].section}`;
+  const okN=nx<b.length && i>st; N.hidden=!okN; if(okN) N.textContent=`Give ${r(i,nx-1)} to ${b[nx].section}`;
+  $('edMoveRow').hidden=!okP&&!okN; }
+$('edToPrev').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {st,pv}=secBounds(i), b=ST.song.bars, to=b[pv]?.section, nm=b[st].section, n=i-st+1; barEdit('sec',i+1,st); openEditor(i,true); $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${to}; ${nm} now starts at bar ${i+2}. No chords moved.`; });
+$('edToNext').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {nx}=secBounds(i), b=ST.song.bars, nm=b[nx].section, n=nx-i; barEdit('sec',i,nx); $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${nm}; it now starts at bar ${i+1}. No chords moved.`; });
 function closeEditor(){ lgShow(false); $('editor').hidden=true; document.querySelectorAll('.measure.sel').forEach(e=>e.classList.remove('sel')); selBar=-1; }
 $('edClose').addEventListener('click',()=>{ if(editing) $('editBtn').click(); else closeEditor(); }); // leaves Fix bars altogether (CJ)
 // the panel covers the bottom of the page, so pad the page by its height: every bar can still be scrolled into view (CJ: stuck at bar 81)

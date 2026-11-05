@@ -104,11 +104,12 @@ class Analyzer:
                 T[i, (r + iv) % 12] = 1.0
         self.tmpl = T
         self.load_s = round(time.time() - t, 2)
+        print("models loaded in", self.load_s, "s on", torch.cuda.get_device_name(0) if self.dev == "cuda" else "cpu", flush=True)
 
     def run(self, data: bytes):
         import numpy as np, torch, librosa
         tm = {}; t0 = time.time()
-        x = decode(data); dur = x.shape[1] / SR; tm["decode"] = round(time.time() - t0, 2)
+        x = decode(data); dur = x.shape[1] / SR; tm["decode"] = round(time.time() - t0, 2); print("decode", tm["decode"], "s", flush=True)
         if dur > 15 * 60: raise ValueError("song longer than 15 minutes")
 
         # 1) parts
@@ -120,12 +121,12 @@ class Analyzer:
             out = apply_model(self.sep, ((wav - m) / s)[None], shifts=0, split=True, overlap=0.25, device=self.dev, progress=False)[0]
         out = (out * s + m).float().cpu().numpy()  # (6, 2, T)
         stems = dict(zip(self.sep.sources, out))  # drums, bass, other, vocals, guitar, piano
-        tm["separate"] = round(time.time() - t, 2)
+        tm["separate"] = round(time.time() - t, 2); print("separate", tm["separate"], "s", flush=True)
 
         # 2) beats on the whole song
         t = time.time()
         b, db = self.beats(x.mean(0), SR)
-        tm["beats"] = round(time.time() - t, 2)
+        tm["beats"] = round(time.time() - t, 2); print("beats", tm["beats"], "s", flush=True)
 
         # 3) chords on the music without drums and vocals (BTC: 22.05 kHz mono, CQT 144 bins, 24/oct, hop 2048, 10 s pieces)
         t = time.time()
@@ -163,7 +164,7 @@ class Analyzer:
             B[:, (k + 4) % 12] += Bq[k]  # E1 is pitch class 4
         E = pieces(y, lambda z: librosa.feature.rms(y=z, frame_length=4096, hop_length=2048, center=True))[0]
         m_ = min(len(B), n, len(E)); B = B[:m_]; C = C[:m_]; E = E[:m_]
-        tm["chords"] = round(time.time() - t, 2)
+        tm["chords"] = round(time.time() - t, 2); print("chords", tm["chords"], "s", flush=True)
 
         # 4) parts back to the page as MP3 (other = the song minus these, worked out in the page)
         t = time.time()
@@ -172,7 +173,7 @@ class Analyzer:
         with ThreadPoolExecutor(5) as ex:
             blobs = list(ex.map(lambda k: mp3(stems[k]), names))
         lv = {k: float(np.sqrt(np.mean(stems[k][:, ::50] ** 2))) for k in self.sep.sources}
-        tm["encode"] = round(time.time() - t, 2)
+        tm["encode"] = round(time.time() - t, 2); print("encode", tm["encode"], "s", flush=True)
         tm["total"] = round(time.time() - t0, 2)
 
         meta = {"v": 1, "dur": dur, "timings": tm, "load_s": self.load_s, "beats": [round(float(v), 4) for v in b],

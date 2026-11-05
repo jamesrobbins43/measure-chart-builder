@@ -30,5 +30,5 @@ jobs:
           set +e
           (timeout 700 modal app logs chart-play-along > server.log 2>&1 &)
           timeout 600 python -u server/smoke.py; rc=$?
-          sleep 5; echo "----- server log -----"; tail -n 200 server.log; echo '----- app status -----'; modal app list 2>&1 | head; modal container list 2>&1 | head
+          sleep 5; echo "----- server log -----"; grep -v "%|\|\[1A" server.log | tail -n 120; echo '----- app status -----'; modal app list 2>&1 | head; modal container list 2>&1 | head
           exit $rc

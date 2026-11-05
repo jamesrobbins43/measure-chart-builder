@@ -35,5 +35,9 @@ t=t.replace('with a click track you can switch on and download.','with a click t
 # the "Please double-check" notes only show for the editor (CJ)
 assert 'const showChecks=()=>true;' in t
 t=t.replace('const showChecks=()=>true;','const showChecks=()=>!!(DB&&DB.canSave);',1)
+# the analysis server (Modal); for now only the editor's browser uses it, while CJ checks it on real songs
+SERVER_URL='https://cj-69038--chart-play-along-api.us-east.modal.run'
+assert "const SERVER='';" in t
+t=t.replace("const SERVER='';","const SERVER=(()=>{ try{ return localStorage.getItem('mcb-editor')?'"+SERVER_URL+"':''; }catch(e){ return ''; } })();",1)
 open(os.path.join(H,'public','index.html'),'w').write(t)
 print('ok',len(t))

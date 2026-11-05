@@ -514,7 +514,7 @@ async function freshStart(){
   $('libFresh').disabled=true; $('libMsg').textContent='Working it out from scratch…';
   if(!ST.O) ST.O=await onsetEnvelope(ST.mono,22050,()=>{});
   const h0=+$('bpmIn').value||ST.meta.bpm||0; const G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,h0,ST.meter):h0);
-  ST.P=G.P; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; setOrder(null); undoClear(); ST.libDate=null;
+  ST.P=G.P; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; setOrder(null); undoClear(); ST.libDate=null; useCf('srv'); // starting fresh uses the server's chord reading when there is one
   await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); $('libFresh').disabled=false; finish(true); saveLast();
 }
 $('libFresh').addEventListener('click',freshStart);

@@ -930,7 +930,7 @@ async function readPdf(file){
 }
 
 // ---------- analysis server (site only): real part separation + a trained chord model (CJ, 2026-11-05) ----------
-const SERVER=''; // the site build puts its server address here; the artifact has none and keeps working in the browser
+const SERVER=(()=>{ try{ return localStorage.getItem('mcb-editor')?'https://cj-69038--chart-play-along-api.us-east.modal.run':''; }catch(e){ return ''; } })(); // the site build puts its server address here; the artifact has none and keeps working in the browser
 let warmed=false; function srvWarm(){ if(!SERVER||warmed) return; warmed=true; fetch(SERVER+'/warm').catch(()=>{}); }
 async function srvAnalyze(file){
   const r=await fetch(SERVER+'/analyze',{method:'POST',headers:{'content-type':'text/plain'},body:file});
@@ -1112,7 +1112,7 @@ async function freshStart(){
   $('libFresh').disabled=true; $('libMsg').textContent='Working it out from scratch…';
   if(!ST.O) ST.O=await onsetEnvelope(ST.mono,22050,()=>{});
   const h0=+$('bpmIn').value||ST.meta.bpm||0; const G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,h0,ST.meter):h0);
-  ST.P=G.P; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; setOrder(null); undoClear(); ST.libDate=null;
+  ST.P=G.P; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; setOrder(null); undoClear(); ST.libDate=null; useCf('srv'); // starting fresh uses the server's chord reading when there is one
   await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); $('libFresh').disabled=false; finish(true); saveLast();
 }
 $('libFresh').addEventListener('click',freshStart);

@@ -1370,10 +1370,10 @@ function startAtTime(t,countBar,keep,four){
   offsetAt=Math.max(0,Math.min(t,ST.audio.duration-0.1)); ciBar=null;
   if(countBar!=null){ // one bar of clicks first, landing on the downbeat of countBar
     const P=ST.song.beat, M=ST.meter, down=bT(countBar), now=ac.currentTime+0.06;
-    const N=four?4:M, Q=four?P*(ST.compound?3:1):P; // four: the section bar's "1, 2, 3, 4" (CJ), not a whole bar
+    const six=four&&ST.compound, N=four&&!six?4:M, Q=P; // four: the section bar's "1, 2, 3, 4" (CJ); in 6/8 it counts all 6 (CJ)
     const c0=keep?ciUntil-N*Q:now; // keep: carry on a count-in that's already running
-    const FADE=four?2*Q:P*Math.max(1,M-2); if(!keep) offsetAt=Math.max(0,down-FADE); // CJ: the music fades in from beat 3 of the count-in
-    ciUntil=c0+N*Q; ciN=N; ciQ=Q; ciFour=!!four; startAt=ciUntil-(down-offsetAt); ciBar=countBar; nodes.ci=countInSource(ac,Math.max(c0,now),Math.max(0,now-c0),N,Q,four);
+    const FADE=four&&!six?2*Q:P*Math.max(1,M-2); if(!keep) offsetAt=Math.max(0,down-FADE); // CJ: the music fades in from beat 3 of the count-in
+    ciUntil=c0+N*Q; ciN=N; ciQ=Q; ciFour=!!four; startAt=ciUntil-(down-offsetAt); ciBar=countBar; nodes.ci=countInSource(ac,Math.max(c0,now),Math.max(0,now-c0),N,Q,four&&!six);
     const g=nodes.fade.gain, f0=Math.max(now,ciUntil-FADE); g.setValueAtTime(0,now); g.setValueAtTime(0,f0); if(ciUntil>f0) g.linearRampToValueAtTime(1,ciUntil); else g.setValueAtTime(1,ciUntil);
     const cg=nodes.cg.gain, cl=cg.value; cg.setValueAtTime(0,now); cg.setValueAtTime(cl,ciUntil-0.02); } // the count-in plays its own clicks
   else startAt=ac.currentTime+0.06;
@@ -1465,7 +1465,7 @@ function update(force,noScroll){
   if(editing) $('edNowT').textContent=fmtT(Math.max(0,t));
   let bar=barAt(t), beat=Math.max(0,Math.floor((t-bT(bar))/P+1e-6)); beat=bar<0||bar>=song.bars.length?((beat%M)+M)%M:Math.min(bLen(bar)-1,beat);
   const ci=playing && ciBar!=null && ctxNow()<ciUntil; // one-bar count-in before a chorus: show the chorus's first bar counting down
-  if(ci){ bar=ciBar; beat=Math.max(0,Math.min(M-1,ciN-1, ciN-Math.ceil((ciUntil-ctxNow())/ciQ-1e-6))); if(ciFour&&ST.compound) beat=(beat*3)%M; }
+  if(ci){ bar=ciBar; beat=Math.max(0,Math.min(M-1,ciN-1, ciN-Math.ceil((ciUntil-ctxNow())/ciQ-1e-6))); }
   { let si=-1; for(let k=0;k<secSp.length;k++){ if(secSp[k].bar<=bar) si=k; else break; } // section bar: light up the section that's playing (CJ)
     if(si!==lastSec||force){ lastSec=si; const nav=$('secNav'); [...nav.children].forEach((b,k)=>{ b.classList.toggle('on',k===si); if(k===si) b.setAttribute('aria-current','true'); else b.removeAttribute('aria-current'); });
       const on=nav.children[si]; if(on){ const l=on.offsetLeft-nav.offsetLeft, r=l+on.offsetWidth; if(l<nav.scrollLeft||r>nav.scrollLeft+nav.clientWidth) nav.scrollTo({left:Math.max(0,l-40),behavior:'smooth'}); } } }

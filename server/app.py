@@ -80,15 +80,18 @@ def mp3(x, kbps=112) -> bytes:
 class Analyzer:
     @modal.enter()
     def load(self):
+        print("container starting", flush=True)
         import torch
+        print("torch", torch.__version__, "cuda", torch.cuda.is_available(), flush=True)
         sys.path.insert(0, "/opt/btc")
         from demucs.pretrained import get_model
         from beat_this.inference import Audio2Beats
         from btc_model import BTC_model
         t = time.time()
         self.dev = "cuda" if torch.cuda.is_available() else "cpu"
-        self.sep = get_model("htdemucs_6s").to(self.dev).eval()
+        self.sep = get_model("htdemucs_6s").to(self.dev).eval(); print("demucs ready", round(time.time() - t, 1), flush=True)
         self.beats = Audio2Beats(checkpoint_path="final0", device=self.dev, float16=self.dev == "cuda")
+        print("beat_this ready", round(time.time() - t, 1), flush=True)
         cfg = dict(feature_size=144, timestep=108, num_chords=170, input_dropout=0.2, layer_dropout=0.2, attention_dropout=0.2,
                    relu_dropout=0.2, num_layers=8, num_heads=4, hidden_size=128, total_key_depth=128, total_value_depth=128,
                    filter_size=128, loss="ce", probs_out=False)

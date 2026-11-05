@@ -18,7 +18,8 @@ data = subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ac", "1", "-ar"
 
 print("test song", len(data), "bytes; calling the server (a cold start loads the models first)", flush=True)
 A = modal.Cls.from_name("chart-play-along", "Analyzer")()
-t = time.time(); out = A.analyze.remote(data); wall = time.time() - t
+with modal.enable_output():  # streams the server's own log lines here
+    t = time.time(); out = A.analyze.remote(data); wall = time.time() - t
 assert out[:4] == b"MCB1", out[:40]
 n = struct.unpack("<I", out[4:8])[0]; meta = json.loads(out[8:8 + n])
 print("round trip", round(wall, 1), "s; server timings", meta["timings"], "model load", meta["load_s"], "s")

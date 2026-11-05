@@ -16,6 +16,7 @@ import subprocess
 data = subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ac", "1", "-ar", str(SR), "-i", "pipe:0", "-b:a", "128k", "-f", "mp3", "pipe:1"],
                       input=y.tobytes(), capture_output=True, check=True).stdout
 
+print("test song", len(data), "bytes; calling the server (a cold start loads the models first)", flush=True)
 A = modal.Cls.from_name("chart-play-along", "Analyzer")()
 t = time.time(); out = A.analyze.remote(data); wall = time.time() - t
 assert out[:4] == b"MCB1", out[:40]

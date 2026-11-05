@@ -1359,8 +1359,7 @@ function startAtTime(t,countBar,keep){
   if(countBar!=null){ // one bar of clicks first, landing on the downbeat of countBar
     const P=ST.song.beat, M=ST.meter, down=bT(countBar), now=ac.currentTime+0.06;
     const c0=keep?ciUntil-M*P:now; // keep: carry on a count-in that's already running
-    // the music fades in over the count-in's last beat (a dotted quarter in 6/8), so any lead-in or pickup is heard coming in
-    const FADE=P*(ST.compound?3:1); if(!keep) offsetAt=Math.max(0,down-FADE);
+    const FADE=P*Math.max(1,M-2); if(!keep) offsetAt=Math.max(0,down-FADE); // CJ: the music fades in from beat 3 of the count-in bar
     ciUntil=c0+M*P; startAt=ciUntil-(down-offsetAt); ciBar=countBar; nodes.ci=countInSource(ac,Math.max(c0,now),Math.max(0,now-c0));
     const g=nodes.fade.gain, f0=Math.max(now,ciUntil-FADE); g.setValueAtTime(0,now); g.setValueAtTime(0,f0); if(ciUntil>f0) g.linearRampToValueAtTime(1,ciUntil); else g.setValueAtTime(1,ciUntil);
     const cg=nodes.cg.gain, cl=cg.value; cg.setValueAtTime(0,now); cg.setValueAtTime(cl,ciUntil-0.02); } // the count-in plays its own clicks
@@ -1405,7 +1404,7 @@ function topBar(){ const BAR=ST.song.beat*ST.meter, b=ST.song.bars; return Math.
 function atTop(t){ return t<=bT(topBar())+0.05; }
 function choStartBar(t){ const sp=chorusSpans(), s=sp.find(([a])=>Math.abs(a-0.03-t)<0.12); return s?barAt(s[0]+0.01):null; }
 function choCheck(){ if(!choOnly||!playing||ctxNow()<startAt||(ciBar!=null&&ctxNow()<ciUntil+0.1)) return; const t=offsetAt+(ctxNow()-startAt), sp=chorusSpans(); if(!sp.length) return;
-  const lead=ST.song.beat*(ST.compound?3:1)+0.3; /* the music fades in a beat before the section starts */
+  const lead=ST.song.beat*Math.max(1,ST.meter-2)+0.3; /* the music fades in a beat before the section starts */
   if(sp.some(([a,b])=>t>=a-lead&&t<b)) return;
   const nx=sp.find(([a])=>a>t);
   if(nx) startAtTime(Math.max(0,nx[0]-0.03), barAt(nx[0]+0.01)); else { pause(); pausedAt=Math.max(0,sp[0][0]-0.03); update(true); } }

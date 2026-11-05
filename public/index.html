@@ -1203,7 +1203,7 @@ function finish(keep){
   // CJ (Same God): the same chord twice in a row inside one bar is redundant; keep the first (the one on beat 1) and drop the repeat
   { const key=c=>{ const m=String(c).match(/^([A-G][b#]?)(.*?)(?:\/([A-G][b#]?))?$/); return m&&PC[m[1]]!=null? PC[m[1]]+'|'+m[2]+'|'+(m[3]?PC[m[3]]:'') : c; };
     for(const b of ST.song.bars) if(b.chords.length>1) b.chords=b.chords.filter((c,k,a)=>!k||key(c[1])!==key(a[k-1][1])); }
-  $('upload').hidden=true; $('result').hidden=false;
+  $('upload').hidden=true; $('result').hidden=false; try{ sessionStorage.setItem('mcb-open','1'); }catch(e){}
   $('songTitle').textContent=ST.meta.title||ST.songFile.name.replace(/\.[^.]+$/,'');
   $('songMeta').textContent=[ST.meta.artist, ST.meta.key&&(ST.shift?`Chart in ${ST.meta.key}, recording in ${recKey()}`:'Key '+ST.meta.key), bpmLabel(), ST.meter+'/'+(ST.den||4), ST.song.bars.length+' bars'].filter(Boolean).join(' · ');
   $('bpmV').textContent=bpmLabel();
@@ -1849,9 +1849,12 @@ function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
   const nm=(r.songName||'your last song').replace(/\.[a-z0-9]+$/i,''), li=document.createElement('li'); li.className='note'; li.id='reopenNote';
   li.innerHTML='<button type="button" class="primary" id="reopenBtn"></button> or choose a different song and chart above.'; li.querySelector('#reopenBtn').textContent='Reopen '+nm;
   steps.innerHTML=''; steps.appendChild(li); li.querySelector('#reopenBtn').addEventListener('click',build);
+  // CJ: a refresh while a chart is open goes straight back to that chart; a fresh visit still asks
+  let wasOpen=false; try{ wasOpen=sessionStorage.getItem('mcb-open')==='1'; }catch(e){}
+  if(wasOpen){ li.innerHTML='Reopening '+esc(nm)+'…'; build(); }
 }catch(e){ /* storage blocked: start fresh */ } })();
 function clearPicked(){ ST.songFile=null; ST.chartFile=null; ST.chartMode='pdf'; for(const [d,n] of [['dropSong','songName'],['dropChart','chartName']]){ $(d).classList.remove('has'); $(n).textContent=''; } $('chartText').hidden=true; $('chartText').value=''; $('songFile').value=''; $('chartFile').value=''; ready(); }
-$('newBtn').addEventListener('click',()=>{ forgetLast(); $('bpmIn').value=''; $('meterIn').value=''; if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
+$('newBtn').addEventListener('click',()=>{ forgetLast(); try{ sessionStorage.removeItem('mcb-open'); }catch(e){} $('bpmIn').value=''; $('meterIn').value=''; if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
 
 // ---------- downloads ----------
 let dl=null;

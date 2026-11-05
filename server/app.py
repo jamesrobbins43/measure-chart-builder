@@ -38,6 +38,8 @@ image = (
     .run_commands(
         f"git clone https://github.com/jayg996/BTC-ISMIR19 /opt/btc && cd /opt/btc && git checkout {BTC_REV}",
         "test -s /opt/btc/test/btc_model_large_voca.pt",
+        # the BTC code predates NumPy 1.24, which removed np.float / np.int / np.bool
+        r"sed -i -E 's/np\.(float|int|bool)\b/\1/g' /opt/btc/*.py /opt/btc/utils/*.py",
     )
     .run_function(_bake)
 )

@@ -75,7 +75,7 @@ def mp3(x, kbps=112) -> bytes:
     return p.stdout
 
 
-@app.cls(image=image, gpu=["L4", "A10G", "T4"], timeout=300, scaledown_window=300, max_containers=4, enable_memory_snapshot=False)
+@app.cls(image=image, gpu=["L4", "A10G", "T4"], timeout=300, startup_timeout=600, scaledown_window=300, max_containers=4, enable_memory_snapshot=False)
 @modal.concurrent(max_inputs=1)
 class Analyzer:
     @modal.enter()

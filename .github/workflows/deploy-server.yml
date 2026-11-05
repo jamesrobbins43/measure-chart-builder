@@ -36,7 +36,8 @@ jobs:
       - name: Test with a made-up song
         run: |
           set +e
-          (timeout 700 modal app logs chart-play-along > server.log 2>&1 &)
+          (timeout 700 modal app logs chart-play-along --timestamps > server.log 2>&1 &)
+          (for i in $(seq 1 30); do date -u +%T; modal container list 2>&1 | grep -v "^[┏┡└]" | head -8; sleep 20; done > containers.log 2>&1 &)
           timeout 600 python -u server/smoke.py; rc=$?
-          sleep 5; echo "----- server log -----"; grep -v "%|\|\[1A" server.log | tail -n 120; echo '----- app status -----'; modal app list 2>&1 | head; modal container list 2>&1 | head
+          sleep 5; echo "----- server log -----"; grep -v "%|\|\[1A" server.log | tail -n 120; echo '----- containers over time -----'; cat containers.log; echo '----- app status -----'; modal app list 2>&1 | head; modal container list 2>&1 | head
           exit $rc

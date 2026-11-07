@@ -798,7 +798,7 @@ function countInSource(ac,when,skip=0,M=ST.meter,P=ST.song.beat,four=false){ con
 function pause(){ pausedAt=songTime()+userSync/1000; playing=false; stopSrc(); $('play').textContent='Play'; update(true); }
 // section bar: jump to a section with a "1, 2, 3, 4" count before it starts (CJ)
 function jumpSection(i){ const t=bT(i); getAC().resume().then(()=>startAtTime(t,i,false,true)); pausedAt=t; update(true); }
-function buildSecNav(){ const nav=$('secNav'); if(!nav) return; secSp=ST.song?sectionSpans().filter((o,k,a)=>!k||o.label!==a[k-1].label):[]; // one button for a run of same-named sections lastSec=-2; nav.innerHTML='';
+function buildSecNav(){ const nav=$('secNav'); if(!nav) return; secSp=ST.song?sectionSpans().filter((o,k,a)=>!k||o.label!==a[k-1].label):[]; /* one button for a run of same-named sections */ lastSec=-2; nav.innerHTML='';
   for(const sp of secSp){ const b=document.createElement('button'); b.type='button'; b.textContent=sp.label; b.style.setProperty('--c',colorFor(sp.label)); b.title=`Go to ${sp.label} (bar ${sp.bar+1}) with a four-count`; b.onclick=()=>jumpSection(sp.bar); nav.appendChild(b); } }
 function seekBar(i){ const t=Math.max(0,bT(i)-0.05); getAC().resume().then(()=>startAtTime(t)); pausedAt=t; update(true); }
 // choruses only: play each chorus and jump straight to the next one
@@ -1038,10 +1038,11 @@ function openEditor(i,noFocus){
 function secBounds(i){ const b=ST.song.bars; let st=i; while(st>0&&!b[st].section) st--; let nx=i+1; while(nx<b.length&&!b[nx].section) nx++; let pv=st-1; while(pv>0&&!b[pv].section) pv--; return {st,nx,pv:st>0&&b[Math.max(0,pv)]?.section?pv:-1}; }
 function moveUI(i){ const b=ST.song.bars, {st,nx,pv}=secBounds(i), r=(a,z)=>a===z?`bar ${a+1}`:`bars ${a+1}–${z+1}`;
   const P=$('edToPrev'), N=$('edToNext');
-  const okP=!!b[st]?.section && pv>=0 && i+1<nx; P.hidden=!okP; if(okP) P.textContent=`Give ${r(st,i)} to ${b[pv].section}`;
+  const okP=!!b[st]?.section && pv>=0; P.hidden=!okP; if(okP) P.textContent=`Give ${r(st,i)} to ${b[pv].section}`;
   const okN=nx<b.length && i>st; N.hidden=!okN; if(okN) N.textContent=`Give ${r(i,nx-1)} to ${b[nx].section}`;
   $('edMoveRow').hidden=!okP&&!okN; }
-$('edToPrev').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {st,pv}=secBounds(i), b=ST.song.bars, to=b[pv]?.section, nm=b[st].section, n=i-st+1; barEdit('sec',i+1,st); openEditor(i,true); $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${to}; ${nm} now starts at bar ${i+2}. No chords moved.`; });
+$('edToPrev').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {st,pv}=secBounds(i), b=ST.song.bars, to=b[pv]?.section, nm=b[st].section, n=i-st+1; const all=i+1>=secBounds(i).nx; if(all) barEdit('nosec',st); else barEdit('sec',i+1,st); openEditor(i,true);
+  $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${to}`+(all?`, so that ${nm} is gone and ${to} now runs through bar ${i+1}.`:`; ${nm} now starts at bar ${i+2}.`)+' No chords moved.'; });
 $('edToNext').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {nx}=secBounds(i), b=ST.song.bars, nm=b[nx].section, n=nx-i; barEdit('sec',i,nx); $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${nm}; it now starts at bar ${i+1}. No chords moved.`; });
 // CJ: save space while fixing: fold the tools or the grid away (remembered), and tuck the mixer up while Fix bars is open
 { const get=k=>{ try{ return localStorage.getItem(k)==='1'; }catch(e){ return false; } }, put=(k,v)=>{ try{ localStorage.setItem(k,v?'1':'0'); }catch(e){} };
@@ -1084,6 +1085,7 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
     if(e.op==='ins'){ const at=Math.max(0,Math.min(grid.length,e.at)), l=grid[grid.length-1], s0=at<grid.length?grid[at].s:(l?l.s+l.len:0);
       for(let k=at;k<grid.length;k++) grid[k].s+=e.len; grid.splice(at,0,{s:s0,len:e.len,ins:ei}); }
     else if(e.op==='split'){ const g=grid[e.at], b=e.len-1; if(!g||b<=0||b>=g.len) return; grid.splice(e.at+1,0,{s:g.s+b,len:g.len-b}); g.len=b; } // CJ: a new bar line inside this bar; nothing else moves
+    else if(e.op==='nosec'){ const f=grid[e.at]; if(!f) return; for(let k=items.length-1;k>=0;k--){ const it=items[k]; if(it.t==='s' && it.x>=f.s-1e-6 && it.x<f.s+f.len-1e-6) items.splice(k,1); } } // CJ (Praise): a whole section's bars go to the one before, so its name goes away
     else if(e.op==='sec'){ const f=grid[e.from], t=grid[e.at]; if(!f||!t) return; for(const it of items) if(it.t==='s' && it.x>=f.s-1e-6 && it.x<f.s+f.len-1e-6) it.x=t.s; } // move a section name only (CJ): no chord moves
     else if(e.op==='len'){ // CJ: set this bar's beats; the beats left over (or borrowed) belong to the next bar, and bar lines settle back at the next short bar
       const at=e.at; if(at<0||at>=grid.length) return; const was=new Map(grid.slice(at).map(g=>[g,{s:g.s,len:g.len}])), g0=grid[at];
@@ -1107,7 +1109,7 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
 }
 function shiftKeys(obj,at,d){ const o={}; for(const [k,v] of Object.entries(obj||{})){ const n=+k; if(d<0&&n===at) continue; o[n>=at+(d<0?1:0)?n+d:n]=v; } return o; }
 function barEdit(op,at,len){ pushUndo(); ST.barEdits=[...(ST.barEdits||[]), op==='ins'||op==='len'||op==='split'?{op,at,len}:op==='sec'?{op,at,from:len}:{op,at}];
-  if(op==='len'||op==='sec'){ finish(true); openEditor(at,true); saveLast(); return; }
+  if(op==='len'||op==='sec'||op==='nosec'){ finish(true); openEditor(at,true); saveLast(); return; }
   if(op==='split'){ ST.overrides=shiftKeys(ST.overrides,at+1,1); ST.breaks=shiftKeys(ST.breaks,at+1,1); const an={}; for(const [j,bar] of Object.entries(ST.anchors||{})){ const i=bar-1; an[j]=(i>at?i+1:i)+1; } ST.anchors=an; finish(true); openEditor(at,true); saveLast(); return; }
   const d=op==='ins'?1:-1; ST.overrides=shiftKeys(ST.overrides,at,d); ST.breaks=shiftKeys(ST.breaks,at,d);
   const an={}; for(const [j,bar] of Object.entries(ST.anchors||{})){ const i=bar-1; if(d<0&&i===at) continue; an[j]=(i>=at+(d<0?1:0)?i+d:i)+1; } ST.anchors=an;

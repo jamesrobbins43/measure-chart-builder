@@ -226,7 +226,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
       <label for="meterIn">Beats per bar <select id="meterIn"><option value="">From chart</option><option value="4">4</option><option value="3">3</option><option value="6">6</option><option value="2">2</option></select></label>
       <button type="button" id="advApply">Redo with these</button></div>
     <div class="group" id="keyGroup"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <button type="button" id="numBtn" aria-pressed="false" title="Show chords as numbers (1 4 5 6m) in the chart's key">Numbers</button> <span id="keyMsg" class="keymsg" role="status"></span></div>
-    <div class="group"><button type="button" id="editBtn" aria-pressed="false" title="Fix bars (press E)">Fix bars</button></div>
+    <div class="group"><button type="button" id="editBtn" aria-pressed="false" title="Fix bars (press E)">Fix bars</button><button type="button" id="tbUndo" hidden title="Undo the last fix (⌘Z / Ctrl+Z)">Undo</button><button type="button" id="tbRedo" hidden title="Redo (⇧⌘Z / Ctrl+Y)">Redo</button></div>
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button></div>
     <div class="group"><button type="button" id="dlPdf">Chart PDF</button><button type="button" id="dlVid" title="An MP4 of the chart with the beats lighting up and the click. No music.">Play-along video</button><span id="vidProgWrap" hidden style="display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)"><progress id="vidProg" max="100" value="0" style="width:140px;height:10px;accent-color:var(--accent)" aria-label="Video progress"></progress><b id="vidProgV">0%</b></span></div>
     <div class="group" id="vidNote" hidden role="dialog" aria-labelledby="vidNoteT" style="flex-basis:100%;max-width:640px;padding:10px 12px;border:1px solid var(--rule);border-left:3px solid var(--accent);border-radius:8px;background:var(--paper);font-family:var(--f-ui);font-size:13px;gap:8px 10px"><span id="vidNoteT" style="flex-basis:100%">Please note: Due to licensing restrictions, this download contains only click and chord progressions, the lyrics and music have been removed.</span><button class="primary" type="button" id="vidGo">Continue</button><button type="button" id="vidCancel">Cancel</button></div>
@@ -433,7 +433,7 @@ async function build(){
       if(hit0 && (!own || Date.parse(hit0.v.savedAt||0)>(ST.restoreAt||0))){ ST.restore=null; if(applyLib(hit0)){ s=step(showChecks()?'Checking the song library':'Lining the chart up with the song'); if(showChecks()) s.done('Found this song in the library'); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); realign(false); return; } } }
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
       Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null}); setOrder(v.order); useCf(v.cf);
-      s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); realign(false); return; }
+      s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); if(ST.restoreUndo){ [undoStack,redoStack]=ST.restoreUndo; ST.restoreUndo=null; undoUI(); } realign(false); return; } // CJ: undo still works after a refresh
     s=step(showChecks()?'Checking the song library':'Lining the chart up with the song');
     const hit=chk(await libFind(ST.audio.duration,ST.env));
     if(hit && applyLib(hit)){ if(showChecks()) s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); realign(false); return; }
@@ -523,12 +523,12 @@ $('libDel').addEventListener('click',async()=>{ const b=$('libDel');
   try{ await DB.collection('songs').doc(ST.libId).delete(); ST.libId=null; ST.libDate=null; b.textContent='Remove from library'; b.disabled=false; await freshStart(); $('libMsg').textContent='Removed from the library and worked out again from scratch.'; }
   catch(e){ b.textContent='Remove from library'; b.disabled=false; $('libMsg').textContent="Couldn't remove it just now. Try again in a moment."; }
 });
-async function freshStart(){
+async function freshStart(){ pushUndo(); // CJ: Start fresh can be undone too
   // ignore the saved version and work the song out from scratch
   $('libFresh').disabled=true; $('libMsg').textContent='Working it out from scratch…';
   if(!ST.O) ST.O=await onsetEnvelope(ST.mono,22050,()=>{});
   const h0=+$('bpmIn').value||ST.meta.bpm||0; const G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,h0,ST.meter):h0);
-  ST.P=G.P; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; setOrder(null); undoClear(); ST.libDate=null; useCf('srv'); // starting fresh uses the server's chord reading when there is one
+  ST.P=G.P; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; setOrder(null); ST.libDate=null; useCf('srv'); // starting fresh uses the server's chord reading when there is one
   await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); $('libFresh').disabled=false; finish(true); saveLast();
 }
 $('libFresh').addEventListener('click',freshStart);
@@ -668,8 +668,10 @@ function render(forcePer){
           lh+=`<span style="min-width:calc(100% * ${span} / ${M})">${lyB[q].join(' ')}</span>`; q+=span; }
         h+=`<div class="lyr">${lh}</div>`; }
       m.innerHTML=h+'</div>';
-      m.addEventListener('click',e=>{ if(!editing && !playing && e.target.closest('.c1')){ clearTimeout(qcT); qcT=setTimeout(()=>onBar(i),280); return; } onBar(i); });
-      m.addEventListener('dblclick',e=>{ const c=e.target.closest('.c1'); if(!c||editing||playing) return; clearTimeout(qcT); e.preventDefault(); quickChord(i,+c.dataset.k,c); }); m.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); onBar(i);} });
+      m.addEventListener('click',e=>{ if(!editing && !playing){ clearTimeout(qcT); qcT=setTimeout(()=>onBar(i),280); return; } onBar(i); });
+      m.addEventListener('dblclick',e=>{ if(editing||playing) return; clearTimeout(qcT); e.preventDefault(); const c=e.target.closest('.c1');
+        if(c) return quickChord(i,+c.dataset.k,c);
+        const r=m.getBoundingClientRect(), L=bLen(i), bt=1+Math.max(0,Math.min(L-1,Math.floor((e.clientX-r.left)/r.width*L))); quickChord(i,-1,null,bt,e.clientX,e.clientY); }); // CJ: double-click an empty spot to add a chord on that beat m.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); onBar(i);} });
       row.appendChild(m); measEls.push(m);
     }
     { const used=idxs.reduce((a,i)=>a+bLen(i)/ST.meter,0); if(used<perLine-1e-6){ const sp=document.createElement('div'); sp.className='spacer'; sp.style.flex=`0 0 calc(100% / var(--per,8) * ${perLine-used})`; row.appendChild(sp); } }
@@ -1022,14 +1024,16 @@ let editing=false, selBar=-1;
 $('editBtn').addEventListener('click',()=>{ editing=!editing; $('editBtn').setAttribute('aria-pressed',editing); $('editBtn').classList.toggle('primary',editing); $('editBtn').textContent=editing?'Done fixing':'Fix bars'; if(editing) openEditor(Math.max(0,Math.min(ST.song.bars.length-1,selBar>=0?selBar:barAt(songTime())))); else closeEditor(); });
 // CJ: while paused, double-click a chord to change it right there (no Fix bars panel). Enter saves, Esc cancels, empty removes it
 let qcT=null;
-function quickChord(i,k,el){ const b=ST.song.bars[i], ch=b?.chords[k]; if(!ch) return; document.querySelector('.qchord')?.remove();
-  const r=el.getBoundingClientRect(), inp=document.createElement('input'); inp.type='text'; inp.className='qchord'; inp.value=lgOut(ch[1]); inp.setAttribute('aria-label',`Chord in bar ${i+1}`); inp.autocomplete='off'; inp.spellcheck=false;
+function quickChord(i,k,el,bt,cx,cy){ const b=ST.song.bars[i]; if(!b) return; const ch=k>=0?b.chords[k]:[bt,'']; if(!ch) return; document.querySelector('.qchord')?.remove();
+  if(k<0){ const at=b.chords.findIndex(c=>Math.abs(c[0]-bt)<1e-6); if(at>=0){ k=at; ch[1]=b.chords[at][1]; } } // a chord already on that beat: change it
+  const r=el?el.getBoundingClientRect():{left:cx-20,top:cy-14}, inp=document.createElement('input'); inp.type='text'; inp.className='qchord'; inp.value=ch[1]?lgOut(ch[1]):''; inp.placeholder='Chord'; inp.setAttribute('aria-label',k>=0?`Chord in bar ${i+1}`:`New chord in bar ${i+1}, beat ${bt}`); inp.autocomplete='off'; inp.spellcheck=false;
   Object.assign(inp.style,{left:(r.left+window.scrollX-4)+'px', top:(r.top+window.scrollY-4)+'px'}); document.body.appendChild(inp); inp.focus(); inp.select();
   let done=false; const close=()=>{ done=true; inp.remove(); };
   const save=()=>{ if(done) return; const v=inp.value.trim(); if(v && !isChord(v)){ inp.classList.add('bad'); inp.title='Type a chord like C, F#m7 or Bb/D'; return; }
-    close(); if(v===lgOut(ch[1])) return; pushUndo(); ST.overrides={...ST.overrides}; const cs=b.chords.map(c=>[...c]); if(v) cs[k][1]=lgIn(v); else cs.splice(k,1);
+    close(); if(k>=0? v===lgOut(ch[1]) : !v) return; pushUndo(); ST.overrides={...ST.overrides}; const cs=b.chords.map(c=>[...c]);
+    if(k<0){ cs.push([bt,lgIn(v)]); cs.sort((x,y)=>x[0]-y[0]); } else if(v) cs[k][1]=lgIn(v); else cs.splice(k,1);
     ST.overrides[i]={...(ST.overrides[i]||{}), chords:cs, lyrics:(ST.overrides[i]?.lyrics||b.lyrics)}; b.chords=cs; render(); sectionCheck(); update(true,true); saveLast();
-    $('msg').className='msg'; $('msg').textContent=v?`Bar ${i+1}: changed to ${v}. Press ⌘Z / Ctrl+Z in Fix bars to undo.`:`Bar ${i+1}: chord removed.`; };
+    $('msg').className='msg'; $('msg').textContent=(v?(k<0?`Bar ${i+1}: added ${v} on beat ${bt}.`:`Bar ${i+1}: changed to ${v}.`):`Bar ${i+1}: chord removed.`)+' Undo (⌘Z / Ctrl+Z) puts it back.'; };
   inp.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ e.preventDefault(); save(); } else if(e.key==='Escape'){ e.preventDefault(); close(); } });
   inp.addEventListener('blur',()=>{ if(!done) save(); if(!done) close(); }); }
 function onBar(i){ if(editing){ openEditor(i,true); cueBar(i); } else if(playing && i===barAt(songTime())) pause(); else seekBar(i); } // clicking the bar that's playing stops it (CJ)
@@ -1117,16 +1121,22 @@ $('edClose').addEventListener('click',()=>{ if(editing) $('editBtn').click(); el
   try{ new ResizeObserver(padEd).observe($('editor')); }catch(e){} new MutationObserver(padEd).observe($('editor'),{attributes:true,attributeFilter:['hidden']}); }
 // ---------- undo / redo for Fix bars (CJ): every bar length, section pin and grid save can be stepped back ----------
 var undoStack=[], redoStack=[];
-function snapFix(){ return {anchors:JSON.parse(JSON.stringify(ST.anchors||{})), overrides:JSON.parse(JSON.stringify(ST.overrides||{})), barLens:{...(ST.barLens||{})}, breaks:{...(ST.breaks||{})}, barEdits:JSON.parse(JSON.stringify(ST.barEdits||[])), order:ST.order?[...ST.order]:null, al:ST.al}; }
-function undoUI(){ const u=$('edUndo'), r=$('edRedo'); if(u) u.disabled=!undoStack.length; if(r) r.disabled=!redoStack.length; }
+function snapFix(){ return {P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, shift:ST.shift, nudge:ST.nudge, cf:ST.cfSrc, anchors:JSON.parse(JSON.stringify(ST.anchors||{})), overrides:JSON.parse(JSON.stringify(ST.overrides||{})), barLens:{...(ST.barLens||{})}, breaks:{...(ST.breaks||{})}, barEdits:JSON.parse(JSON.stringify(ST.barEdits||[])), order:ST.order?[...ST.order]:null, al:ST.al}; }
+function undoUI(){ const u=$('edUndo'), r=$('edRedo'); if(u) u.disabled=!undoStack.length; if(r) r.disabled=!redoStack.length; const tu=$('tbUndo'), tr=$('tbRedo'); if(tu) tu.hidden=!undoStack.length; if(tr) tr.hidden=!redoStack.length; }
 function undoClear(){ undoStack=[]; redoStack=[]; undoUI(); }
 function pushUndo(){ undoStack.push(snapFix()); if(undoStack.length>50) undoStack.shift(); redoStack=[]; undoUI(); }
-function applySnap(x){ Object.assign(ST,{anchors:x.anchors, overrides:x.overrides, barLens:x.barLens, breaks:x.breaks||{}, barEdits:x.barEdits||[]}); setOrder(x.order); ST.al=x.al; const keep=selBar; finish(true); if(keep>=0 && !$('editor').hidden) openEditor(Math.min(keep,ST.song.bars.length-1),true); undoUI(); }
-function undoFix(){ if(!undoStack.length) return; redoStack.push(snapFix()); applySnap(undoStack.pop()); $('edLenMsg').textContent='Undid the last change.'; }
-function redoFix(){ if(!redoStack.length) return; undoStack.push(snapFix()); applySnap(redoStack.pop()); $('edLenMsg').textContent='Redid it.'; }
+function applySnap(x){ const grid=x.P!=null && (x.P!==ST.P||x.beat0!==ST.beat0||x.downPhase!==ST.downPhase||x.shift!==ST.shift);
+  if(x.P!=null) Object.assign(ST,{P:x.P, beat0:x.beat0, downPhase:x.downPhase, shift:x.shift, nudge:x.nudge||0}); if(x.cf && x.cf!==ST.cfSrc && typeof useCf==='function') useCf(x.cf);
+  Object.assign(ST,{anchors:x.anchors, overrides:x.overrides, barLens:x.barLens, breaks:x.breaks||{}, barEdits:x.barEdits||[]}); setOrder(x.order); const keep=selBar;
+  if(x.al && !grid){ ST.al=x.al; finish(true); } else realign(true); /* a step kept from before a refresh, or a different beat grid: line it up again from the fixes */ if(keep>=0 && !$('editor').hidden) openEditor(Math.min(keep,ST.song.bars.length-1),true); undoUI(); }
+function undoFix(){ if(!undoStack.length) return; redoStack.push(snapFix()); applySnap(undoStack.pop()); undoSay('Undid the last change.'); }
+function redoFix(){ if(!redoStack.length) return; undoStack.push(snapFix()); applySnap(redoStack.pop()); undoSay('Redid it.'); }
+function undoSay(t){ if(!$('editor').hidden) $('edLenMsg').textContent=t; else { $('msg').className='msg'; $('msg').textContent=t; } }
+$('tbUndo').addEventListener('click',undoFix); $('tbRedo').addEventListener('click',redoFix);
 $('edUndo').addEventListener('click',undoFix);
-$('edPlay').addEventListener('click',()=>$('play').click()); new MutationObserver(()=>{ $('edPlay').textContent=$('play').textContent; }).observe($('play'),{childList:true,characterData:true,subtree:true}); // a Play button in the editor (CJ) $('edRedo').addEventListener('click',redoFix);
-document.addEventListener('keydown',e=>{ if(!editing || !(e.metaKey||e.ctrlKey) || e.altKey) return; const t=e.target; if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&t.type!=='range') return; // text boxes keep their own undo
+$('edPlay').addEventListener('click',()=>$('play').click()); new MutationObserver(()=>{ $('edPlay').textContent=$('play').textContent; }).observe($('play'),{childList:true,characterData:true,subtree:true}); // a Play button in the editor (CJ)
+$('edRedo').addEventListener('click',redoFix);
+document.addEventListener('keydown',e=>{ if($('result').hidden || !(e.metaKey||e.ctrlKey) || e.altKey) return; // CJ: undo works after leaving Fix bars too const t=e.target; if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&t.type!=='range') return; // text boxes keep their own undo
   const k=e.key.toLowerCase(); if(k==='z'&&!e.shiftKey){ e.preventDefault(); undoFix(); } else if((k==='z'&&e.shiftKey)||k==='y'){ e.preventDefault(); redoFix(); } });
 // add / remove bars (CJ): laid over the line-up, so everything after the change moves along with its chords and sections.
 // ST.barEdits is an ordered list of {op:'ins',at,len} / {op:'del',at}, in the numbering left by the edits before it.
@@ -1257,8 +1267,8 @@ $('edSection').addEventListener('change',pinSection); // picking a section sets 
 $('edSecApply').addEventListener('click',pinSection);
 
 // beat 1 / grid / tempo
-$('dbL').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+ST.meter-1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); realign(); });
-$('dbR').addEventListener('click',()=>{ ST.downPhase=(ST.downPhase+1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear(); realign(); });
+$('dbL').addEventListener('click',()=>{ pushUndo(); ST.downPhase=(ST.downPhase+ST.meter-1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; realign(); });
+$('dbR').addEventListener('click',()=>{ pushUndo(); ST.downPhase=(ST.downPhase+1)%ST.meter; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; realign(); });
 $('keyChartSel').addEventListener('change',e=>{
   // an open grid follows the new key (CJ), unsaved grid edits included
   const open=!$('lyrGrid').hidden; let keep=null; if(open){ lgStash(); keep={}; for(const [i,[cs,ws]] of Object.entries(lgDraft)) keep[i]=[cs.map(v=>v&&isChord(v)?lgIn(v):v),ws]; }
@@ -1281,7 +1291,7 @@ $('advApply').addEventListener('click',async()=>{ const b=$('advApply'); b.disab
     await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); finish(true);
   }catch(e){ console.warn(e); $('msg').className='msg warn'; $('msg').textContent="Couldn't redo it with those settings."; }
   b.disabled=false; });
-async function retempo(f){ ST.P*=f; ST.beat0=ST.beat0%ST.P; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear();
+async function retempo(f){ pushUndo(); ST.P*=f; ST.beat0=ST.beat0%ST.P; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[];
   await fitSearch([ST.beat0,(ST.beat0+ST.P/2)%ST.P]); finish(true); }
 // ---------- keep the last song on this device, so a refresh doesn't lose it (stored only in this browser, never uploaded) ----------
 function idb(mode,fn){ return new Promise((res,rej)=>{ try{ const rq=indexedDB.open('mcb',1); rq.onupgradeneeded=()=>rq.result.createObjectStore('kv'); rq.onerror=()=>rej(rq.error);
@@ -1295,7 +1305,7 @@ const ANA_V=1; // bump when onsetEnvelope / chromaFrames / vocalOnsets / the ser
 function saveLast(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(!ST.songFile) return;
   const rec={song:ST.songFile, songName:ST.songFile.name, chartMode:ST.chartMode, chart:ST.chartMode==='pdf'?ST.chartFile:null, chartName:ST.chartFile?.name||'', chartText:ST.chartMode==='text'?$('chartText').value:'',
     bpmIn:$('bpmIn').value, meterIn:$('meterIn').value,
-    state:{P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', libId:ST.libId, libDate:ST.libDate}, savedAt:Date.now()};
+    state:{P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', libId:ST.libId, libDate:ST.libDate}, undo:undoStack.slice(-30).map(({al,...r})=>r), redo:redoStack.slice(-30).map(({al,...r})=>r), savedAt:Date.now()};
   idb('readwrite',st=>st.put(rec,'last')).catch(e=>console.warn('could not keep the song for next time',e)); },400); }
 function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
 (async()=>{ try{ const r=await idb('readonly',st=>st.get('last')); if(!r||!r.song||!(r.chart||r.chartText)) return;
@@ -1303,7 +1313,7 @@ function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
   if(r.chartMode==='text'){ ST.chartMode='text'; $('chartText').value=r.chartText; $('chartText').hidden=false; }
   else { ST.chartMode='pdf'; ST.chartFile=r.chart instanceof File?r.chart:new File([r.chart],r.chartName||'chart.pdf'); $('chartName').textContent=r.chartName||'chart'; $('dropChart').classList.add('has'); }
   if(r.bpmIn) $('bpmIn').value=r.bpmIn; if(r.meterIn) $('meterIn').value=r.meterIn;
-  ST.restore=r.state&&r.state.P>0?r.state:null; ST.restoreAt=+r.savedAt||0; ready();
+  ST.restore=r.state&&r.state.P>0?r.state:null; ST.restoreAt=+r.savedAt||0; ST.restoreUndo=[r.undo||[],r.redo||[]]; ready();
   // don't build on its own: offer it (CJ found the automatic rebuild got in the way of loading a new song)
   const nm=(r.songName||'your last song').replace(/\.[a-z0-9]+$/i,''), li=document.createElement('li'); li.className='note'; li.id='reopenNote';
   li.innerHTML='<button type="button" class="primary" id="reopenBtn"></button> or choose a different song and chart above.'; li.querySelector('#reopenBtn').textContent='Reopen '+nm;

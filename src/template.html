@@ -99,6 +99,7 @@ textarea{width:100%;box-sizing:border-box;min-height:180px;font-family:var(--f-m
 [hidden]{display:none!important}
 .msg{font-family:var(--f-ui);font-size:13px;color:var(--muted);flex-basis:100%;margin:0}
 .checks{flex-basis:100%;font-family:var(--f-ui);font-size:13px;line-height:1.5;color:var(--ink);background:color-mix(in srgb,var(--flag) 8%,var(--paper));border:1px solid color-mix(in srgb,var(--flag) 45%,var(--rule));border-radius:8px;padding:10px 12px}
+.qchord{position:absolute;z-index:9;width:7em;font-family:var(--f-chord);font-weight:700;font-size:16px;padding:3px 6px;border:2px solid var(--accent);border-radius:6px;background:var(--paper);color:var(--ink);box-shadow:0 4px 14px rgba(0,0,0,.18)} .qchord.bad{border-color:var(--flag)}
 .checks{position:relative;padding-right:40px} .checks .chkX{position:absolute;top:6px;right:6px;width:28px;height:28px;padding:0;border-radius:50%;font-size:18px;line-height:1;background:none;border:0;color:var(--muted);cursor:pointer} .checks .chkX:hover{color:var(--ink);background:color-mix(in srgb,var(--flag) 12%,transparent)}
 .checks b{color:var(--flag)} .checks a{color:inherit;text-decoration:underline;cursor:pointer} .checks .cbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .report{flex-basis:100%;display:grid;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted);max-width:640px}
@@ -249,6 +250,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="row2"><label for="edInsLen" style="flex-direction:row;align-items:center;gap:8px">Add a bar of<select id="edInsLen"></select>beats</label><button type="button" id="edInsBefore">before this bar</button><button type="button" id="edInsAfter">after this bar</button><button type="button" id="edDel">Remove this bar</button></div>
     <div class="row2"><label for="edSplitAt" style="flex-direction:row;align-items:center;gap:8px">Split this bar before beat<select id="edSplitAt"></select></label><button type="button" id="edSplit">Split</button><button type="button" id="edJoin" title="Make this bar and the next one a single bar">Join with next bar</button></div>
     <div class="row2"><label for="edSection" style="flex-direction:row;align-items:center;gap:8px">A section starts here:<select id="edSection"></select></label><button type="button" id="edSecApply" hidden>Set</button><span id="edAnchors"></span></div>
+    <div class="row2" id="edRehearRow"><label for="edRhA" style="flex-direction:row;align-items:center;gap:6px">Re-hear the chords for bars<input type="number" id="edRhA" min="1" step="1" style="width:4.5em"></label><label for="edRhB" style="flex-direction:row;align-items:center;gap:6px">to<input type="number" id="edRhB" min="1" step="1" style="width:4.5em"></label><button type="button" id="edRh" title="Listen to these bars again and pick the chart's chords that fit best. Words stay put; Undo puts the old chords back.">Re-hear</button></div>
     <div class="row2" id="edMoveRow"><span style="font-family:var(--f-ui);font-size:13px;align-self:center">Bars in the wrong section:</span><button type="button" id="edToPrev" title="This bar and the bars before it in its section become the end of the section before"></button><button type="button" id="edToNext" title="This bar and the bars after it in its section become the start of the section after"></button></div>
     <div class="row2" id="edTimeRow"><label for="edTimeSec" style="flex-direction:row;align-items:center;gap:8px"><b>Section Marker:</b><select id="edTimeSec"></select></label><label for="edTime" style="flex-direction:row;align-items:center;gap:6px">starts at<input type="text" id="edTime" inputmode="decimal" placeholder="0:21.5" style="width:6.5em" autocomplete="off" aria-describedby="edTimeHelp"></label><button type="button" id="edTimeNow" title="Use where the song is playing right now">Now</button><span style="font-family:var(--f-ui);font-size:13px">Song is at <b id="edNowT" style="font-variant-numeric:tabular-nums">0:00.0</b></span><button type="button" id="edTimeSet">Set</button><span id="edTimeHelp" style="font-size:12px;color:var(--muted)">Type a time like 0:21.5, or press Now while it plays.</span></div>
     <div class="lgrid" id="lyrGrid" hidden>
@@ -547,9 +549,17 @@ function libUI(){
 function leadT(){ if(!ST.O) return 0; const e=ST.O.env, s=[...e].sort((a,b)=>a-b), p95=s[Math.floor(s.length*0.95)]||0; let i=0; while(i<e.length&&e[i]<0.8*p95) i++; return i/ST.O.fps+ST.O.offset; }
 function leadMinT(){ const t=leadT(); return t>1.5? t-0.35*ST.P : null; }
 // try the likeliest keys x both halves of the pulse x every beat-1 position; keep the best fit
+// the recording's major key from its notes (Krumhansl profile); margin = how far ahead of the next-best key it is
+function noteKey(S){ const maj=[6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88], prof=new Array(12).fill(0);
+  for(let i=0;i<S.n;i++) for(let k=0;k<12;k++) prof[k]+=S.C[i*12+k];
+  const corr=(a,b)=>{ const ma=a.reduce((x,y)=>x+y)/12, mb=b.reduce((x,y)=>x+y)/12; let n=0,da=0,db=0; for(let k=0;k<12;k++){ n+=(a[k]-ma)*(b[k]-mb); da+=(a[k]-ma)**2; db+=(b[k]-mb)**2; } return n/(Math.sqrt(da*db)||1); };
+  const sc=[]; for(let t=0;t<12;t++) sc.push([t,corr(prof,maj.map((_,k)=>maj[(k-t+12)%12]))]); sc.sort((a,b)=>b[1]-a[1]);
+  return prof.some(x=>x>0)?{pc:sc[0][0], margin:sc[0][1]-sc[1][1]}:null; }
 async function fitSearch(b0s){
   const S1=beatSegments(ST.Cf,ST.P,b0s[0],ST.audio.duration);
-  const ks=keyShifts(S1,ST.events), shifts=ks.slice(0,3).filter(x=>x[1]>=ks[0][1]-0.2).map(x=>x[0]); // a key that fits the recording's notes much worse isn't tried (I Believe matched a 4th away)
+  const ks=keyShifts(S1,ST.events); let shifts=ks.slice(0,3).filter(x=>x[1]>=ks[0][1]-0.2).map(x=>x[0]); // a key that fits the recording's notes much worse isn't tried (I Believe matched a 4th away)
+  { const k=noteKey(S1), m=(ST.meta?.key||'').match(/^([A-G][b#]?)(m?)$/); // CJ (I Believe): when the recording's key is clear, trust it over the line-up score
+    if(k && m && !m[2] && k.margin>=0.15){ const sh=((k.pc-PC[m[1]])%12+12)%12; if(shifts.includes(sh)||ks.findIndex(x=>x[0]===sh)<5) shifts=[sh]; } }
   let best=null;
   for(const sh of shifts) for(const b0 of b0s){
     const S0=beatSegments(ST.Cf,ST.P,b0,ST.audio.duration);
@@ -658,7 +668,8 @@ function render(forcePer){
           lh+=`<span style="min-width:calc(100% * ${span} / ${M})">${lyB[q].join(' ')}</span>`; q+=span; }
         h+=`<div class="lyr">${lh}</div>`; }
       m.innerHTML=h+'</div>';
-      m.addEventListener('click',()=>onBar(i)); m.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); onBar(i);} });
+      m.addEventListener('click',e=>{ if(!editing && !playing && e.target.closest('.c1')){ clearTimeout(qcT); qcT=setTimeout(()=>onBar(i),280); return; } onBar(i); });
+      m.addEventListener('dblclick',e=>{ const c=e.target.closest('.c1'); if(!c||editing||playing) return; clearTimeout(qcT); e.preventDefault(); quickChord(i,+c.dataset.k,c); }); m.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); onBar(i);} });
       row.appendChild(m); measEls.push(m);
     }
     { const used=idxs.reduce((a,i)=>a+bLen(i)/ST.meter,0); if(used<perLine-1e-6){ const sp=document.createElement('div'); sp.className='spacer'; sp.style.flex=`0 0 calc(100% / var(--per,8) * ${perLine-used})`; row.appendChild(sp); } }
@@ -1009,6 +1020,18 @@ $('lgSave').addEventListener('click',()=>{
 // ---------- fixing ----------
 let editing=false, selBar=-1;
 $('editBtn').addEventListener('click',()=>{ editing=!editing; $('editBtn').setAttribute('aria-pressed',editing); $('editBtn').classList.toggle('primary',editing); $('editBtn').textContent=editing?'Done fixing':'Fix bars'; if(editing) openEditor(Math.max(0,Math.min(ST.song.bars.length-1,selBar>=0?selBar:barAt(songTime())))); else closeEditor(); });
+// CJ: while paused, double-click a chord to change it right there (no Fix bars panel). Enter saves, Esc cancels, empty removes it
+let qcT=null;
+function quickChord(i,k,el){ const b=ST.song.bars[i], ch=b?.chords[k]; if(!ch) return; document.querySelector('.qchord')?.remove();
+  const r=el.getBoundingClientRect(), inp=document.createElement('input'); inp.type='text'; inp.className='qchord'; inp.value=lgOut(ch[1]); inp.setAttribute('aria-label',`Chord in bar ${i+1}`); inp.autocomplete='off'; inp.spellcheck=false;
+  Object.assign(inp.style,{left:(r.left+window.scrollX-4)+'px', top:(r.top+window.scrollY-4)+'px'}); document.body.appendChild(inp); inp.focus(); inp.select();
+  let done=false; const close=()=>{ done=true; inp.remove(); };
+  const save=()=>{ if(done) return; const v=inp.value.trim(); if(v && !isChord(v)){ inp.classList.add('bad'); inp.title='Type a chord like C, F#m7 or Bb/D'; return; }
+    close(); if(v===lgOut(ch[1])) return; pushUndo(); ST.overrides={...ST.overrides}; const cs=b.chords.map(c=>[...c]); if(v) cs[k][1]=lgIn(v); else cs.splice(k,1);
+    ST.overrides[i]={...(ST.overrides[i]||{}), chords:cs, lyrics:(ST.overrides[i]?.lyrics||b.lyrics)}; b.chords=cs; render(); sectionCheck(); update(true,true); saveLast();
+    $('msg').className='msg'; $('msg').textContent=v?`Bar ${i+1}: changed to ${v}. Press ⌘Z / Ctrl+Z in Fix bars to undo.`:`Bar ${i+1}: chord removed.`; };
+  inp.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ e.preventDefault(); save(); } else if(e.key==='Escape'){ e.preventDefault(); close(); } });
+  inp.addEventListener('blur',()=>{ if(!done) save(); if(!done) close(); }); }
 function onBar(i){ if(editing){ openEditor(i,true); cueBar(i); } else if(playing && i===barAt(songTime())) pause(); else seekBar(i); } // clicking the bar that's playing stops it (CJ)
 // while fixing, a click only moves the play position to that bar (no auto-play, CJ): Space or Play then plays from there
 function cueBar(i){ if(playing) pause(); pausedAt=Math.max(0,bT(i)-0.05); update(true,true); }
@@ -1030,7 +1053,7 @@ function openEditor(i,noFocus){
   const opts=['<option value="">(no change)</option>']; const seen=new Set();
   ST.events.forEach((e,j)=>{ const bi=ST.order?ST.order[e.sec]:e.sec, base=ST.base||ST.sections; if(e.k===0 && e.pass===0 && !seen.has(bi)){ seen.add(bi); opts.push(`<option value="${j}">${esc(e.label)}${base.filter(s=>s.label===e.label).length>1?' '+(base.slice(0,bi+1).filter(s=>s.label===e.label).length):''}</option>`); } });
   $('edSection').innerHTML=opts.join(''); { const v=$('edTimeSec').value; $('edTimeSec').innerHTML=opts.join('').replace('(no change)','(pick a section)'); $('edTimeSec').value=v; }
-  moveUI(i);
+  moveUI(i); if(document.activeElement!==$('edRhA')&&document.activeElement!==$('edRhB')){ $('edRhA').value=i+1; $('edRhB').value=Math.min(ST.song.bars.length,i+4); }
   const n=Object.keys(ST.anchors).length; $('edAnchors').textContent=n?`${n} section start${n>1?'s':''} pinned`:'';
   $('editor').hidden=false; lgShow(true,noFocus);
 }
@@ -1041,9 +1064,15 @@ function moveUI(i){ const b=ST.song.bars, {st,nx,pv}=secBounds(i), r=(a,z)=>a===
   const okP=!!b[st]?.section && pv>=0; P.hidden=!okP; if(okP) P.textContent=`Give ${r(st,i)} to ${b[pv].section}`;
   const okN=nx<b.length && i>st; N.hidden=!okN; if(okN) N.textContent=`Give ${r(i,nx-1)} to ${b[nx].section}`;
   $('edMoveRow').hidden=!okP&&!okN; }
-$('edToPrev').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {st,pv}=secBounds(i), b=ST.song.bars, to=b[pv]?.section, nm=b[st].section, n=i-st+1; const all=i+1>=secBounds(i).nx; if(all) barEdit('nosec',st); else barEdit('sec',i+1,st); openEditor(i,true);
-  $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${to}`+(all?`, so that ${nm} is gone and ${to} now runs through bar ${i+1}.`:`; ${nm} now starts at bar ${i+2}.`)+' No chords moved.'; });
-$('edToNext').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {nx}=secBounds(i), b=ST.song.bars, nm=b[nx].section, n=nx-i; barEdit('sec',i,nx); $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${nm}; it now starts at bar ${i+1}. No chords moved.`; });
+$('edToPrev').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {st,pv}=secBounds(i), b=ST.song.bars, to=b[pv]?.section, nm=b[st].section, n=i-st+1; const all=i+1>=secBounds(i).nx; if(all) barEdit('nosec',st); else barEdit('sec',i+1,st); const cl=clearWords(to,st,i); openEditor(i,true);
+  $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${to}`+(all?`, so that ${nm} is gone and ${to} now runs through bar ${i+1}.`:`; ${nm} now starts at bar ${i+2}.`)+' No chords moved.'+(cl?` ${to} has no words, so the words in those bars were taken out.`:''); });
+// CJ (Praise 78-81): bars given to a section with no words (an Instrumental) lose the words they had
+function chartWords(label){ let best=null; for(const e of ST.events){ const l=e.label||''; if(label===l || (label.startsWith(l) && (!best || l.length>best.length))) best=l; }
+  return best==null ? true : ST.events.some(e=>e.label===best && e.lines.some(l=>!l.pickup && l.length)); }
+function clearWords(label,a,z){ const bars=ST.song.bars; if(chartWords(label)) return false; let n=0; ST.overrides={...ST.overrides};
+  for(let k=a;k<=z;k++){ if(!bars[k]?.lyrics?.length) continue; ST.overrides[k]={...(ST.overrides[k]||{}), chords:(ST.overrides[k]?.chords||bars[k].chords.map(c=>[...c])), lyrics:[]}; n++; }
+  if(n){ finish(true); saveLast(); } return n>0; }
+$('edToNext').addEventListener('click',()=>{ const i=selBar; if(i<0) return; const {nx}=secBounds(i), b=ST.song.bars, nm=b[nx].section, n=nx-i; barEdit('sec',i,nx); const cl=clearWords(nm,i,nx-1); $('edLenMsg').textContent=`${n} bar${n>1?'s':''} moved into ${nm}; it now starts at bar ${i+1}. No chords moved.`+(cl?` ${nm} has no words, so the words in those bars were taken out.`:''); });
 // CJ: save space while fixing: fold the tools or the grid away (remembered), and tuck the mixer up while Fix bars is open
 { const get=k=>{ try{ return localStorage.getItem(k)==='1'; }catch(e){ return false; } }, put=(k,v)=>{ try{ localStorage.setItem(k,v?'1':'0'); }catch(e){} };
   const setMin=v=>{ $('editor').classList.toggle('min',v); $('edMin').textContent=v?'Show tools':'Hide tools'; $('edMin').setAttribute('aria-expanded',String(!v)); put('mcb-edmin',v); };
@@ -1055,6 +1084,32 @@ let mixWas=null;
 new MutationObserver(()=>{ const open=!$('editor').hidden;
   if(open && mixWas===null){ mixWas=!$('mixer').hidden; if(mixWas) $('mixBtn').click(); }
   else if(!open && mixWas!==null){ if(mixWas && $('mixer').hidden) $('mixBtn').click(); mixWas=null; } }).observe($('editor'),{attributes:true,attributeFilter:['hidden']});
+// CJ: "re-evaluate the chords for bars 70-81": listen to those bars again and choose, from the chart's own chords, the ones that fit,
+// changing only on beat 1 or the middle of the bar (6/8: beat 1 or 4). Words and bar lines stay; it's one Undo.
+function rehearChords(a,z){ const bars=ST.song.bars, Cf=ST.Cf, P=ST.song.beat, sh=ST.shift||0; if(!Cf||!bars.length) return 0;
+  a=Math.max(0,Math.min(bars.length-1,a)); z=Math.max(a,Math.min(bars.length-1,z));
+  const names=[...new Set(ST.events.map(e=>e.chord).filter(c=>c&&!/^N\.?C/i.test(c)))], tps=names.map(n=>chordTemplate(n)).filter(Boolean), cand=names.filter(n=>chordTemplate(n));
+  const vec=(t0,t1)=>{ const c=new Float64Array(12), b=new Float64Array(12); const f0=Math.max(0,Math.floor((t0-Cf.offset)*Cf.fps)), f1=Math.min(Cf.frames,Math.max(f0+1,Math.floor((t1-Cf.offset)*Cf.fps)));
+    for(let f=f0;f<f1;f++) for(let k=0;k<12;k++){ c[k]+=Cf.C[f*12+k]; b[k]+=Cf.B[f*12+k]; }
+    const nc=Math.hypot(...c)||1, nb=Math.max(...b)||1; return {c:c.map(x=>x/nc), b:b.map(x=>x/nb)}; };
+  const fit=(tp,v)=>{ let d=0, n=0; for(let k=0;k<12;k++){ d+=tp.t[k]*v.c[(k+sh)%12]; n+=tp.t[k]*tp.t[k]; } return d/(Math.sqrt(n)||1)+0.35*v.b[(tp.bass+sh)%12]; };
+  const slots=[]; // [bar, beat (1-based), start, end]
+  for(let i=a;i<=z;i++){ const L=bLen(i), half=ST.compound?3:(L>=4&&L%2===0?L/2:L), t=bT(i); for(let x=0;x<L-1e-6;x+=half) slots.push([i,1+x,t+x*P,t+Math.min(L,x+half)*P]); }
+  const S=slots.map(s=>{ const v=vec(s[2],s[3]); return tps.map(tp=>fit(tp,v)); });
+  const prev=a>0?bars[a-1].chords.at(-1)?.[1]:null; // keep going from the chord before, when that fits
+  const N=cand.length, dp=S.map(()=>new Float64Array(N)), bp=S.map(()=>new Int16Array(N));
+  for(let s=0;s<S.length;s++) for(let c=0;c<N;c++){ const cost=slots[s][1]===1?0.08:0.16;
+    if(!s){ dp[s][c]=S[s][c]-(prev&&cand[c]!==prev?cost:0); continue; }
+    let best=-1e9,bi=0; for(let q=0;q<N;q++){ const v=dp[s-1][q]-(q===c?0:cost); if(v>best){ best=v; bi=q; } } dp[s][c]=best+S[s][c]; bp[s][c]=bi; }
+  let c=0; for(let q=1;q<N;q++) if(dp[S.length-1][q]>dp[S.length-1][c]) c=q; const pick=new Array(S.length);
+  for(let s=S.length-1;s>=0;s--){ pick[s]=c; c=bp[s][c]; }
+  pushUndo(); ST.overrides={...ST.overrides}; const out={};
+  slots.forEach((sl,k)=>{ const i=sl[0], nm=cand[pick[k]]; (out[i]=out[i]||[]); if(!out[i].length||out[i].at(-1)[1]!==nm) out[i].push([sl[1],nm]); });
+  for(const [i,cs] of Object.entries(out)){ ST.overrides[i]={...(ST.overrides[i]||{}), chords:cs, lyrics:(ST.overrides[i]?.lyrics||bars[i].lyrics)}; }
+  return z-a+1; }
+$('edRh').addEventListener('click',()=>{ const a=(+$('edRhA').value||1)-1, z=(+$('edRhB').value||a+1)-1; if(z<a){ $('edLenMsg').textContent='The second bar number needs to be the same or later.'; return; }
+  const keep=selBar, n=rehearChords(a,z); finish(true); if(keep>=0) openEditor(keep,true); saveLast();
+  $('edLenMsg').textContent=n?`Listened to bar${n>1?'s':''} ${a+1}${n>1?'–'+(z+1):''} again and put in the chart's chords that fit best. Words didn't move. Undo puts the old chords back.`:'Nothing to listen to.'; });
 function closeEditor(){ lgShow(false); $('editor').hidden=true; document.querySelectorAll('.measure.sel').forEach(e=>e.classList.remove('sel')); selBar=-1; }
 $('edClose').addEventListener('click',()=>{ if(editing) $('editBtn').click(); else closeEditor(); }); // leaves Fix bars altogether (CJ)
 // the panel covers the bottom of the page, so pad the page by its height: every bar can still be scrolled into view (CJ: stuck at bar 81)

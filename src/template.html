@@ -474,7 +474,7 @@ async function build(){
     s.done(`Tempo: ${(60/G.P).toFixed(1)} BPM`);
     s=step('Lining the chart up with the song');
     await new Promise(r=>setTimeout(r,20));
-    await fitSearch([G.beat0%G.P, (G.beat0+G.P/2)%G.P]); chk(); building=false;
+    ST.halved=false; await fitSearch([G.beat0%G.P, (G.beat0+G.P/2)%G.P]); chk(); await halveIfDouble(); chk(); building=false;
     ST.showRec=false;
     s.done('Chart lined up'+(ST.shift?` (recording is in ${recKey()}, chart is in ${ST.meta.key||'another key'})`:''));
     finish();
@@ -557,7 +557,7 @@ async function freshStart(){ pushUndo(); // CJ: Start fresh can be undone too
   if(!ST.O) ST.O=await onsetEnvelope(ST.mono,22050,()=>{});
   const h0=+$('bpmIn').value||ST.meta.bpm||0; const G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,h0,ST.meter):h0);
   ST.P=G.P; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; setOrder(null); ST.libDate=null; useCf('srv'); // starting fresh uses the server's chord reading when there is one
-  await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); $('libFresh').disabled=false; finish(true); saveLast();
+  ST.halved=false; await fitSearch([G.beat0%G.P,(G.beat0+G.P/2)%G.P]); await halveIfDouble(); $('libFresh').disabled=false; finish(true); saveLast();
 }
 $('libFresh').addEventListener('click',freshStart);
 // CJ: songs fixed in the Claude version live in that version's own library; this brings them into the site's library (editor key only)
@@ -583,11 +583,27 @@ function noteKey(S){ const maj=[6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.6
   const corr=(a,b)=>{ const ma=a.reduce((x,y)=>x+y)/12, mb=b.reduce((x,y)=>x+y)/12; let n=0,da=0,db=0; for(let k=0;k<12;k++){ n+=(a[k]-ma)*(b[k]-mb); da+=(a[k]-ma)**2; db+=(b[k]-mb)**2; } return n/(Math.sqrt(da*db)||1); };
   const sc=[]; for(let t=0;t<12;t++) sc.push([t,corr(prof,maj.map((_,k)=>maj[(k-t+12)%12]))]); sc.sort((a,b)=>b[1]-a[1]);
   return prof.some(x=>x>0)?{pc:sc[0][0], margin:sc[0][1]-sc[1][1]}:null; }
+/* CJ (In Christ Alone: chart says 136 BPM in 3/4, the song's beat is 68). When a 3/4 song is counted twice too fast, the chords change on every other bar line,
+   so one bar-line parity gets far more changes than the other. Then the tempo is halved and the chart lined up again. Only for 3/4: 4/4 songs often hold chords for 2 bars. */
+async function halveIfDouble(){
+  if(ST.compound || ST.meter!==3 || +$('bpmIn').value || !ST.al?.path) return false;
+  const cnt=[0,0]; let prev=null;
+  for(const p of ST.al.path){ const c=ST.events[p.j]?.chord; if(!c||c===prev){ prev=c||prev; continue; } prev=c; const x=p.start-ST.downPhase; if(Math.abs(x-Math.round(x/3)*3)<1e-6) cnt[((Math.round(x/3))%2+2)%2]++; }
+  const hi=Math.max(...cnt), lo=Math.min(...cnt); if(hi+lo<30 || hi<1.6*Math.max(lo,1)) return false;
+  const P1=ST.P, b0=ST.beat0; ST.P=P1*2; await fitSearch([b0%ST.P,(b0+P1)%ST.P]); ST.halved=true; return true;
+}
 async function fitSearch(b0s){
   const S1=beatSegments(ST.Cf,ST.P,b0s[0],ST.audio.duration);
   const ks=keyShifts(S1,ST.events); let shifts=ks.slice(0,3).filter(x=>x[1]>=ks[0][1]-0.2).map(x=>x[0]); // a key that fits the recording's notes much worse isn't tried (I Believe matched a 4th away)
   { const k=noteKey(S1), m=(ST.meta?.key||'').match(/^([A-G][b#]?)(m?)$/); // CJ (I Believe): when the recording's key is clear, trust it over the line-up score
-    if(k && m && !m[2] && k.margin>=0.15){ const sh=((k.pc-PC[m[1]])%12+12)%12; if(shifts.includes(sh)||ks.findIndex(x=>x[0]===sh)<5) shifts=[sh]; } }
+    if(k && m && !m[2] && k.margin>=0.15){ const sh=((k.pc-PC[m[1]])%12+12)%12; if(shifts.includes(sh)||ks.findIndex(x=>x[0]===sh)<5) shifts=[sh]; }
+    /* CJ (In Christ Alone: chart in E, recording in F, but it was read in C). Two keys a 4th apart share six notes and line up almost equally well.
+       The note they don't share decides (C has B, F has Bb). Each note's count is reduced by the overtone of the note a 5th below it, which otherwise leans
+       every reading toward the key a 5th up. Checked on 12 songs: this picks the right key in all of them. */
+    else if(m && !m[2] && ks.length>1 && [5,7].includes(((ks[1][0]-ks[0][0])%12+12)%12)){ const prof=new Array(12).fill(0); for(let i=0;i<S1.n;i++) for(let q=0;q<12;q++) prof[q]+=S1.C[i*12+q];
+      const up=((ks[1][0]-ks[0][0])%12+12)%12===5, lo=up?ks[0][0]:ks[1][0], hi=up?ks[1][0]:ks[0][0], t=(PC[m[1]]+lo)%12, cl=q=>prof[q]-0.4*prof[(q+5)%12];
+      const lead=cl((t+11)%12), fourth=cl((t+10)%12); if(fourth>lead*1.1) shifts=[hi]; else if(lead>fourth*1.1) shifts=[lo]; }
+  }
   let best=null;
   for(const sh of shifts) for(const b0 of b0s){
     const S0=beatSegments(ST.Cf,ST.P,b0,ST.audio.duration);
@@ -654,7 +670,8 @@ function finish(keep){
   $('editBtn').parentElement.hidden=!CAN_FIX;
   $('msg').className='msg'; $('msg').textContent=CAN_FIX?'Check where each section starts. To fix one, click "Fix bars", click the bar where it really starts, and set it there.':'';
   const near=x=>Math.abs(got-x)/x<=0.04;
-  if(chartBpm && !(near(chartBpm) || (ST.compound && (near(chartBpm*2)||near(chartBpm*3))))){ $('msg').className='msg warn'; $('msg').textContent=`The chart says ${chartBpm} BPM but the recording sounds like ${got.toFixed(1)}. If the chart looks rushed or dragged, open Advanced and try ½× or 2×, or type the tempo.`; }
+  if(ST.halved && chartBpm && near(chartBpm/2)){ $('msg').className='msg'; $('msg').textContent=`The chart says ${chartBpm} BPM; the chords move like a 3/4 song at ${got.toFixed(0)}, so the click is set to ${got.toFixed(0)}. If that's wrong, open Advanced and press 2×.`; }
+  else if(chartBpm && !(near(chartBpm) || (ST.compound && (near(chartBpm*2)||near(chartBpm*3))))){ $('msg').className='msg warn'; $('msg').textContent=`The chart says ${chartBpm} BPM but the recording sounds like ${got.toFixed(1)}. If the chart looks rushed or dragged, open Advanced and try ½× or 2×, or type the tempo.`; }
   libUI(); render(); sectionCheck(); makeClick(); if(!keep){ setupPlayer(); startStems(); } else { update(true); }
 }
 

@@ -283,7 +283,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
       const P=pre[j], dm=Math.min(D,b);
       for(let q=0;q<Q;q++){
         let best=NEG,bd=0,bf=-1,bq=0;
-        for(let d=opt.compound?minD[j]:Math.min(minD[j],Math.max(sub,minS[j]));d<=dm;d++){ const a=b-d, ia=at(j,a,q), pv=arrV[ia]; if(pv<=NEG/2) continue; const sh1=d<minD[j]&&d*Pb/sub<(opt.minSec??0.78)&&!(d===sub&&pos(a,(q/Q0)|0)===(meterBeats-1)*sub)?(opt.short1??0.3):0; /* a one-beat chord is allowed but costs extra, except a passing chord on beat 4 (CJ); only at quicker tempos: Goodbye Yesterday (75 BPM) really does change every beat */
+        for(let d=opt.compound?minD[j]:Math.min(minD[j],Math.max(sub,minS[j]));d<=dm;d++){ const a=b-d, ia=at(j,a,q), pv=arrV[ia]; if(pv<=NEG/2) continue; const sh1=d<minD[j]&&(meterBeats===3||d*Pb/sub<(opt.minSec??0.78))&&!(d===sub&&pos(a,(q/Q0)|0)===(meterBeats-1)*sub)?(opt.short1??0.3):0; /* a one-beat chord is allowed but costs extra, except a passing chord on beat 4 (CJ); only at quicker tempos: Goodbye Yesterday (75 BPM) really does change every beat */
           const v=pv-sh1+(P[b]-P[a])+(afterQuick[j]?0:startBonus(a,(q/Q0)|0))+(quick[j]?0:durBonus(d))+(bare[j]?barFit(d,bare[j]):0)-(d>maxNat[j]?(quick[j]?0.15:STR)*(d-maxNat[j]):0)-(REF&&REF[j]>0?DEV*Math.max(0,Math.abs(d-REF[j]*sub)-sub):0); if(v>best){best=v;bd=d;bf=arrF[ia];bq=arrQ[ia];} }
         const io=at(j,b,q); dp[io]=best; bpD[io]=bd; bpP[io]=bf; bpQ[io]=bq;
       }

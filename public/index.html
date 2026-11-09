@@ -1467,11 +1467,12 @@ function buildSecNav(){ const nav=$('secNav'); if(!nav) return; secSp=ST.song?se
    it goes in at the chosen bar, everything before stays put, and the rest of the song is lined up again after it (same as Fix bars > section start). */
 function openSecAdd(){ const box=$('secAdd'); if(!box.hidden){ box.hidden=true; return; }
   const opts=[], seen=new Set(), base=ST.base||ST.sections; ST.events.forEach((e,j)=>{ const bi=ST.order?ST.order[e.sec]:e.sec; if(e.k===0&&e.pass===0&&!seen.has(bi)){ seen.add(bi); const n=base.filter(s=>s.label===e.label).length>1?' '+base.slice(0,bi+1).filter(s=>s.label===e.label).length:''; opts.push(`<option value="${j}">${esc(e.label+n)}</option>`); } });
-  $('saSec').innerHTML=opts.join(''); const nb=ST.song.bars.length, cur=Math.max(0,Math.min(nb-1,barAt(songTime()+userSync/1000)));
+  $('saSec').innerHTML=opts.join('')+'<option value="end">End (runs to the end of the song)</option>'; const nb=ST.song.bars.length, cur=Math.max(0,Math.min(nb-1,barAt(songTime()+userSync/1000)));
   $('saBar').max=nb; $('saBar').value=cur+1; $('saMsg').textContent=''; box.hidden=false; $('saSec').focus(); }
 $('saX').addEventListener('click',()=>{ $('secAdd').hidden=true; });
 $('saGo').addEventListener('click',()=>{ const j=+$('saSec').value, nb=ST.song.bars.length, bar=Math.round(+$('saBar').value);
   if(!(bar>=1&&bar<=nb)){ $('saMsg').textContent=`Pick a bar from 1 to ${nb}.`; return; }
+  if($('saSec').value==='end'){ if(playing) pause(); barEdit('lab',bar-1,'End'); $('edLenMsg').textContent=`The End now starts at bar ${bar} and runs to the end of the song. No chords moved.`; $('secAdd').hidden=true; buildSecNav(); return; }
   const nm=$('saSec').selectedOptions[0]?.textContent||ST.events[j].label; if(playing) pause(); selBar=bar-1;
   if(!newPass(j,nm)){ $('saMsg').textContent=`${nm} doesn't fit at bar ${bar}, so nothing was changed. Try the bar where a section starts, or a later bar.`; return; }
   $('secAdd').hidden=true; buildSecNav(); });
@@ -1725,7 +1726,7 @@ function openEditor(i,noFocus){
   { const L=bLen(i); $('edSplitAt').innerHTML=Array.from({length:Math.max(0,Math.ceil(L)-1)},(_,k)=>k+2).map(n=>`<option value="${n}"${n===Math.floor(L/2)+1?' selected':''}>${n}</option>`).join(''); $('edSplit').disabled=L<2; $('edJoin').disabled=i>=ST.song.bars.length-1; }
   const opts=['<option value="">(no change)</option>']; const seen=new Set();
   ST.events.forEach((e,j)=>{ const bi=ST.order?ST.order[e.sec]:e.sec, base=ST.base||ST.sections; if(e.k===0 && e.pass===0 && !seen.has(bi)){ seen.add(bi); opts.push(`<option value="${j}">${esc(e.label)}${base.filter(s=>s.label===e.label).length>1?' '+(base.slice(0,bi+1).filter(s=>s.label===e.label).length):''}</option>`); } });
-  $('edSection').innerHTML=opts.join(''); { const v=$('edTimeSec').value; $('edTimeSec').innerHTML=opts.join('').replace('(no change)','(pick a section)'); $('edTimeSec').value=v; }
+  $('edSection').innerHTML=opts.join('')+'<option value="end">End (runs to the end)</option>'; { const v=$('edTimeSec').value; $('edTimeSec').innerHTML=opts.join('').replace('(no change)','(pick a section)'); $('edTimeSec').value=v; }
   moveUI(i); if(document.activeElement!==$('edRhA')&&document.activeElement!==$('edRhB')){ $('edRhA').value=i+1; $('edRhB').value=Math.min(ST.song.bars.length,i+4); }
   const n=Object.keys(ST.anchors).length; $('edAnchors').textContent=n?`${n} section start${n>1?'s':''} pinned`:'';
   $('editor').hidden=false; lgShow(true,noFocus);
@@ -1822,6 +1823,7 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
       for(let k=at;k<grid.length;k++) grid[k].s+=e.len; grid.splice(at,0,{s:s0,len:e.len,ins:ei}); }
     else if(e.op==='split'){ const g=grid[e.at], b=e.len-1; if(!g||b<=0||b>=g.len) return; grid.splice(e.at+1,0,{s:g.s+b,len:g.len-b}); g.len=b; } // CJ: a new bar line inside this bar; nothing else moves
     else if(e.op==='nosec'){ const f=grid[e.at]; if(!f) return; for(let k=items.length-1;k>=0;k--){ const it=items[k]; if(it.t==='s' && it.x>=f.s-1e-6 && it.x<f.s+f.len-1e-6) items.splice(k,1); } } // CJ (Praise): a whole section's bars go to the one before, so its name goes away
+    else if(e.op==='lab'){ const f=grid[e.at]; if(!f) return; for(let k=items.length-1;k>=0;k--){ const it=items[k]; if(it.t==='s' && it.x>=f.s-1e-6) items.splice(k,1); } items.push({x:f.s,t:'s',v:e.name||'End'}); } // CJ: mark the End (not in the chart): it runs to the end of the song; chords and words stay put
     else if(e.op==='sec'){ const f=grid[e.from], t=grid[e.at]; if(!f||!t) return; for(const it of items) if(it.t==='s' && it.x>=f.s-1e-6 && it.x<f.s+f.len-1e-6) it.x=t.s; } // move a section name only (CJ): no chord moves
     else if(e.op==='len'){ // CJ: set this bar's beats; the beats left over (or borrowed) belong to the next bar, and bar lines settle back at the next short bar
       const at=e.at; if(at<0||at>=grid.length) return; const was=new Map(grid.slice(at).map(g=>[g,{s:g.s,len:g.len}])), g0=grid[at];
@@ -1844,8 +1846,8 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
   bars.splice(0,bars.length,...nb);
 }
 function shiftKeys(obj,at,d){ const o={}; for(const [k,v] of Object.entries(obj||{})){ const n=+k; if(d<0&&n===at) continue; o[n>=at+(d<0?1:0)?n+d:n]=v; } return o; }
-function barEdit(op,at,len){ pushUndo(); ST.barEdits=[...(ST.barEdits||[]), op==='ins'||op==='len'||op==='split'?{op,at,len}:op==='sec'?{op,at,from:len}:{op,at}];
-  if(op==='len'||op==='sec'||op==='nosec'){ finish(true); openEditor(at,true); saveLast(); return; }
+function barEdit(op,at,len){ pushUndo(); ST.barEdits=[...(ST.barEdits||[]), op==='ins'||op==='len'||op==='split'?{op,at,len}:op==='sec'?{op,at,from:len}:op==='lab'?{op,at,name:len}:{op,at}];
+  if(op==='len'||op==='sec'||op==='nosec'||op==='lab'){ finish(true); openEditor(at,true); saveLast(); return; }
   if(op==='split'){ ST.overrides=shiftKeys(ST.overrides,at+1,1); ST.breaks=shiftKeys(ST.breaks,at+1,1); const an={}; for(const [j,bar] of Object.entries(ST.anchors||{})){ const i=bar-1; an[j]=(i>at?i+1:i)+1; } ST.anchors=an; finish(true); openEditor(at,true); saveLast(); return; }
   const d=op==='ins'?1:-1; ST.overrides=shiftKeys(ST.overrides,at,d); ST.breaks=shiftKeys(ST.breaks,at,d);
   const an={}; for(const [j,bar] of Object.entries(ST.anchors||{})){ const i=bar-1; if(d<0&&i===at) continue; an[j]=(i>=at+(d<0?1:0)?i+d:i)+1; } ST.anchors=an;
@@ -1905,7 +1907,8 @@ function newPass(j,nm,before){
   return true;
 }
 function pinSection(){
-  const j=$('edSection').value; if(j===''||selBar<0) return; const nm=$('edSection').selectedOptions[0]?.textContent||ST.events[j].label;
+  const j=$('edSection').value; if(j===''||selBar<0) return;
+  if(j==='end'){ const at=selBar; barEdit('lab',at,'End'); $('edSection').value=''; $('edLenMsg').textContent=`The End now starts at bar ${at+1} and runs to the end of the song. No chords moved.`; buildSecNav(); return; } const nm=$('edSection').selectedOptions[0]?.textContent||ST.events[j].label;
   // the section is already on a bar close by: just move its name here, and leave every chord and the line-up alone (CJ)
   { const lab=ST.events[j]?.label||nm, norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]/g,''); let from=-1;
     for(let d=1; d<=8 && from<0; d++) for(const k of [selBar+d, selBar-d]){ const b=ST.song.bars[k]; if(b && b.section && (norm(b.section)===norm(nm) || norm(b.section).startsWith(norm(lab)))){ from=k; break; } }

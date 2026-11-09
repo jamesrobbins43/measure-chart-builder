@@ -569,7 +569,7 @@ $('libImportFile').addEventListener('change',async()=>{ const f=$('libImportFile
   $('libMsg').textContent=`Imported ${ok} of ${docs.length} song${docs.length===1?'':'s'}: ${docs.map(d=>d.title||'untitled').join(', ')}. Load a song again to use its fixes.`; });
 function libUI(){
   $('libGroup').hidden=!DB || !showChecks(); // members don't see the library at all (CJ) $('libSave').hidden=!!DB && DB.canSave===false;
-  $('libImport').hidden=!(DB && DB.site && DB.canSave); $('libFresh').hidden=!ST.libDate; $('libDel').hidden=!(ST.libId && DB && DB.canSave!==false);
+  $('libImport').hidden=!(DB && DB.site && DB.canSave); $('libFresh').hidden=false; /* CJ: Start fresh is always there, not only for library songs */ $('libDel').hidden=!(ST.libId && DB && DB.canSave!==false);
   const dg=ST.libDiag, why=!dg?'':dg.err?` (Couldn't reach the library: ${dg.err}.)`:dg.n?` (Not matched: checked ${dg.n} saved song${dg.n===1?'':'s'} of this length, closest ${Math.round(dg.top*100)}%; it needs 90%.)`:' (No saved songs of this length.)';
   $('libMsg').textContent=ST.libDate?`Using fixes saved ${new Date(ST.libDate).toLocaleDateString()}${ST.libSame===false?' (timing only: this PDF is different from the one saved)':''}.`:(why&&DB&&DB.canSave!==false)?'Not in the library yet.'+why:(DB&&DB.canSave===false?'':'Save once the bars look right, so this song lines up on its own next time.');
 }
@@ -1373,9 +1373,7 @@ function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
   const nm=(r.songName||'your last song').replace(/\.[a-z0-9]+$/i,''), li=document.createElement('li'); li.className='note'; li.id='reopenNote';
   li.innerHTML='<button type="button" class="primary" id="reopenBtn"></button> or choose a different song and chart above.'; li.querySelector('#reopenBtn').textContent='Reopen '+nm;
   steps.innerHTML=''; steps.appendChild(li); li.querySelector('#reopenBtn').addEventListener('click',build);
-  // CJ: a refresh while a chart is open goes straight back to that chart; a fresh visit still asks
-  let wasOpen=false; try{ wasOpen=sessionStorage.getItem('mcb-open')==='1'; }catch(e){}
-  if(wasOpen){ li.innerHTML='Reopening '+esc(nm)+'…'; build(); }
+  // CJ (Nov 9): a refresh never starts working on its own; the song and chart wait, ticked, until Reopen or Build chart is pressed
 }catch(e){ /* storage blocked: start fresh */ } })();
 function clearPicked(){ ST.songFile=null; ST.chartFile=null; ST.chartMode='pdf'; for(const [d,n] of [['dropSong','songName'],['dropChart','chartName']]){ $(d).classList.remove('has'); $(n).textContent=''; } $('chartText').hidden=true; $('chartText').value=''; $('songFile').value=''; $('chartFile').value=''; ready(); }
 $('newBtn').addEventListener('click',()=>{ forgetLast(); try{ sessionStorage.removeItem('mcb-open'); }catch(e){} $('bpmIn').value=''; $('meterIn').value=''; if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });

@@ -1188,7 +1188,8 @@ async function halveIfDouble(){
   if(ST.compound || ST.meter!==3 || +$('bpmIn').value || !ST.al?.path) return false;
   const cnt=[0,0]; let prev=null;
   for(const p of ST.al.path){ const c=ST.events[p.j]?.chord; if(!c||c===prev){ prev=c||prev; continue; } prev=c; const x=p.start-ST.downPhase; if(Math.abs(x-Math.round(x/3)*3)<1e-6) cnt[((Math.round(x/3))%2+2)%2]++; }
-  const hi=Math.max(...cnt), lo=Math.min(...cnt); if(hi+lo<30 || hi<1.6*Math.max(lo,1)) return false;
+  const hi=Math.max(...cnt), lo=Math.min(...cnt), fast=60/ST.P>=115; /* CJ: a 3/4 worship song at 115+ is nearly always counted in eighths (In Christ Alone: chart 136, counted 68) */
+  if(!fast && (hi+lo<30 || hi<1.6*Math.max(lo,1))) return false;
   const P1=ST.P, b0=ST.beat0; ST.P=P1*2; await fitSearch([b0%ST.P,(b0+P1)%ST.P]); ST.halved=true; return true;
 }
 async function fitSearch(b0s){

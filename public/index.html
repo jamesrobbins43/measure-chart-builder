@@ -64,6 +64,14 @@ html:has(#upload:not([hidden])) body{background:#000}
 #upload .primary:disabled{opacity:.4} #upload .primary:hover:not(:disabled){background:#eeab50; border-color:#eeab50}
 #upload .steps{font-family:inherit; font-size:13px; color:var(--e-mute)} #upload .steps li.done{color:#d8c9a8} #upload .steps li.run{color:var(--e-ink)} #upload .steps li.err{color:#ff7a6b}
 #upload .linkbtn{color:var(--e-amber); background:none; border:0}
+.drop1 .d1hint,.drop1 h2{pointer-events:none} .drop1>input[type=file]{z-index:0} .drop1>:not(input){position:relative;z-index:1}
+.fline{position:relative;display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--tick);border-radius:8px;cursor:pointer;min-width:0}
+.fline .ck{flex:none;width:20px;height:20px;border:1.5px solid currentColor;border-radius:4px;display:grid;place-items:center;opacity:.6}
+.fline.has .ck{opacity:1;background:var(--ok);border-color:var(--ok)} .fline.has .ck::after{content:'';width:5px;height:10px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:translateY(-1px) rotate(45deg)}
+.fline .fl{display:flex;flex-direction:column;gap:2px;min-width:0} .fline .fhint{font-family:var(--f-ui);font-size:12px;color:var(--muted)} .fline.has .fhint{display:none}
+.fline input[type=file]{z-index:2}
+#upload .fline{border-color:var(--e-line);background:var(--e-panel2)} #upload .fline b{font-size:15px} #upload .fline .fhint{font-family:inherit;color:var(--e-mute)}
+#upload .fline.has{border-color:var(--e-amber)} #upload .fline.has .ck{background:var(--e-amber);border-color:var(--e-amber)} #upload .fline.has .ck::after{border-color:var(--e-amber-ink)} #upload .drop1{gap:10px}
 #upload button:focus-visible,#upload textarea:focus-visible,#upload .drop:focus-within{outline-color:var(--e-amber)}
 .steps li.note{color:var(--muted,#666)} .linkbtn{background:none;border:0;padding:0;color:var(--accent,#2b54d6);text-decoration:underline;cursor:pointer;font:inherit} .steps li.done{color:var(--ok)} .steps li.run{color:var(--ink)} .steps li.err{color:#d23a3a}
 .example{font-family:var(--f-ui);margin-top:28px;border-top:1px solid var(--rule);padding-top:16px;font-size:13px;color:var(--muted);max-width:70ch;line-height:1.5}
@@ -189,17 +197,12 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
   <p class="tagline">Turn your chart into a play along track.</p>
   <p class="lede">Drop in a song and its chord chart. The builder finds the tempo and the bars, lines the chart's chords up with the recording, and gives you a chart that follows along as the song plays, with a click track you can switch on.</p>
   <div class="drops">
-    <div class="drop" id="dropSong">
-      <h2>Song</h2>
-      <p>MP3, WAV or M4A of the recording.</p>
-      <div class="fname" id="songName"></div>
-      <input type="file" id="songFile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" aria-label="Choose song file">
-    </div>
-    <div class="drop" id="dropChart">
-      <h2>Chord chart</h2>
-      <p id="chartHint">PDF with chords over lyrics, like a WorshipOnline chart.</p>
-      <div class="fname" id="chartName"></div>
-      <input type="file" id="chartFile" accept="application/pdf,.pdf,.txt" aria-label="Choose chart PDF">
+    <div class="drop drop1" id="dropBoth">
+      <h2>Song and chord chart</h2>
+      <p class="d1hint">Drag both files in here, together or one at a time. Or click a line to choose a file.</p>
+      <input type="file" id="bothFile" multiple accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,application/pdf,.pdf,.txt" aria-label="Choose the song and chart files">
+      <label class="fline" id="dropSong"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Song</b><span class="fhint">MP3, WAV or M4A of the recording</span><span class="fname" id="songName"></span></span><input type="file" id="songFile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" aria-label="Choose song file"></label>
+      <label class="fline" id="dropChart"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Chart</b><span class="fhint" id="chartHint">PDF with chords over lyrics, like a WorshipOnline chart</span><span class="fname" id="chartName"></span></span><input type="file" id="chartFile" accept="application/pdf,.pdf,.txt" aria-label="Choose chart PDF"></label>
       <div class="alt">No PDF? <button type="button" id="pasteBtn">Paste chart text</button></div>
       <textarea id="chartText" hidden placeholder="VERSE 1&#10;Ab                Db&#10;Again and again, and again and again&#10;..."></textarea>
     </div>
@@ -935,19 +938,21 @@ function chordHTML(c){
 const fmt=s=>{s=Math.max(0,s|0);return `${(s/60)|0}:${String(s%60).padStart(2,'0')}`};
 
 // ---------- upload UI ----------
-function setupDrop(dropId,inputId,nameId,kind){
-  const d=$(dropId), inp=$(inputId);
-  inp.addEventListener('change',()=>{ if(inp.files[0]) take(inp.files[0]); });
+/* CJ: one box takes both files; a Song line and a Chart line each tick when their file is in */
+const isAudio=f=>/^audio\//.test(f.type)||/\.(mp3|wav|m4a|aac|ogg|flac|aiff?)$/i.test(f.name), isChart=f=>f.type==='application/pdf'||/\.(pdf|txt)$/i.test(f.name);
+function takeFile(kind,f){ cancelBuild(); if(ST.restore){ ST.restore=null; $('reopenNote')?.remove(); } ST[kind]=f; if(kind==='songFile') srvWarm();
+  const [d,n]=kind==='songFile'?['dropSong','songName']:['dropChart','chartName']; $(n).textContent=f.name; $(d).classList.add('has'); if(kind==='chartFile'){ ST.chartMode='pdf'; $('chartText').hidden=true; $('chartFile').style.pointerEvents=''; } ready(); }
+function takeFiles(list){ for(const f of list){ if(isAudio(f)) takeFile('songFile',f); else if(isChart(f)) takeFile('chartFile',f); } }
+{ const d=$('dropBoth');
+  $('bothFile').addEventListener('change',e=>{ takeFiles([...e.target.files]); e.target.value=''; });
+  $('songFile').addEventListener('change',()=>{ if($('songFile').files[0]) takeFile('songFile',$('songFile').files[0]); });
+  $('chartFile').addEventListener('change',()=>{ if($('chartFile').files[0]) takeFile('chartFile',$('chartFile').files[0]); });
   d.addEventListener('dragover',e=>{e.preventDefault(); d.classList.add('over');});
-  d.addEventListener('dragleave',()=>d.classList.remove('over'));
-  d.addEventListener('drop',e=>{e.preventDefault(); d.classList.remove('over'); if(e.dataTransfer.files[0]) take(e.dataTransfer.files[0]);});
-  function take(f){ cancelBuild(); if(ST.restore){ ST.restore=null; $('reopenNote')?.remove(); } ST[kind]=f; if(kind==='songFile') srvWarm(); $(nameId).textContent=f.name; d.classList.add('has'); if(kind==='chartFile'){ ST.chartMode='pdf'; $('chartText').hidden=true; } ready(); }
-}
-setupDrop('dropSong','songFile','songName','songFile');
-setupDrop('dropChart','chartFile','chartName','chartFile');
+  d.addEventListener('dragleave',e=>{ if(!d.contains(e.relatedTarget)) d.classList.remove('over'); });
+  d.addEventListener('drop',e=>{e.preventDefault(); d.classList.remove('over'); takeFiles([...e.dataTransfer.files]); }); }
 $('pasteBtn').addEventListener('click',()=>{ const t=$('chartText'); t.hidden=!t.hidden; ST.chartMode=t.hidden?'pdf':'text'; if(!t.hidden){ t.focus(); $('chartFile').style.pointerEvents='none'; } else $('chartFile').style.pointerEvents=''; ready(); });
 $('chartText').addEventListener('input',ready);
-function ready(){ const chartOk = ST.chartMode==='text' ? $('chartText').value.trim().length>20 : !!ST.chartFile; $('buildBtn').disabled=!(ST.songFile&&chartOk); if(ST.chartMode==='text'&&chartOk) $('dropChart').classList.add('has'); }
+function ready(){ const chartOk = ST.chartMode==='text' ? $('chartText').value.trim().length>20 : !!ST.chartFile; $('buildBtn').disabled=!(ST.songFile&&chartOk); $('dropChart').classList.toggle('has', ST.chartMode==='text'?chartOk:!!ST.chartFile); $('dropBoth').classList.toggle('has', !!ST.songFile&&chartOk); }
 
 const steps=$('steps');
 function step(text){ const li=document.createElement('li'); li.className='run'; li.textContent='… '+text; steps.appendChild(li); return {

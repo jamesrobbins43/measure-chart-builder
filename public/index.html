@@ -647,6 +647,7 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
   const Pb=S.n>1?(S.beats[1]-S.beats[0])*sub:0.6, SPS=opt.secPerSyl??0.6;
   const STR=STR0*Math.min(1,Pb*sub/0.6); // per second, not per beat, so short beats (6/8 eighths) don't make holding a chord dearer
   const maxNat=sylls.map((n,j)=>events[j].quick? sub : (n? Math.max(4,n*SPS/Pb) : 2*meterBeats)*sub);
+  const minS=sylls.map(n=>Math.max(1,Math.ceil(n*0.16/(S.n>1?(S.beats[1]-S.beats[0])*sub:0.6)*sub))); /* CJ: in 4/4 a passing chord may take just beat 4, leading into the next bar */
   const minD=sylls.map((n,j)=>Math.max(!events[j].quick?(opt.compound?(opt.minGrp??2):(opt.min4??2))*sub:1,Math.ceil(n*0.16/Pb*sub))); // CJ (I Believe): in 6/8 a chord lasts at least a dotted quarter, so no bar gets 3-4 chords // no faster than ~6 syllables a second
   // a chord line with no words (intro, interlude) is usually played a bar per chord, even when a bar is a rest
   const secOf=events.map(e=>e.sec+'/'+e.pass), words=e=>e.lines.some(l=>!l.pickup&&l.length), bare=events.map((e0,j)=>{ if(words(e0)||e0.quick) return false; // only short all-instrumental sections (busy instrumentals change chords mid-bar)
@@ -692,8 +693,8 @@ function alignEvents(S,events,meterBeats,downPhaseBeats,opt={}){
       const P=pre[j], dm=Math.min(D,b);
       for(let q=0;q<Q;q++){
         let best=NEG,bd=0,bf=-1,bq=0;
-        for(let d=minD[j];d<=dm;d++){ const a=b-d, ia=at(j,a,q), pv=arrV[ia]; if(pv<=NEG/2) continue;
-          const v=pv+(P[b]-P[a])+(afterQuick[j]?0:startBonus(a,(q/Q0)|0))+(quick[j]?0:durBonus(d))+(bare[j]?barFit(d,bare[j]):0)-(d>maxNat[j]?(quick[j]?0.15:STR)*(d-maxNat[j]):0)-(REF&&REF[j]>0?DEV*Math.max(0,Math.abs(d-REF[j]*sub)-sub):0); if(v>best){best=v;bd=d;bf=arrF[ia];bq=arrQ[ia];} }
+        for(let d=opt.compound?minD[j]:Math.min(minD[j],Math.max(sub,minS[j]));d<=dm;d++){ const a=b-d, ia=at(j,a,q), pv=arrV[ia]; if(pv<=NEG/2) continue; const sh1=d<minD[j]&&d*Pb/sub<(opt.minSec??0.78)&&!(d===sub&&pos(a,(q/Q0)|0)===(meterBeats-1)*sub)?(opt.short1??0.3):0; /* a one-beat chord is allowed but costs extra, except a passing chord on beat 4 (CJ); only at quicker tempos: Goodbye Yesterday (75 BPM) really does change every beat */
+          const v=pv-sh1+(P[b]-P[a])+(afterQuick[j]?0:startBonus(a,(q/Q0)|0))+(quick[j]?0:durBonus(d))+(bare[j]?barFit(d,bare[j]):0)-(d>maxNat[j]?(quick[j]?0.15:STR)*(d-maxNat[j]):0)-(REF&&REF[j]>0?DEV*Math.max(0,Math.abs(d-REF[j]*sub)-sub):0); if(v>best){best=v;bd=d;bf=arrF[ia];bq=arrQ[ia];} }
         const io=at(j,b,q); dp[io]=best; bpD[io]=bd; bpP[io]=bf; bpQ[io]=bq;
       }
     }
@@ -1207,7 +1208,7 @@ function refineChords(al){
   const fit=(n,h)=>{ const t=tp(n); if(!t||h<0||h>=S.n) return 0; let v=0; for(let k=0;k<12;k++) v+=t.t[k]*S.C[h*12+((k+sh)%12+12)%12]; return v+0.4*S.B[h*12+((t.bass+sh)%12+12)%12]; };
   const P=al.path;
   for(let i=1;i<P.length-1;i++){ const e=ST.events[P[i].j], pe=ST.events[P[i-1].j]; if(!e||!pe||!e.chord||!pe.chord||e.k===0||e.chord===pe.chord) continue;
-    const a=P[i-1].start, z=P[i+1].start, st=P[i].start, lo=Math.max(a+1,st-2), hi=Math.min(z-1,st+2); if(hi<=lo) continue;
+    const a=P[i-1].start, z=P[i+1].start, st=P[i].start, m2=!ST.compound&&ST.P<0.7, lo=Math.max(a+1,st-2,m2?a+Math.min(2,st-a):0), hi=Math.min(z-1,st+2,m2?z-Math.min(2,z-st):1e9); if(hi<=lo) continue; /* CJ (Praise): in quicker 4/4 songs sliding must not squeeze a chord under 2 beats */
     const w0=Math.max(a,st-2.5), w1=Math.min(z,st+2.5);
     const score=c=>{ let v=0; for(let x=w0;x<w1-1e-6;x+=0.5){ v+=fit(x<c-1e-6?pe.chord:e.chord, Math.round(x*2)); } return v; };
     const onG=c=>!ST.compound||e.quick||(((Math.round(c)-ST.downPhase)%3)+3)%3===0; // 6/8: a change may only slide to a big beat (CJ, I Believe)
@@ -1552,19 +1553,26 @@ let checksOk=new Set();
 const showChecks=()=>!!(DB&&DB.canSave); // the "Please double-check" notes: only for the editor (CJ); the public builds turn this off
 function sectionCheck(){
   const sig=ST.songFile?.name+'|'+ST.song.bars.length, el=$('checks');
-  const flags=sectionSpans().filter((o,k,a)=>o.label!=='Lead-in' && !(k===a.length-1 && /ending|outro/i.test(o.label)) && o.bars%4!==0);
+  const spans=sectionSpans(), flags=spans.filter((o,k,a)=>o.label!=='Lead-in' && !(k===a.length-1 && /ending|outro/i.test(o.label)) && o.bars%4!==0);
+  /* CJ (Praise): a pass of a section that changes chords much more often than the other passes of the same section (the chart plays it the same way each time) */
+  const B=ST.song.bars, pl=w=>/(s|x|ch|sh)$/.test(w)?w+'es':w+'s', base=l=>String(l).replace(/\s*\d+$/,'').replace(/\s*\(.*\)$/,'').trim().toLowerCase();
+  const rate=o=>{ let n=0, prev=null; for(let i=o.bar;i<o.bar+o.bars&&i<B.length;i++) for(const c of B[i].chords||[]){ if(c[1]!==prev){ if(prev!==null||i>o.bar) n++; prev=c[1]; } } return o.bars? n/o.bars : 0; };
+  const R=spans.map(rate), groups={}; spans.forEach((o,k)=>{ if(o.bars>=2) (groups[base(o.label)]||=[]).push(R[k]); });
+  spans.forEach((o,k)=>{ const g=groups[base(o.label)]; if(!g||g.length<2||o.bars<2) return; const m=[...g].sort((x,y)=>x-y)[Math.floor((g.length-1)/2)];
+    if(R[k]>1.05 && R[k]>=1.6*Math.max(m,0.25)) flags.push({label:o.label,bar:o.bar,bars:o.bars,busy:R[k]/Math.max(m,0.25),base:base(o.label)}); });
+  flags.sort((x,y)=>x.bar-y.bar);
   ST.flags=flags;
   document.querySelectorAll('.measure .sec .flag').forEach(f=>f.remove());
   if(!showChecks()){ el.hidden=true; return; }
-  for(const f of flags){ const s=measEls[f.bar]?.querySelector('.sec'); if(s) s.insertAdjacentHTML('beforeend',`<span class="flag" title="${f.bars} bar${f.bars===1?'':'s'}: please double-check">⚑</span>`); }
+  for(const f of flags){ const s=measEls[f.bar]?.querySelector('.sec'); if(s) s.insertAdjacentHTML('beforeend',`<span class="flag" title="${f.busy?'More chord changes than the other '+esc(pl(f.base)):f.bars+' bar'+(f.bars===1?'':'s')}: please double-check">⚑</span>`); }
   if(!flags.length || checksOk.has(sig)){ el.hidden=true; return; }
-  el.innerHTML=`<button type="button" class="chkX" id="chkX" aria-label="Close this note" title="Close">×</button><b>⚑ Please double-check:</b> ${flags.map((f,k)=>`<a data-bar="${f.bar}">${esc(f.label)} (bar ${f.bar+1}) is ${f.bars} bar${f.bars===1?'':'s'}</a>`).join(', ')}. Most sections are 4, 8 or 16 bars long, so these may be off.
+  el.innerHTML=`<button type="button" class="chkX" id="chkX" aria-label="Close this note" title="Close">×</button><b>⚑ Please double-check:</b> ${flags.map((f,k)=>f.busy?`<a data-bar="${f.bar}">${esc(f.label)} (bar ${f.bar+1}) changes chords ${f.busy>=2.5?'much ':''}more often than the other ${esc(pl(f.base))}</a>`:`<a data-bar="${f.bar}">${esc(f.label)} (bar ${f.bar+1}) is ${f.bars} bar${f.bars===1?'':'s'}</a>`).join(', ')}. ${flags.some(f=>!f.busy)?'Most sections are 4, 8 or 16 bars long':'The chart plays each pass of a section the same way'}, so these may be off. Re-hear in Fix bars can redo a pass's chords.
     <div class="cbtns"><button type="button" id="chkOk">Looks right</button><button type="button" id="chkBad">Something's wrong</button></div>`;
   el.hidden=false;
   el.querySelectorAll('a[data-bar]').forEach(a=>a.addEventListener('click',()=>{ const i=+a.dataset.bar; pausedAt=Math.max(0,bT(i)-0.05); update(true); measEls[i]?.scrollIntoView({block:'center',behavior:'smooth'}); }));
   $('chkOk').addEventListener('click',()=>{ checksOk.add(sig); el.hidden=true; });
   $('chkX').addEventListener('click',()=>{ checksOk.add(sig); el.hidden=true; }); // CJ: an X to close it and save room; the ⚑ flags on the bars stay
-  $('chkBad').addEventListener('click',()=>openReport(flags.map(f=>`${f.label} (bar ${f.bar+1}) is ${f.bars} bar${f.bars===1?'':'s'} but should be `).join('\n')));
+  $('chkBad').addEventListener('click',()=>openReport(flags.map(f=>f.busy?`${f.label} (bar ${f.bar+1}) has too many chord changes`:`${f.label} (bar ${f.bar+1}) is ${f.bars} bar${f.bars===1?'':'s'} but should be `).join('\n')));
 }
 function openReport(prefill){ $('report').hidden=false; $('reportMsg').textContent=''; $('reportSend').disabled=false; const t=$('reportText'); if(prefill&&!t.value) t.value=prefill; t.focus(); }
 $('reportBtn').addEventListener('click',()=>openReport(''));

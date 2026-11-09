@@ -874,7 +874,7 @@ $('saX').addEventListener('click',()=>{ $('secAdd').hidden=true; });
 $('saGo').addEventListener('click',()=>{ const j=+$('saSec').value, nb=ST.song.bars.length, bar=Math.round(+$('saBar').value);
   if(!(bar>=1&&bar<=nb)){ $('saMsg').textContent=`Pick a bar from 1 to ${nb}.`; return; }
   const nm=$('saSec').selectedOptions[0]?.textContent||ST.events[j].label; if(playing) pause(); selBar=bar-1;
-  if(!newPass(j,nm)){ $('saMsg').textContent=`Bar ${bar} is before the first section, so ${nm} can't go there. Pick a later bar.`; return; }
+  if(!newPass(j,nm)){ $('saMsg').textContent=`${nm} doesn't fit at bar ${bar}, so nothing was changed. Try the bar where a section starts, or a later bar.`; return; }
   $('secAdd').hidden=true; buildSecNav(); });
 function seekBar(i){ const t=Math.max(0,bT(i)-0.05); getAC().resume().then(()=>startAtTime(t)); pausedAt=t; update(true); }
 // choruses only: play each chorus and jump straight to the next one
@@ -1286,18 +1286,22 @@ function setBarLen(selBar,L){
 // the song's real order of sections (indexes into the chart's sections), when it repeats a section the chart writes once (CJ: Firm Foundation, Chorus again at bar 49)
 function setOrder(o){ ST.order=Array.isArray(o)&&o.length?o:null; if(!ST.base) return; ST.sections=ST.order?ST.order.map(i=>ST.base[i]).filter(Boolean):ST.base; ST.events=expandEvents(ST.sections); }
 function barOfStart(p){ const s0=p.start-ST.downPhase; return ST.song.bars.findIndex(b=>Math.abs((b.s0??b.s)-s0)<1e-6); }
-function newPass(j,nm){
+function newPass(j,nm,before){
   const e=ST.events[j], ord=ST.order||ST.base.map((_,i)=>i), baseIdx=ord[e.sec];
   // the section the chosen bar is in now: the new pass goes in right after it, and that section's start stays put
   let cur=-1, curBar=-1; for(const p of (ST.al?.path||[])){ const ev=ST.events[p.j]; if(!ev||ev.k!==0) continue; const bi=barOfStart(p); if(bi<0) continue; if(bi<=selBar){ cur=ev.sec; curBar=bi; } else break; }
   if(cur<0) return false;
-  const onStart=curBar===selBar, old=ST.events, at=onStart?cur:cur+1, key=x=>x.sec+'/'+x.k+'/'+x.pass; /* the bar already starts a section: the new one goes in before it, and that section follows after */
+  const onStart=curBar===selBar||!!before, old=ST.events, at=onStart?cur:cur+1, key=x=>x.sec+'/'+x.k+'/'+x.pass; /* the bar already starts a section: the new one goes in before it, and that section follows after */
   pushUndo(); const anchors={}; if(curBar>=0 && !onStart){ const j0=old.findIndex(x=>x.sec===cur&&x.k===0&&x.pass===0); if(j0>=0 && ST.anchors[j0]==null) ST.anchors={...ST.anchors,[j0]:curBar+1}; }
   const nOrd=[...ord.slice(0,at),baseIdx,...ord.slice(at)]; setOrder(nOrd);
   const idx=new Map(ST.events.map((x,i)=>[key(x),i]));
   for(const [k,v] of Object.entries(ST.anchors)){ const o=old[k]; if(!o) continue; const n=idx.get(key({...o,sec:o.sec>=at?o.sec+1:o.sec})); if(n!=null) anchors[n]=v; }
   const jn=idx.get(at+'/0/0'); if(jn!=null) anchors[jn]=selBar+1;
-  ST.anchors=anchors; ST.overrides={}; ST.breaks={}; ST.barEdits=(ST.barEdits||[]).filter(x=>x.at<=selBar); const keep=selBar; realign(); openEditor(keep,true);
+  if(onStart && curBar!==selBar){ for(const k of Object.keys(anchors)) if(ST.events[k]?.sec===at+1) delete anchors[k]; } /* the section it cut into now follows the new one */
+  ST.anchors=anchors; ST.overrides={}; ST.breaks={}; ST.barEdits=(ST.barEdits||[]).filter(x=>x.at<=selBar); const keep=selBar; realign();
+  /* CJ (In Christ Alone, Intro added at bar 50 inside Verse 3): the section it lands in can't always fit before the new one; then the new one goes in front of it instead, and if nothing fits the change is undone */
+  if(!ST.al?.path?.length){ applySnap(undoStack.pop()); undoUI(); return before||onStart ? false : newPass(j,nm,true); }
+  openEditor(keep,true);
   $('edSection').value=''; $('edLenMsg').textContent=`A new ${nm} now starts at bar ${keep+1}. Everything before it stayed put; the rest of the song was lined up again after it.`;
   return true;
 }

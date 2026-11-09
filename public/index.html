@@ -1058,6 +1058,8 @@ async function build(){
       s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); if(ST.restoreUndo){ [undoStack,redoStack]=ST.restoreUndo; ST.restoreUndo=null; undoUI(); } realign(false); return; } // CJ: undo still works after a refresh
     s=step(showChecks()?'Checking the song library':'Lining the chart up with the song');
     const hit=chk(await libFind(ST.audio.duration,ST.env));
+    /* CJ: the same recording is in the library with a different chart: offer the fixed version first (another person's chart is likely as rough as the first upload was) */
+    if(hit && !hit.sameChart && hit.v.chart && Array.isArray(hit.v.chart.sections) && chk(await askLibChart(hit,s))){ useLibChart(hit); s=step('Lining the chart up with the song'); }
     if(hit && applyLib(hit)){ if(showChecks()) s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); realign(false); return; }
     if(hit===undefined || !showChecks()) steps.lastElementChild?.remove(); else s.done('Not in the library yet');
     s=step('Finding the tempo');
@@ -1132,11 +1134,19 @@ function applyLib(h){
   ST.libId=h.id; ST.libDate=v.savedAt||null; ST.libSame=!!h.sameChart; useCf(h.sameChart?v.cf:'srv');
   return true;
 }
+const chartPack=sec=>JSON.parse(JSON.stringify(sec,(k,v)=>Array.isArray(v)&&v.pickup?{__pk:[...v]}:v));
+const chartUnpack=sec=>JSON.parse(JSON.stringify(sec),(k,v)=>v&&Array.isArray(v.__pk)?Object.assign(v.__pk,{pickup:true}):v);
+function askLibChart(hit,s){ return new Promise(res=>{ s.el?.remove?.(); steps.lastElementChild?.remove();
+  const d=hit.v.savedAt?new Date(hit.v.savedAt).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'', li=document.createElement('li'); li.className='note'; li.id='libAsk';
+  li.innerHTML=`This recording is already in the library with a chart that's been checked and fixed${d?' (saved '+esc(d)+')':''}. Your chart is different. <span class="cbtns" style="display:inline-flex;gap:8px;margin-left:6px"><button type="button" class="primary" id="libAskYes">See the fixed version</button><button type="button" id="libAskNo">Use my chart</button></span>`;
+  steps.appendChild(li); try{ li.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} const done=v=>{ li.remove(); res(v); }; li.querySelector('#libAskYes').onclick=()=>done(true); li.querySelector('#libAskNo').onclick=()=>done(false); }); }
+function useLibChart(hit){ const c=hit.v.chart; ST.meta={...ST.meta,...(c.meta||{})}; ST.base=chartUnpack(c.sections); ST.order=null; ST.sections=ST.base;
+  ST.events=expandEvents(ST.sections); ST.chartSig=chartSig(ST.events); hit.sameChart=ST.chartSig===hit.v.chartSig; ST.libChart=true; }
 async function libSave(){
   if(!DB) return;
   const b=$('libSave'); b.disabled=true; $('libMsg').textContent='Saving…';
   const doc={dur:Math.round(ST.audio.duration*100)/100, env:ST.env, title:ST.meta.title||'', artist:ST.meta.artist||'', chartKey:ST.meta.key||'', chartSig:ST.chartSig,
-    P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', savedAt:new Date().toISOString()};
+    P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', chart:{meta:ST.meta, sections:chartPack(ST.base||ST.sections)}, savedAt:new Date().toISOString()};
   try{
     const ref=ST.libId?DB.collection('songs').doc(ST.libId):DB.collection('songs').doc();
     await ref.set(doc); ST.libId=ref.id; ST.libDate=doc.savedAt;

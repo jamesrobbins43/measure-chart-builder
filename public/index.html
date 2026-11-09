@@ -1087,6 +1087,9 @@ let DB=(()=>{
     doc(id){ id=id||crypto.randomUUID(); return { id, async set(d){ const r=await fetch(`/api/songs/${encodeURIComponent(id)}`,{method:'PUT',headers:{'content-type':'application/json','x-editor-key':key||''},body:JSON.stringify(d)}); if(r.status===403) throw err('invalid_argument'); if(!r.ok) throw err('unavailable'); },
       async delete(){ const r=await fetch(`/api/songs/${encodeURIComponent(id)}`,{method:'DELETE',headers:{'x-editor-key':key||''}}); if(r.status===403) throw err('invalid_argument'); if(!r.ok) throw err('unavailable'); } }; } }; return api; } };
 })();
+/* CJ (members' page): the whole page scrolls as one. When the tool is scrolled or a chart opens, the members' page scrolls its header away so the tool fills the window */
+function embedPin(){ try{ if(window.parent!==window) window.parent.postMessage({mcb:'pin'},'*'); }catch(e){} }
+if(window.parent!==window){ let pinned=false; addEventListener('scroll',()=>{ if(scrollY>8&&!pinned){ pinned=true; embedPin(); } else if(scrollY<=2) pinned=false; },{passive:true}); }
 let CAN_FIX=true; // "Fix bars" editing: on for everyone (CJ); members' fixes stay in their own browser
 if(!CAN_FIX){ document.getElementById('fixHint')?.remove(); }
 const ENV_HZ=20;
@@ -1273,7 +1276,7 @@ function finish(keep){
   // CJ (Same God): the same chord twice in a row inside one bar is redundant; keep the first (the one on beat 1) and drop the repeat
   { const key=c=>{ const m=String(c).match(/^([A-G][b#]?)(.*?)(?:\/([A-G][b#]?))?$/); return m&&PC[m[1]]!=null? PC[m[1]]+'|'+m[2]+'|'+(m[3]?PC[m[3]]:'') : c; };
     for(const b of ST.song.bars) if(b.chords.length>1) b.chords=b.chords.filter((c,k,a)=>!k||key(c[1])!==key(a[k-1][1])); }
-  $('upload').hidden=true; $('result').hidden=false; try{ sessionStorage.setItem('mcb-open','1'); }catch(e){}
+  $('upload').hidden=true; $('result').hidden=false; try{ sessionStorage.setItem('mcb-open','1'); }catch(e){} embedPin();
   $('songTitle').textContent=ST.meta.title||ST.songFile.name.replace(/\.[^.]+$/,'');
   $('songMeta').textContent=[ST.meta.artist, ST.meta.key&&(ST.shift?`Chart in ${ST.meta.key}, recording in ${recKey()}`:'Key '+ST.meta.key), bpmLabel(), ST.meter+'/'+(ST.den||4), ST.song.bars.length+' bars'].filter(Boolean).join(' · ');
   $('bpmV').textContent=bpmLabel();

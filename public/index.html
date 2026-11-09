@@ -1891,11 +1891,11 @@ function newPass(j,nm,before){
   let cur=-1, curBar=-1; for(const p of (ST.al?.path||[])){ const ev=ST.events[p.j]; if(!ev||ev.k!==0) continue; const bi=barOfStart(p); if(bi<0) continue; if(bi<=selBar){ cur=ev.sec; curBar=bi; } else break; }
   if(cur<0) return false;
   const onStart=curBar===selBar||!!before, old=ST.events, at=onStart?cur:cur+1, key=x=>x.sec+'/'+x.k+'/'+x.pass; /* the bar already starts a section: the new one goes in before it, and that section follows after */
-  pushUndo(); const anchors={}; if(curBar>=0 && !onStart){ const j0=old.findIndex(x=>x.sec===cur&&x.k===0&&x.pass===0); if(j0>=0 && ST.anchors[j0]==null) ST.anchors={...ST.anchors,[j0]:curBar+1}; }
+  pushUndo(); const anchors={}; if(curBar>=0 && !onStart){ const j0=old.findIndex(x=>x.sec===cur&&x.k===0&&x.pass===0); if(j0>=0 && ST.anchors[j0]==null) ST.anchors={...ST.anchors,[j0]:{t:bT(curBar)+1e-3}}; }
   const nOrd=[...ord.slice(0,at),baseIdx,...ord.slice(at)]; setOrder(nOrd);
   const idx=new Map(ST.events.map((x,i)=>[key(x),i]));
   for(const [k,v] of Object.entries(ST.anchors)){ const o=old[k]; if(!o) continue; const n=idx.get(key({...o,sec:o.sec>=at?o.sec+1:o.sec})); if(n!=null) anchors[n]=v; }
-  const jn=idx.get(at+'/0/0'); if(jn!=null) anchors[jn]=selBar+1;
+  const jn=idx.get(at+'/0/0'); if(jn!=null) anchors[jn]={t:bT(selBar)+1e-3}; /* pinned by time, so earlier bar edits can't shift it a bar (CJ: bar 74 came out at 75) */
   if(onStart && curBar!==selBar){ for(const k of Object.keys(anchors)) if(ST.events[k]?.sec===at+1) delete anchors[k]; } /* the section it cut into now follows the new one */
   ST.anchors=anchors; ST.overrides={}; ST.breaks={}; ST.barEdits=(ST.barEdits||[]).filter(x=>x.at<=selBar); const keep=selBar; realign();
   /* CJ (In Christ Alone, Intro added at bar 50 inside Verse 3): the section it lands in can't always fit before the new one; then the new one goes in front of it instead, and if nothing fits the change is undone */
@@ -1916,8 +1916,8 @@ function pinSection(){
   // the section after this bar stays where it is, so moving a start only moves that one boundary (CJ: Interlude 29-30, Verse 2 stays at 31)
   const song=ST.song, path=ST.al?.path||[];
   for(const p of path){ const e=ST.events[p.j]; if(!e||e.k!==0||String(p.j)===String(j)) continue; const s0=p.start-ST.downPhase, bi=song.bars.findIndex(b=>Math.abs((b.s0??b.s)-s0)<1e-6);
-    if(bi>selBar){ if(ST.anchors[p.j]==null) ST.anchors[p.j]=bi+1; break; } }
-  ST.anchors[j]=selBar+1; ST.overrides={}; ST.breaks={}; ST.barEdits=(ST.barEdits||[]).filter(e=>e.at<=selBar); const keep=selBar; realign(); openEditor(keep,true);
+    if(bi>selBar){ if(ST.anchors[p.j]==null) ST.anchors[p.j]={t:bT(bi)+1e-3}; break; } }
+  ST.anchors[j]={t:bT(selBar)+1e-3}; /* by time, so earlier bar edits can't shift it a bar */ ST.overrides={}; ST.breaks={}; ST.barEdits=(ST.barEdits||[]).filter(e=>e.at<=selBar); const keep=selBar; realign(); openEditor(keep,true);
   $('edSection').value='';
   $('edLenMsg').textContent=`${nm} now starts at bar ${keep+1}; the section after it stayed where it was.`;
 }

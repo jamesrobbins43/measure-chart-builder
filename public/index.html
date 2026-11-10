@@ -1421,7 +1421,7 @@ function finish(keep){
   { const base=l=>l.replace(/\s*\(\d+x\)\s*$/i,''), cnt={}, seen={};
     ST.song.bars.forEach(b=>{ if(b.section && !/\d$/.test(base(b.section))) cnt[b.section]=(cnt[b.section]||0)+1; });
     ST.song.bars.forEach(b=>{ const o=b.section; if(o && cnt[o]>1){ seen[o]=(seen[o]||0)+1; const rp=o.slice(base(o).length); b.section=base(o)+' '+seen[o]+rp; } }); }
-  for(const [i,o] of Object.entries(ST.overrides)){ if(ST.song.bars[i]) Object.assign(ST.song.bars[i],o); }
+  for(const [i,o] of Object.entries(ST.overrides)){ const b=ST.song.bars[i]; if(b){ b.lyr0=JSON.stringify(b.lyrics||[]); Object.assign(b,o); } } // lyr0: the words before your edit, so a lyric cue you typed shows even with lyrics off (CJ)
   // CJ (Same God): the same chord twice in a row inside one bar is redundant; keep the first (the one on beat 1) and drop the repeat
   { const key=c=>{ const m=String(c).match(/^([A-G][b#]?)(.*?)(?:\/([A-G][b#]?))?$/); return m&&PC[m[1]]!=null? PC[m[1]]+'|'+m[2]+'|'+(m[3]?PC[m[3]]:'') : c; };
     for(const b of ST.song.bars) if(b.chords.length>1) b.chords=b.chords.filter((c,k,a)=>!k||key(c[1])!==key(a[k-1][1])); }
@@ -1478,7 +1478,7 @@ function render(forcePer){
       for(let q=0;q<M;q++) h+=`<span class="ch" style="grid-column:${q+1}">${chB[q].join(' ')}</span><span class="bt${q?'':' one'}" style="grid-column:${q+1}"><b>${q+1}</b>${ands.has(q)?'<i class="plus" aria-label="and">+</i>':''}</span>`;
       // lyrics flow as one line: each beat's words start at their beat, and a long phrase pushes the next one along
       // instead of being squeezed into its own narrow column
-      if(showLyr && lyB.some(x=>x.length)){ let lh='', q=0;
+      if((showLyr || (b.lyr0!=null && b.lyr0!==JSON.stringify(b.lyrics||[]))) && lyB.some(x=>x.length)){ let lh='', q=0;
         while(q<M){ let span=1; while(q+span<M && !lyB[q+span].length) span++;
           lh+=`<span style="min-width:calc(100% * ${span} / ${M})">${lyB[q].join(' ')}</span>`; q+=span; }
         h+=`<div class="lyr">${lh}</div>`; }

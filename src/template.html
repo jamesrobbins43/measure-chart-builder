@@ -94,7 +94,7 @@ html:has(#upload:not([hidden])) body{background:#000}
 .secnav{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin:0 auto;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
 .secnav .secplus{border-left-width:1px;border-style:dashed;font-weight:600}
 .secadd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-family:var(--f-ui);font-size:13px;padding:2px 0 10px}
-.secadd select,.secadd input{font:inherit;padding:4px 6px} .secadd input{width:5em} .secadd small{flex-basis:100%;color:var(--muted)} .secadd small:empty{display:none}
+.secadd select,.secadd input{font:inherit;padding:4px 6px} .secadd input{width:5em} .secadd #saName{width:11em} .secadd small{flex-basis:100%;color:var(--muted)} .secadd small:empty{display:none}
 .secnav:not(:has(button:not(.secplus))){display:none}
 .secnav button{flex:none;border-left:4px solid var(--c,var(--rule));font-family:var(--f-ui);font-size:13px;padding:4px 11px;border-radius:999px;white-space:nowrap}
 .secnav button.on{background:var(--c,var(--accent));border-color:var(--c,var(--accent));color:#fff;font-weight:600} /* each section lights up in its own chart color (CJ) */
@@ -288,7 +288,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
       <div class="where" id="where"></div>
     </div>
   </div><nav class="secnav wrap" id="secNav" aria-label="Jump to a section (plays a four-count first)"></nav>
-  <div class="secadd wrap" id="secAdd" hidden><span>Add a whole</span> <select id="saSec" aria-label="Section to add"></select> <span>starting at bar</span> <input type="number" id="saBar" min="1" step="1" aria-label="Bar it starts on"> <button type="button" class="primary" id="saGo">Add</button> <button type="button" id="saX">Cancel</button><small id="saMsg"></small></div></div>
+  <div class="secadd wrap" id="secAdd" hidden><span>Add a whole</span> <select id="saSec" aria-label="Section to add"></select> <span>starting at bar</span> <input type="number" id="saBar" min="1" step="1" aria-label="Bar it starts on"> <input type="text" id="saName" hidden maxlength="30" placeholder="Name, e.g. Tag" aria-label="Name of the new section"> <button type="button" class="primary" id="saGo">Add</button> <button type="button" id="saX">Cancel</button><small id="saMsg"></small></div></div>
   <div class="toolbar wrap">
     <div class="group" id="keyGroup" style="flex-basis:100%"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <button type="button" id="numBtn" aria-pressed="false" title="Show chords as numbers (1 4 5 6m) in the chart's key">Numbers</button> <span id="keyMsg" class="keymsg" role="status"></span></div>
     <div class="group"><span class="help" tabindex="0" role="img" aria-label="Help: If the highlighted beat counter is off, use this slider to sync it with the tempo." data-tip="If the highlighted beat counter is off, use this slider to sync it with the tempo.">?</span><label for="sync" style="display:inline-flex;align-items:center;gap:6px" aria-label="Beat highlight timing"><small>later</small><input id="sync" type="range" min="-400" max="250" step="10" value="0" style="width:90px;accent-color:var(--accent)"><small>sooner</small></label><b id="syncV">0 ms</b></div>
@@ -939,11 +939,16 @@ function buildSecNav(){ const nav=$('secNav'); if(!nav) return; secSp=ST.song?se
    it goes in at the chosen bar, everything before stays put, and the rest of the song is lined up again after it (same as Fix bars > section start). */
 function openSecAdd(){ const box=$('secAdd'); if(!box.hidden){ box.hidden=true; return; }
   const opts=[], seen=new Set(), base=ST.base||ST.sections; ST.events.forEach((e,j)=>{ const bi=ST.order?ST.order[e.sec]:e.sec; if(e.k===0&&e.pass===0&&!seen.has(bi)){ seen.add(bi); const n=base.filter(s=>s.label===e.label).length>1?' '+base.slice(0,bi+1).filter(s=>s.label===e.label).length:''; opts.push(`<option value="${j}">${esc(e.label+n)}</option>`); } });
-  $('saSec').innerHTML=opts.join('')+'<option value="end">End (runs to the end of the song)</option>'; const nb=ST.song.bars.length, cur=Math.max(0,Math.min(nb-1,barAt(songTime()+userSync/1000)));
+  $('saSec').innerHTML=opts.join('')+'<option value="end">End (runs to the end of the song)</option><option value="custom">A section not on the chart…</option>'; $('saName').hidden=true; $('saName').value=''; const nb=ST.song.bars.length, cur=Math.max(0,Math.min(nb-1,barAt(songTime()+userSync/1000)));
   $('saBar').max=nb; $('saBar').value=cur+1; $('saMsg').textContent=''; box.hidden=false; $('saSec').focus(); }
 $('saX').addEventListener('click',()=>{ $('secAdd').hidden=true; });
+$('saSec').addEventListener('change',()=>{ const c=$('saSec').value==='custom'; $('saName').hidden=!c; if(c) $('saName').focus(); });
+/* CJ: a section the chart doesn't have (a Tag, a Vamp...): it starts at that bar and runs to the next section; the chords there stay as they are */
+function addCustomSection(bar,name){ name=String(name||'').trim().replace(/\s+/g,' ').slice(0,30); if(!name) return false; if(playing) pause(); barEdit('name',bar-1,name);
+  $('edLenMsg').textContent=`${name} now starts at bar ${bar} and runs to the next section. No chords moved; change them in Chords & words if you need to.`; $('msg').className='msg'; $('msg').textContent=$('edLenMsg').textContent; buildSecNav(); return true; }
 $('saGo').addEventListener('click',()=>{ const j=+$('saSec').value, nb=ST.song.bars.length, bar=Math.round(+$('saBar').value);
   if(!(bar>=1&&bar<=nb)){ $('saMsg').textContent=`Pick a bar from 1 to ${nb}.`; return; }
+  if($('saSec').value==='custom'){ if(!addCustomSection(bar,$('saName').value)){ $('saMsg').textContent='Type a name for the new section.'; $('saName').focus(); return; } $('secAdd').hidden=true; return; }
   if($('saSec').value==='end'){ if(playing) pause(); barEdit('lab',bar-1,'End'); $('edLenMsg').textContent=`The End now starts at bar ${bar} and runs to the end of the song. No chords moved.`; $('secAdd').hidden=true; buildSecNav(); return; }
   const nm=$('saSec').selectedOptions[0]?.textContent||ST.events[j].label; if(playing) pause(); selBar=bar-1;
   if(!newPass(j,nm)){ $('saMsg').textContent=`${nm} doesn't fit at bar ${bar}, so nothing was changed. Try the bar where a section starts, or a later bar.`; return; }
@@ -1198,7 +1203,7 @@ function openEditor(i,noFocus){
   { const L=bLen(i); $('edSplitAt').innerHTML=Array.from({length:Math.max(0,Math.ceil(L)-1)},(_,k)=>k+2).map(n=>`<option value="${n}"${n===Math.floor(L/2)+1?' selected':''}>${n}</option>`).join(''); $('edSplit').disabled=L<2; $('edJoin').disabled=i>=ST.song.bars.length-1; }
   const opts=['<option value="">(no change)</option>']; const seen=new Set();
   ST.events.forEach((e,j)=>{ const bi=ST.order?ST.order[e.sec]:e.sec, base=ST.base||ST.sections; if(e.k===0 && e.pass===0 && !seen.has(bi)){ seen.add(bi); opts.push(`<option value="${j}">${esc(e.label)}${base.filter(s=>s.label===e.label).length>1?' '+(base.slice(0,bi+1).filter(s=>s.label===e.label).length):''}</option>`); } });
-  $('edSection').innerHTML=opts.join('')+'<option value="end">End (runs to the end)</option>'; { const v=$('edTimeSec').value; $('edTimeSec').innerHTML=opts.join('').replace('(no change)','(pick a section)'); $('edTimeSec').value=v; }
+  $('edSection').innerHTML=opts.join('')+'<option value="end">End (runs to the end)</option><option value="custom">A section not on the chart…</option>'; { const v=$('edTimeSec').value; $('edTimeSec').innerHTML=opts.join('').replace('(no change)','(pick a section)'); $('edTimeSec').value=v; }
   moveUI(i); if(document.activeElement!==$('edRhA')&&document.activeElement!==$('edRhB')){ $('edRhA').value=i+1; $('edRhB').value=Math.min(ST.song.bars.length,i+4); }
   const n=Object.keys(ST.anchors).length; $('edAnchors').textContent=n?`${n} section start${n>1?'s':''} pinned`:'';
   $('editor').hidden=false; lgShow(true,noFocus);
@@ -1295,7 +1300,8 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
       for(let k=at;k<grid.length;k++) grid[k].s+=e.len; grid.splice(at,0,{s:s0,len:e.len,ins:ei}); }
     else if(e.op==='split'){ const g=grid[e.at], b=e.len-1; if(!g||b<=0||b>=g.len) return; grid.splice(e.at+1,0,{s:g.s+b,len:g.len-b}); g.len=b; } // CJ: a new bar line inside this bar; nothing else moves
     else if(e.op==='nosec'){ const f=grid[e.at]; if(!f) return; for(let k=items.length-1;k>=0;k--){ const it=items[k]; if(it.t==='s' && it.x>=f.s-1e-6 && it.x<f.s+f.len-1e-6) items.splice(k,1); } } // CJ (Praise): a whole section's bars go to the one before, so its name goes away
-    else if(e.op==='lab'){ const f=grid[e.at]; if(!f) return; for(let k=items.length-1;k>=0;k--){ const it=items[k]; if(it.t==='s' && it.x>=f.s-1e-6) items.splice(k,1); } items.push({x:f.s,t:'s',v:e.name||'End'}); } // CJ: mark the End (not in the chart): it runs to the end of the song; chords and words stay put
+    else if(e.op==='lab'){ const f=grid[e.at]; if(!f) return; for(let k=items.length-1;k>=0;k--){ const it=items[k]; if(it.t==='s' && it.x>=f.s-1e-6) items.splice(k,1); } items.push({x:f.s,t:'s',v:e.name||'End'}); }
+    else if(e.op==='name'){ const f=grid[e.at]; if(!f) return; for(let k=items.length-1;k>=0;k--){ const it=items[k]; if(it.t==='s' && Math.abs(it.x-f.s)<1e-6) items.splice(k,1); } items.push({x:f.s,t:'s',v:e.name}); } // CJ: a section not on the chart, from this bar to the next section // CJ: mark the End (not in the chart): it runs to the end of the song; chords and words stay put
     else if(e.op==='sec'){ const f=grid[e.from], t=grid[e.at]; if(!f||!t) return; for(const it of items) if(it.t==='s' && it.x>=f.s-1e-6 && it.x<f.s+f.len-1e-6) it.x=t.s; } // move a section name only (CJ): no chord moves
     else if(e.op==='len'){ // CJ: set this bar's beats; the beats left over (or borrowed) belong to the next bar, and bar lines settle back at the next short bar
       const at=e.at; if(at<0||at>=grid.length) return; const was=new Map(grid.slice(at).map(g=>[g,{s:g.s,len:g.len}])), g0=grid[at];
@@ -1318,8 +1324,8 @@ function applyBarEdits(song){ const bars=song.bars, M0=ST.meter; bars.forEach(b=
   bars.splice(0,bars.length,...nb);
 }
 function shiftKeys(obj,at,d){ const o={}; for(const [k,v] of Object.entries(obj||{})){ const n=+k; if(d<0&&n===at) continue; o[n>=at+(d<0?1:0)?n+d:n]=v; } return o; }
-function barEdit(op,at,len){ pushUndo(); ST.barEdits=[...(ST.barEdits||[]), op==='ins'||op==='len'||op==='split'?{op,at,len}:op==='sec'?{op,at,from:len}:op==='lab'?{op,at,name:len}:{op,at}];
-  if(op==='len'||op==='sec'||op==='nosec'||op==='lab'){ finish(true); openEditor(at,true); saveLast(); return; }
+function barEdit(op,at,len){ pushUndo(); ST.barEdits=[...(ST.barEdits||[]), op==='ins'||op==='len'||op==='split'?{op,at,len}:op==='sec'?{op,at,from:len}:op==='lab'||op==='name'?{op,at,name:len}:{op,at}];
+  if(op==='len'||op==='sec'||op==='nosec'||op==='lab'||op==='name'){ finish(true); openEditor(at,true); saveLast(); return; }
   if(op==='split'){ ST.overrides=shiftKeys(ST.overrides,at+1,1); ST.breaks=shiftKeys(ST.breaks,at+1,1); const an={}; for(const [j,bar] of Object.entries(ST.anchors||{})){ const i=bar-1; an[j]=(i>at?i+1:i)+1; } ST.anchors=an; finish(true); openEditor(at,true); saveLast(); return; }
   const d=op==='ins'?1:-1; ST.overrides=shiftKeys(ST.overrides,at,d); ST.breaks=shiftKeys(ST.breaks,at,d);
   const an={}; for(const [j,bar] of Object.entries(ST.anchors||{})){ const i=bar-1; if(d<0&&i===at) continue; an[j]=(i>=at+(d<0?1:0)?i+d:i)+1; } ST.anchors=an;
@@ -1362,7 +1368,7 @@ function barOfStart(p){ const s0=p.start-ST.downPhase; return ST.song.bars.findI
 function newPass(j,nm,before){
   const e=ST.events[j], ord=ST.order||ST.base.map((_,i)=>i), baseIdx=ord[e.sec];
   // the section the chosen bar is in now: the new pass goes in right after it, and that section's start stays put
-  let cur=-1, curBar=-1; for(const p of (ST.al?.path||[])){ const ev=ST.events[p.j]; if(!ev||ev.k!==0) continue; const bi=barOfStart(p); if(bi<0) continue; if(bi<=selBar){ cur=ev.sec; curBar=bi; } else break; }
+  let cur=-1, curBar=-1; for(const p of (ST.al?.path||[])){ const ev=ST.events[p.j]; if(!ev||ev.k!==0) continue; const bi=barOfStart(p); if(bi<0) continue; if(bi<=selBar){ if(ev.sec!==cur||ev.pass===0){ cur=ev.sec; curBar=bi; } } else break; } /* a repeat of the same section (2x) isn't a new start: curBar stays on its first pass (CJ, Trust In God bar 106) */
   if(cur<0) return false;
   const onStart=curBar===selBar||!!before, old=ST.events, at=onStart?cur:cur+1, key=x=>x.sec+'/'+x.k+'/'+x.pass; /* the bar already starts a section: the new one goes in before it, and that section follows after */
   pushUndo(); const anchors={}; if(curBar>=0 && !onStart){ const j0=old.findIndex(x=>x.sec===cur&&x.k===0&&x.pass===0); if(j0>=0 && ST.anchors[j0]==null) ST.anchors={...ST.anchors,[j0]:{t:bT(curBar)+1e-3}}; }
@@ -1380,11 +1386,14 @@ function newPass(j,nm,before){
 }
 function pinSection(){
   const j=$('edSection').value; if(j===''||selBar<0) return;
+  if(j==='custom'){ const at=selBar; $('edSection').value=''; openSecAdd(); if($('secAdd').hidden) openSecAdd(); $('saBar').value=at+1; $('saSec').value='custom'; $('saName').hidden=false; $('saName').focus(); return; }
   if(j==='end'){ const at=selBar; barEdit('lab',at,'End'); $('edSection').value=''; $('edLenMsg').textContent=`The End now starts at bar ${at+1} and runs to the end of the song. No chords moved.`; buildSecNav(); return; } const nm=$('edSection').selectedOptions[0]?.textContent||ST.events[j].label;
   // the section is already on a bar close by: just move its name here, and leave every chord and the line-up alone (CJ)
   { const lab=ST.events[j]?.label||nm, norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]/g,''); let from=-1;
     for(let d=1; d<=8 && from<0; d++) for(const k of [selBar+d, selBar-d]){ const b=ST.song.bars[k]; if(b && b.section && (norm(b.section)===norm(nm) || norm(b.section).startsWith(norm(lab)))){ from=k; break; } }
     let prev=-1; for(let k=selBar-4;k>=0;k--){ const b=ST.song.bars[k]; if(b && b.section && (norm(b.section)===norm(nm) || norm(b.section).startsWith(norm(lab)))){ prev=k; break; } }
+    /* CJ (Trust In God, bar 106): that section already played earlier in the song, so this is another pass of it, not a move */
+    { let at=-1; for(const p of (ST.al?.path||[])){ if(String(p.j)===String(j)){ at=barOfStart(p); break; } } if(at>=0 && at<selBar-1 && newPass(+j,nm)) return; }
     if(prev>=0 && (from<0 || from<=selBar-4) && newPass(+j,nm)) return;
     if(from>=0){ barEdit('sec',selBar,from); $('edSection').value=''; $('edLenMsg').textContent=`${nm} now starts at bar ${selBar+1}. No chords moved.`; return; } }
   pushUndo(); ST.anchors={...ST.anchors};

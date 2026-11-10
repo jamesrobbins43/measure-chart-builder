@@ -753,7 +753,10 @@ function finish(keep){
   lgDraft={};
   saveLast();
   ST.song=buildSong(ST.meta,ST.sections,ST.S,ST.P,ST.downPhase,ST.meter,ST.events,ST.al,ST.audio.duration,ST.vox);
-  ST.song.bar0+=ST.nudge/1000; applyBarEdits(ST.song);
+  ST.song.bar0+=ST.nudge/1000;
+  /* CJ: a chart built from the section times starts at the first section in the list: no lead-in bars before it */
+  { const nl=(ST.barEdits||[]).find(e=>e.op==='nolead'), B=ST.song.bars; if(nl && B.length>1){ const x=(nl.t-ST.song.bar0)/ST.song.beat; let k=0; while(k<B.length-1 && Math.abs(B[k+1].s-x)<Math.abs(B[k].s-x)) k++; if(k>0) B.splice(0,k); } }
+  applyBarEdits(ST.song);
   // a section name used more than once without a number (Interlude, Interlude) shows as Interlude 1, Interlude 2, like the Fix bars list (CJ)
   { const base=l=>l.replace(/\s*\(\d+x\)\s*$/i,''), cnt={}, seen={};
     ST.song.bars.forEach(b=>{ if(b.section && !/\d$/.test(base(b.section))) cnt[b.section]=(cnt[b.section]||0)+1; });
@@ -1451,7 +1454,7 @@ function stOptions(){ const base=ST.base||ST.sections, cnt={}; base.forEach(s=>{
 function stFromChart(){ const rows=[], song=ST.song; if(!song) return rows; const at={};
   for(const p of (ST.al?.path||[])){ const e=ST.events[p.j]; if(!e||e.k!==0) continue; const bi=barOfStart(p); if(bi>=0 && at[bi]==null) at[bi]=String(ST.order?ordBase(ST.order[e.sec]):e.sec); }
   /* one row for every section name on the chart as it is now; a name the chart doesn't have becomes a "not on the chart" row */
-  song.bars.forEach((b,i)=>{ if(!b.section && at[i]==null) return; let sec=at[i]; /* every pass of a repeated section is its own row */
+  song.bars.forEach((b,i)=>{ if((!b.section||b.section==='Lead-in') && at[i]==null) return; /* CJ: no lead-in unless you add one */ let sec=at[i]; /* every pass of a repeated section is its own row */
     if(sec==null){ const nb=s=>String(s).toLowerCase().replace(/\s*\(\d+x\)\s*$/,'').replace(/\s+\d+$/,'').trim(), base=ST.base||ST.sections, k=base.findIndex(s=>nb(s.label)===nb(b.section)); sec=k>=0&&!(ST.barEdits||[]).some(e=>(e.op==='name'||e.op==='lab')&&e.name===b.section)?String(k):'custom'; }
     const rn=sec!=='custom'&&(ST.barEdits||[]).find(e=>e.op==='name'&&e.at===i); rows.push(sec==='custom'?{sec,name:b.section,t:bT(i)}:rn?{sec,t:bT(i),rn:true,name:rn.name}:{sec,t:bT(i)}); });
   return rows; }
@@ -1509,7 +1512,7 @@ function stFirst(){ document.body.classList.add('stfirst'); try{ sessionStorage.
 function stFirstDone(){ document.body.classList.remove('stfirst'); $('stLeft').textContent=''; if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; stOpen(false);
   $('stTitle').textContent='Section times'; $('stHelp').textContent='Set where every section starts. Type a time (like 1:23.5) or press Now while the song plays, then press Build chart from this list.'; $('stGo').textContent='Build chart from this list';
   render(); lastBar=-2; lastBeat=-1; update(false); scrollTo(0,0); }
-$('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.ok)){ const i=stRows.findIndex(r=>!r.ok), m=$('stMsg'); m.className='warn'; m.textContent=`Confirm every section first (${stRows.filter(r=>!r.ok).length} left). Next up is number ${i+1}.`; $('stRows').children[i]?.scrollIntoView({block:'center',behavior:'smooth'}); return; } if(stSnap0!==null && stKey(stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t))===stSnap0 && stRows.every(r=>r.t>=0)){ stFirstDone(); return; } const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
+$('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.ok)){ const i=stRows.findIndex(r=>!r.ok), m=$('stMsg'); m.className='warn'; m.textContent=`Confirm every section first (${stRows.filter(r=>!r.ok).length} left). Next up is number ${i+1}.`; $('stRows').children[i]?.scrollIntoView({block:'center',behavior:'smooth'}); return; } if(stSnap0!==null && stKey(stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t))===stSnap0 && stRows.every(r=>r.t>=0)){ const r0=stRows.slice().sort((a,b)=>a.t-b.t)[0]; if(r0 && ST.song.bars[0]?.section==='Lead-in' && !(ST.barEdits||[]).some(e=>e.op==='nolead')){ ST.barEdits=[{op:'nolead',t:bT(stSnap(r0.t))},...(ST.barEdits||[])]; finish(true); saveLast(); } stFirstDone(); return; } const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
   if(!rows.some(r=>r.sec!=='custom')){ msg.className='warn'; msg.textContent='Add at least one section from the chart.'; return; }
   rows.forEach(r=>{ if(r.rn&&!String(r.name||'').trim()) r.rn=false; });
   if(rows.some(r=>r.sec==='custom'&&!String(r.name||'').trim())){ msg.className='warn'; msg.textContent='Give every "Not on the chart" section a name.'; return; }
@@ -1519,12 +1522,12 @@ $('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.
   const chart=rows.map((r,i)=>({r,t:times[i]})).filter(x=>x.r.sec!=='custom'), customs=rows.map((r,i)=>({r,t:times[i],i})).filter(x=>x.r.sec==='custom');
   setOrder(chart.map(x=>{ const i=+x.r.sec, s=(ST.base||[])[i]; return s&&(s.repeat||1)>1?1000+i:i; })); const A={}; /* each row is one pass */
   chart.forEach((x,pos)=>{ const j=ST.events.findIndex(e=>e.sec===pos&&e.k===0&&e.pass===0); if(j>=0) A[j]={t:x.t+1e-3}; });
-  Object.assign(ST,{anchors:A, overrides:{}, breaks:{}, barEdits:[]}); realign();
+  Object.assign(ST,{anchors:A, overrides:{}, breaks:{}, barEdits:[{op:'nolead',t:times[0]}]}); realign();
   if(!ST.al?.path?.length){ applySnap(undoStack.pop()); undoUI(); msg.className='warn'; msg.textContent="The chart's chords don't fit those times, so nothing was changed. Check that each section starts where it really does."; return; }
   /* sections that aren't on the chart: their name from their start to the next section, and no chords until you type them */
   if(customs.length){ const E=[]; for(const c of customs){ const b0=stSnap(c.t), next=rows.slice(c.i+1).map(r=>stSnap(r.t))[0]??ST.song.bars.length; const nm=String(c.r.name).trim();
       E.push({op:/^end$/i.test(nm)?'lab':'name',at:b0,name:nm}); for(let b=b0;b<next;b++){ ST.overrides[b]={chords:[],lyrics:[]}; if(b>b0) E.push({op:'nosec',at:b}); } }
-    ST.barEdits=E; finish(true);
+    ST.barEdits=[...(ST.barEdits||[]),...E]; finish(true);
     /* CJ: a section that isn't on the chart (an extra chorus) gets the chords heard in the song, from the chart's own chords */
     for(const c of customs){ const b0=stSnap(c.t), next=rows.slice(c.i+1).map(r=>stSnap(r.t))[0]??ST.song.bars.length; if(next>b0){ rehearChords(b0,next-1); undoStack.pop(); } }
     finish(true); }

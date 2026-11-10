@@ -258,7 +258,7 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;h
 #stRows .stnow{grid-column:-2;min-width:5.5em;font-weight:600} /* CJ: Now is on the far right, and it's how a section is confirmed */ #stRows .stck{justify-self:end;color:var(--ok);font-weight:700;font-size:20px;line-height:1} #stRows li.ok .n{color:var(--ok);font-weight:700;font-size:17px;line-height:1}
 .stdots button.todo{background:var(--paper);border-color:var(--accent)} .stdots button.done{background:var(--ok)}
 #stLeft{font-size:12.5px;color:var(--muted);margin-left:4px}
-#rateBtn{display:none} body.stfirst #rateBtn{display:inline-block} body.stfirst #stClose{display:none} body.stfirst #stRows .bar,body.stfirst #stRows .stplay{display:none} /* CJ: step 1 is only about times, not bars */ body.stfirst #stRows{max-height:var(--stH,60vh);overscroll-behavior:contain;padding-right:4px}
+#rateBtn{display:none} body.stfirst #rateBtn{display:inline-block} body.stfirst #stClose{display:none} body.stfirst #stRows .bar,body.stfirst #stRows .stplay,body.stfirst #stRows .stdel{display:none} body.stfirst #stRows li{grid-template-columns:2.2em minmax(9em,16em) 6.5em auto 1.6em 1fr} body.stfirst #stRows .stnow{grid-column:auto} body.stfirst #stRows .stck{justify-self:center} /* CJ: Now sits right next to the rest of the row */ /* CJ: step 1 is only about times, not bars */ body.stfirst #stRows{max-height:var(--stH,60vh);overscroll-behavior:contain;padding-right:4px}
 </style>
 <script>/* CJ: dark or light background, remembered in this browser */ /* CJ: light is the default */ let lk=null; try{ lk=localStorage.getItem("mcb-look2"); }catch(e){} if(lk!=="dark") document.documentElement.setAttribute("data-look","light");</script>
 
@@ -2062,7 +2062,7 @@ function stRender(){ const ol=$('stRows'), opts=stOptions(); ol.innerHTML='';
     const bi=ST.song?barAt(r.t):-1; li.querySelector('.bar').textContent=bi>=0?'bar '+(bi+1):'';
     /* CJ: a check mark on each section once it's confirmed, so you can see what's left */
     li.classList.toggle('ok',!!r.ok); if(r.ok){ const n=li.querySelector('.n'); n.textContent='✓'; n.title='Confirmed'; n.setAttribute('aria-label',`Section ${i+1}, confirmed`); }
-    if(document.body.classList.contains('stfirst')){ const ck=document.createElement('span'); ck.className='stck'; ck.textContent=r.ok?'✓':''; ck.setAttribute('aria-hidden','true'); li.querySelector('.stnow').before(ck); }
+    if(document.body.classList.contains('stfirst')){ const ck=document.createElement('span'); ck.className='stck'; ck.textContent=r.ok?'✓':''; ck.setAttribute('aria-hidden','true'); li.querySelector('.stnow').after(ck); }
     sel.addEventListener('change',()=>{ r.sec=sel.value; if(r.sec==='custom'&&!r.name) r.name=''; stRender(); if(r.sec==='custom') $('stRows').children[i]?.querySelector('.stname')?.focus(); });
     ti.addEventListener('change',()=>{ const v=parseTime(ti.value); ti.classList.toggle('bad',!(v>=0)); if(v>=0){ r.t=v; r.ok=true; stSort(); } });
     li.querySelector('.stnow').addEventListener('click',()=>{ r.t=Math.max(0,songTime()); r.ok=true; stSort(); });

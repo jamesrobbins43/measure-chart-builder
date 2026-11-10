@@ -1347,6 +1347,13 @@ function realign(keep=true){
   ST.al=refineChords(fineAlign(anchors));
   finish(keep);
 }
+/* CJ: any sound on the track before the first section is the lead-in; silent bars before it are dropped */
+let songRms=null;
+function leadFrom(B,k){ const x=ST.mono, sr=22050; if(!x) return k; const sg=ST.song;
+  if(songRms==null||songRms.n!==x.length){ let e=0,c=0; for(let i=0;i<x.length;i+=64){ e+=x[i]*x[i]; c++; } songRms={v:Math.sqrt(e/Math.max(1,c)),n:x.length}; }
+  const loud=b=>{ const t0=Math.max(0,sg.bar0+B[b].s*sg.beat), t1=Math.max(t0,sg.bar0+(B[b].s+B[b].len)*sg.beat); const a=Math.floor(t0*sr), z=Math.min(x.length,Math.floor(t1*sr)); if(z-a<sr*0.05) return false;
+    let e=0,c=0; for(let i=a;i<z;i+=16){ e+=x[i]*x[i]; c++; } return Math.sqrt(e/c)>songRms.v*0.03; }; // louder than about -30 dB under the song's average
+  let j=0; while(j<k && !loud(j)) j++; return j; }
 function bpmLabel(){ const b=Math.round(60/ST.P*10)/10; return ST.compound? `${b} BPM (eighth notes)` : b+' BPM'; }
 function finish(keep){
   lgDraft={};
@@ -1354,7 +1361,7 @@ function finish(keep){
   ST.song=buildSong(ST.meta,ST.sections,ST.S,ST.P,ST.downPhase,ST.meter,ST.events,ST.al,ST.audio.duration,ST.vox);
   ST.song.bar0+=ST.nudge/1000;
   /* CJ: a chart built from the section times starts at the first section in the list: no lead-in bars before it */
-  { const nl=(ST.barEdits||[]).find(e=>e.op==='nolead'), B=ST.song.bars; if(nl && B.length>1){ const x=(nl.t-ST.song.bar0)/ST.song.beat; let k=0; while(k<B.length-1 && Math.abs(B[k+1].s-x)<Math.abs(B[k].s-x)) k++; if(k>0) B.splice(0,k); } }
+  { const nl=(ST.barEdits||[]).find(e=>e.op==='nolead'), B=ST.song.bars; if(nl && B.length>1){ const x=(nl.t-ST.song.bar0)/ST.song.beat; let k=0; while(k<B.length-1 && Math.abs(B[k+1].s-x)<Math.abs(B[k].s-x)) k++; if(k>0){ const j=leadFrom(B,k); B.splice(0,j); if(j<k){ B[0].section='Lead-in'; for(let i=1;i<k-j;i++) B[i].section=null; } } } }
   applyBarEdits(ST.song);
   // a section name used more than once without a number (Interlude, Interlude) shows as Interlude 1, Interlude 2, like the Fix bars list (CJ)
   { const base=l=>l.replace(/\s*\(\d+x\)\s*$/i,''), cnt={}, seen={};
@@ -2112,7 +2119,7 @@ function stFirst(back){ document.body.classList.add('stfirst'); document.body.cl
 function stFirstDone(){ document.body.classList.remove('stfirst','stback'); $('stClose').textContent='Close'; $('stLeft').textContent=''; if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; stOpen(false);
   $('stTitle').textContent='Section times'; $('stHelp').textContent='Set where every section starts. Type a time (like 1:23.5) or press Now while the song plays, then press Build chart from this list.'; $('stGo').textContent='Build chart from this list';
   render(); lastBar=-2; lastBeat=-1; update(false); scrollTo(0,0); }
-$('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.ok)){ const i=stRows.findIndex(r=>!r.ok), m=$('stMsg'); m.className='warn'; m.textContent=`Confirm every section first (${stRows.filter(r=>!r.ok).length} left). Next up is number ${i+1}.`; $('stRows').children[i]?.scrollIntoView({block:'center',behavior:'smooth'}); return; } if(stSnap0!==null && stKey(stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t))===stSnap0 && stRows.every(r=>r.t>=0)){ const r0=stRows.slice().sort((a,b)=>a.t-b.t)[0]; if(r0 && ST.song.bars[0]?.section==='Lead-in' && !(ST.barEdits||[]).some(e=>e.op==='nolead')){ ST.barEdits=[{op:'nolead',t:bT(stSnap(r0.t))},...(ST.barEdits||[])]; finish(true); saveLast(); } stFirstDone(); return; } const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
+$('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.ok)){ const i=stRows.findIndex(r=>!r.ok), m=$('stMsg'); m.className='warn'; m.textContent=`Confirm every section first (${stRows.filter(r=>!r.ok).length} left). Next up is number ${i+1}.`; $('stRows').children[i]?.scrollIntoView({block:'center',behavior:'smooth'}); return; } if(stSnap0!==null && stKey(stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t))===stSnap0 && stRows.every(r=>r.t>=0)){ const r0=stRows.slice().sort((a,b)=>a.t-b.t)[0]; if(r0 && !(ST.barEdits||[]).some(e=>e.op==='nolead')){ ST.barEdits=[{op:'nolead',t:bT(stSnap(r0.t))},...(ST.barEdits||[])]; finish(true); saveLast(); } stFirstDone(); return; } const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
   if(!rows.some(r=>r.sec!=='custom')){ msg.className='warn'; msg.textContent='Add at least one section from the chart.'; return; }
   rows.forEach(r=>{ if(r.rn&&!String(r.name||'').trim()) r.rn=false; });
   if(rows.some(r=>r.sec==='custom'&&!String(r.name||'').trim())){ msg.className='warn'; msg.textContent='Give every "Not on the chart" section a name.'; return; }

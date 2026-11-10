@@ -238,15 +238,27 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .stpanel{flex-basis:100%;display:block;padding:12px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--paper);max-width:760px}
 .stpanel .sthead{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;margin-bottom:8px} .stpanel .sthead b{font-size:14px;color:var(--ink)}
 #stRows{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:50vh;overflow:auto}
-#stRows li{display:grid;grid-template-columns:2.2em minmax(9em,16em) 6.5em auto auto auto 1fr;gap:6px;align-items:center} #stRows li .n{color:var(--muted);text-align:right}
+#stRows li{display:grid;grid-template-columns:2.2em minmax(9em,16em) 6.5em auto auto auto auto 1fr;gap:6px;align-items:center} #stRows li .n{color:var(--muted);text-align:right}
 #stRows select,#stRows input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--bg);color:var(--ink);min-width:0} #stRows input.bad{border-color:var(--flag)}
 #stRows .stname{grid-column:2} #stRows .bar{color:var(--muted);font-size:12px}
 .stbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px} #stMsg{font-size:12px;color:var(--muted)} #stMsg.warn{color:var(--flag)}
-@media (max-width:600px){ #stRows li{grid-template-columns:2em 1fr 6em auto auto auto} #stRows .bar{display:none} }
+@media (max-width:600px){ #stRows li{grid-template-columns:2em 1fr 6em auto auto auto auto} #stRows .bar{display:none} }
 
 /* CJ: step 1 is only the section times list; the chart and every other option wait until the list is confirmed */
 body.stfirst #choBtn,body.stfirst #mixBtn,body.stfirst .lookSw,body.stfirst .mixer,body.stfirst .chordnow,body.stfirst #secNav,body.stfirst #secAdd,body.stfirst .toolbar>.group:not(#stPanel):not(#newGroup),body.stfirst #msg,body.stfirst #checks,body.stfirst main.out,body.stfirst #editor{display:none!important}
-body.stfirst .stpanel{max-width:none;margin-top:6px} #rateBtn{display:none} body.stfirst #rateBtn{display:inline-block} body.stfirst #stClose{display:none} body.stfirst #stRows{max-height:none}
+body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;height:56px;margin:4px 0 2px;border:1px solid var(--rule);border-radius:8px;background:var(--bg);cursor:pointer;touch-action:none;overflow:visible}
+.stline canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:8px}
+.stline .sthead2{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--ink);pointer-events:none;border-radius:1px}
+.stdots{position:absolute;inset:0}
+.stdots button{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;padding:0;border-radius:50%;border:2px solid var(--paper);background:var(--accent);cursor:pointer;z-index:2}
+.stdots button span{position:absolute;bottom:13px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10.5px;color:var(--muted);pointer-events:none}
+.stdots button:nth-child(even) span{bottom:auto;top:13px}
+.stdots button:hover,.stdots button:focus-visible{background:var(--ink)}
+.sttimes{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:10px;font-variant-numeric:tabular-nums}
+#stRows .stok{white-space:nowrap} #stRows li.ok .stok{background:var(--ok);border-color:var(--ok);color:#fff} #stRows li.ok .n{color:var(--ok);font-weight:700}
+.stdots button.todo{background:var(--paper);border-color:var(--accent)} .stdots button.done{background:var(--ok)}
+#stLeft{font-size:12.5px;color:var(--muted);margin-left:4px}
+#rateBtn{display:none} body.stfirst #rateBtn{display:inline-block} body.stfirst #stClose{display:none} body.stfirst #stRows{max-height:none}
 </style>
 <script>/* CJ: dark or light background, remembered in this browser */ /* CJ: light is the default */ let lk=null; try{ lk=localStorage.getItem("mcb-look2"); }catch(e){} if(lk!=="dark") document.documentElement.setAttribute("data-look","light");</script>
 
@@ -320,7 +332,7 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} #rateBtn{display:none} body
     <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><button type="button" id="libDel" hidden>Remove from library</button><button type="button" id="libImport" hidden title="Add songs saved in the Claude version of this tool">Import saved songs</button><input type="file" id="libImportFile" accept=".json,application/json" hidden><span id="libMsg"></span></div>
     <div class="group"><button type="button" id="reportBtn">Report a problem</button></div>
     <div class="group" id="newGroup" style="margin-left:auto"><button type="button" id="newBtn">New song</button></div> <!-- CJ: New song furthest right -->
-    <div class="group stpanel" id="stPanel" hidden><div class="sthead"><b id="stTitle">Section times</b> <span id="stHelp">Set where every section starts. Type a time (like 1:23.5) or press Now while the song plays, then press Build chart from this list.</span></div><ol id="stRows"></ol><div class="stbtns"><button type="button" id="stAdd">+ Add a section</button><button type="button" class="primary" id="stGo">Build chart from this list</button><button type="button" id="stClose">Close</button><span id="stMsg" role="status"></span></div></div>
+    <div class="group stpanel" id="stPanel" hidden><div class="sthead"><b id="stTitle">Section times</b> <span id="stHelp">Set where every section starts. Type a time (like 1:23.5) or press Now while the song plays, then press Build chart from this list.</span></div><div class="stline" id="stLine" role="slider" tabindex="0" aria-label="Song position: click to jump" aria-valuemin="0"><canvas id="stWave" aria-hidden="true"></canvas><div class="stdots" id="stDots"></div><div class="sthead2" id="stPh"></div></div><div class="sttimes"><span id="stCur">0:00.0</span><span id="stDur"></span></div><ol id="stRows"></ol><div class="stbtns"><button type="button" id="stAdd">+ Add a section</button><button type="button" class="primary" id="stGo">Build chart from this list</button><button type="button" id="stClose">Close</button><span id="stLeft" role="status"></span><span id="stMsg" role="status"></span></div></div>
     <p class="msg" id="msg"></p>
     <div class="checks" id="checks" hidden role="status"></div>
     <div class="report" id="report" hidden>
@@ -1007,7 +1019,8 @@ let playerReady=false;
 function setupPlayer(){
   if(playerReady) { update(true); return; } playerReady=true;
   // space bar = play / pause, wherever focus is (except while typing); it never re-clicks a bar or button (CJ)
-  const typing=t=>t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&!(t.tagName==='INPUT'&&/^(range|checkbox|radio|button)$/.test(t.type)));
+  /* CJ: in the section times list the space bar always plays and stops, even in a time box or a section menu (not in a name box) */
+  const typing=t=>t&&!(t.closest&&t.closest('#stRows')&&!t.classList.contains('stname'))&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&!(t.tagName==='INPUT'&&/^(range|checkbox|radio|button)$/.test(t.type)));
   document.addEventListener('keydown',e=>{ if(e.code!=='Space'&&e.key!==' ') return; if(typing(e.target)||$('result').hidden||e.metaKey||e.ctrlKey||e.altKey) return; e.preventDefault(); e.stopPropagation(); if(!e.repeat) $('play').click(); },true);
   document.addEventListener('keyup',e=>{ if((e.code==='Space'||e.key===' ')&&!typing(e.target)&&!$('result').hidden) e.preventDefault(); },true);
   $('play').addEventListener('click',()=>{ if(playing) pause(); else getAC().resume().then(()=>{ const sb=choOnly?choStartBar(pausedAt):atTop(pausedAt)?topBar():null; startAtTime(atTop(pausedAt)&&!choOnly?0:pausedAt,sb); }); });
@@ -1444,32 +1457,56 @@ function stFromChart(){ const rows=[], song=ST.song; if(!song) return rows; cons
   return rows; }
 function stRender(){ const ol=$('stRows'), opts=stOptions(); ol.innerHTML='';
   stRows.forEach((r,i)=>{ const li=document.createElement('li');
-    li.innerHTML=`<span class="n">${i+1}.</span><select aria-label="Section ${i+1}">${opts.map(o=>`<option value="${o.v}">${esc(o.l)}</option>`).join('')}<option value="custom">Not on the chart…</option></select><input type="text" class="stt" inputmode="decimal" aria-label="Start time of section ${i+1}"><button type="button" class="stnow" title="Use the time the song is at now">Now</button><button type="button" class="stplay" title="Play from here" aria-label="Play from here">▶</button><button type="button" class="stdel" title="Remove this section" aria-label="Remove">×</button><span class="bar"></span>`;
+    li.innerHTML=`<span class="n">${i+1}.</span><select aria-label="Section ${i+1}">${opts.map(o=>`<option value="${o.v}">${esc(o.l)}</option>`).join('')}<option value="custom">Not on the chart…</option></select><input type="text" class="stt" inputmode="decimal" aria-label="Start time of section ${i+1}"><button type="button" class="stnow" title="Use the time the song is at now">Now</button><button type="button" class="stplay" title="Play from here" aria-label="Play from here">▶</button><button type="button" class="stdel" title="Remove this section" aria-label="Remove">×</button><button type="button" class="stok" aria-pressed="false" title="Confirm this section starts here">✓ Confirm</button><span class="bar"></span>`;
     const sel=li.querySelector('select'), ti=li.querySelector('.stt'); sel.value=r.sec; ti.value=fmtT(r.t);
-    if(r.sec==='custom'){ const nm=document.createElement('input'); nm.type='text'; nm.className='stname'; nm.maxLength=30; nm.placeholder='Name, e.g. Tag'; nm.value=r.name||''; nm.setAttribute('aria-label','Name of section '+(i+1)); nm.addEventListener('input',()=>{ r.name=nm.value; }); li.appendChild(nm); }
+    if(r.sec==='custom'){ const nm=document.createElement('input'); nm.type='text'; nm.className='stname'; nm.maxLength=30; nm.placeholder='Name, e.g. Tag'; nm.value=r.name||''; nm.setAttribute('aria-label','Name of section '+(i+1)); nm.addEventListener('input',()=>{ r.name=nm.value; stDotsDraw(); }); li.appendChild(nm); }
     const bi=ST.song?barAt(r.t):-1; li.querySelector('.bar').textContent=bi>=0?'bar '+(bi+1):'';
-    sel.addEventListener('change',()=>{ r.sec=sel.value; if(r.sec==='custom'&&!r.name) r.name=''; stRender(); if(r.sec==='custom') $('stRows').children[i]?.querySelector('.stname')?.focus(); });
-    ti.addEventListener('change',()=>{ const v=parseTime(ti.value); ti.classList.toggle('bad',!(v>=0)); if(v>=0){ r.t=v; stSort(); } });
-    li.querySelector('.stnow').addEventListener('click',()=>{ r.t=Math.max(0,songTime()); stSort(); });
+    /* CJ: a check mark on each section once it's confirmed, so you can see what's left */
+    const ok=li.querySelector('.stok'); li.classList.toggle('ok',!!r.ok); ok.setAttribute('aria-pressed',String(!!r.ok)); ok.textContent=r.ok?'✓ Confirmed':'Confirm'; if(r.ok) li.querySelector('.n').textContent='✓';
+    ok.addEventListener('click',()=>{ r.ok=!r.ok; stRender(); });
+    sel.addEventListener('change',()=>{ r.sec=sel.value; r.ok=true; if(r.sec==='custom'&&!r.name) r.name=''; stRender(); if(r.sec==='custom') $('stRows').children[i]?.querySelector('.stname')?.focus(); });
+    ti.addEventListener('change',()=>{ const v=parseTime(ti.value); ti.classList.toggle('bad',!(v>=0)); if(v>=0){ r.t=v; r.ok=true; stSort(); } });
+    li.querySelector('.stnow').addEventListener('click',()=>{ r.t=Math.max(0,songTime()); r.ok=true; stSort(); });
     li.querySelector('.stplay').addEventListener('click',()=>{ getAC().resume().then(()=>startAtTime(Math.max(0,r.t-0.05))); });
     li.querySelector('.stdel').addEventListener('click',()=>{ stRows.splice(i,1); stRender(); });
-    ol.appendChild(li); }); }
+    ol.appendChild(li); }); stDotsDraw(); stLeftUI(); }
+function stLeftUI(){ const el=$('stLeft'); if(!el) return; const n=stRows.length, k=stRows.filter(r=>r.ok).length; el.textContent=document.body.classList.contains('stfirst')?(k<n?`${k} of ${n} confirmed, ${n-k} left`:`All ${n} confirmed`):''; }
+
+/* CJ: the song as a horizontal line: click or drag to jump; every section start is a dot on it */
+let stPeaks=null;
+function stWaveDraw(){ const cv=$('stWave'); if(!cv||!ST.mono) return; const w=cv.clientWidth, h=cv.clientHeight; if(!w) return; const dpr=devicePixelRatio||1; cv.width=w*dpr; cv.height=h*dpr;
+  const n=Math.max(50,Math.floor(w)); if(!stPeaks||stPeaks.length!==n){ const x=ST.mono, step=Math.floor(x.length/n); stPeaks=new Float32Array(n); let mx=1e-6; for(let i=0;i<n;i++){ let e=0; const a=i*step; for(let j=a;j<a+step;j+=8) e+=x[j]*x[j]; stPeaks[i]=Math.sqrt(e/(step/8)); if(stPeaks[i]>mx) mx=stPeaks[i]; } for(let i=0;i<n;i++) stPeaks[i]/=mx; }
+  const g=cv.getContext('2d'); g.scale(dpr,dpr); g.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--rule')||'#ccc'; const bw=w/n;
+  for(let i=0;i<n;i++){ const y=Math.max(1,stPeaks[i]*(h-12)/2); g.fillRect(i*bw,h/2-y,Math.max(1,bw-0.5),y*2); } }
+function stDotsDraw(){ const box=$('stDots'); if(!box||!ST.audio) return; const D=ST.audio.duration, opts=stOptions(); box.innerHTML='';
+  stRows.forEach((r,i)=>{ if(!(r.t>=0)) return; const b=document.createElement('button'); b.type='button'; b.style.left=(100*Math.min(1,r.t/D))+'%';
+    const nm=r.sec==='custom'?(r.name||'New section'):(opts[+r.sec]?.l||''); b.title=`${i+1}. ${nm} at ${fmtT(r.t)}`; b.setAttribute('aria-label',b.title); b.innerHTML=`<span>${r.ok?'✓ ':''}${esc(nm)}</span>`; b.classList.add(r.ok?'done':'todo');
+    b.addEventListener('click',e=>{ e.stopPropagation(); stSeek(r.t); }); box.appendChild(b); }); }
+function stSeek(t){ t=Math.max(0,Math.min(t,ST.audio.duration-0.1)); if(playing) startAtTime(t); else { pausedAt=t+userSync/1000; update(true); } stLineTick(); }
+function stLineTick(){ if($('stPanel').hidden||!ST.audio) return; const t=Math.max(0,songTime()), D=ST.audio.duration; $('stPh').style.left=(100*Math.min(1,t/D))+'%'; $('stCur').textContent=fmtT(t); $('stDur').textContent=fmtT(D); $('stLine').setAttribute('aria-valuenow',t.toFixed(1)); $('stLine').setAttribute('aria-valuemax',D.toFixed(1)); }
+{ const L=$('stLine'); let drag=false; const at=e=>{ const r=L.getBoundingClientRect(); return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*ST.audio.duration; };
+  L.addEventListener('pointerdown',e=>{ if(e.target.closest('.stdots button')||!ST.audio) return; drag=true; L.setPointerCapture(e.pointerId); stSeek(at(e)); });
+  L.addEventListener('pointermove',e=>{ if(drag && !playing){ pausedAt=at(e)+userSync/1000; stLineTick(); } });
+  L.addEventListener('pointerup',e=>{ if(!drag) return; drag=false; stSeek(at(e)); });
+  L.addEventListener('keydown',e=>{ if(!ST.audio) return; const d=e.key==='ArrowRight'?5:e.key==='ArrowLeft'?-5:0; if(d){ e.preventDefault(); stSeek(songTime()+d); } }); }
+addEventListener('resize',()=>{ if(!$('stPanel').hidden){ stPeaks=null; stWaveDraw(); } });
+(function stLoop(){ stLineTick(); requestAnimationFrame(stLoop); })();
 function stSort(){ stRows.sort((a,b)=>a.t-b.t); stRender(); }
-function stOpen(show){ const pn=$('stPanel'), on=show??pn.hidden; pn.hidden=!on; $('stBtn').setAttribute('aria-expanded',String(on)); if(on){ stRows=stFromChart(); $('stMsg').textContent=''; $('stMsg').className=''; stRender(); } }
+function stOpen(show){ const pn=$('stPanel'), on=show??pn.hidden; pn.hidden=!on; $('stBtn').setAttribute('aria-expanded',String(on)); if(on){ stRows=stFromChart(); $('stMsg').textContent=''; $('stMsg').className=''; stRender(); stPeaks=null; requestAnimationFrame(stWaveDraw); } }
 $('stBtn').addEventListener('click',()=>stOpen()); $('stClose').addEventListener('click',()=>stOpen(false));
-$('stAdd').addEventListener('click',()=>{ const t=Math.max(0,songTime()); stRows.push({sec:stRows.length?stRows[stRows.length-1].sec:'0', t}); stSort(); $('stMsg').className=''; $('stMsg').textContent=`Added a section at ${fmtT(t)}. Pick which one it is.`; });
+$('stAdd').addEventListener('click',()=>{ const t=Math.max(0,songTime()); stRows.push({sec:stRows.length?stRows[stRows.length-1].sec:'0', t, ok:true}); stSort(); $('stMsg').className=''; $('stMsg').textContent=`Added a section at ${fmtT(t)}. Pick which one it is.`; });
 /* the start of the bar nearest to a time */
 function stSnap(t){ let b=barAt(t); if(b<0) b=0; const n=ST.song.bars.length; if(b<n-1 && Math.abs(bT(b+1)-t)<Math.abs(bT(b)-t)) b++; return Math.min(b,n-1); }
 
 /* CJ: right from the start, the list of section times comes first; the chart is only built once the list is confirmed */
 let stSnap0=null; const stKey=r=>JSON.stringify(r.map(x=>[x.sec,Math.round(x.t*10),x.name||'']));
 function stFirst(){ document.body.classList.add('stfirst'); try{ sessionStorage.setItem('mcb-st1','1'); }catch(e){} stOpen(true); stSnap0=stKey(stRows);
-  $('stTitle').textContent='Step 1: Section times'; $('stHelp').textContent='Play the song and check where every section starts. Fix a time by typing it (like 1:23.5) or by pressing Now at the right moment. Add, remove or change sections as needed. When the list is right, press Confirm section times.';
+  $('stTitle').textContent='Step 1: Section times'; $('stHelp').textContent='Play the song and check where every section starts. Fix a time by typing it (like 1:23.5) or by pressing Now at the right moment. Press Confirm on each section once its start is right (pressing Now or changing it confirms it too). Click the line above to jump around the song. When every section has a check mark, press Confirm section times.';
   $('stGo').textContent='Confirm section times and build the chart'; scrollTo(0,0); }
-function stFirstDone(){ document.body.classList.remove('stfirst'); if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; stOpen(false);
+function stFirstDone(){ document.body.classList.remove('stfirst'); $('stLeft').textContent=''; if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; stOpen(false);
   $('stTitle').textContent='Section times'; $('stHelp').textContent='Set where every section starts. Type a time (like 1:23.5) or press Now while the song plays, then press Build chart from this list.'; $('stGo').textContent='Build chart from this list';
   render(); lastBar=-2; lastBeat=-1; update(false); scrollTo(0,0); }
-$('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stKey(stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t))===stSnap0 && stRows.every(r=>r.t>=0)){ stFirstDone(); return; } const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
+$('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.ok)){ const i=stRows.findIndex(r=>!r.ok), m=$('stMsg'); m.className='warn'; m.textContent=`Confirm every section first (${stRows.filter(r=>!r.ok).length} left). Next up is number ${i+1}.`; $('stRows').children[i]?.scrollIntoView({block:'center',behavior:'smooth'}); return; } if(stSnap0!==null && stKey(stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t))===stSnap0 && stRows.every(r=>r.t>=0)){ stFirstDone(); return; } const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
   if(!rows.some(r=>r.sec!=='custom')){ msg.className='warn'; msg.textContent='Add at least one section from the chart.'; return; }
   if(rows.some(r=>r.sec==='custom'&&!String(r.name||'').trim())){ msg.className='warn'; msg.textContent='Give every "Not on the chart" section a name.'; return; }
   const bars=rows.map(r=>stSnap(r.t)); for(let i=1;i<bars.length;i++) if(bars[i]<=bars[i-1]){ msg.className='warn'; msg.textContent=`Sections ${i} and ${i+1} start on the same bar (bar ${bars[i]+1}). Move one of them.`; return; }

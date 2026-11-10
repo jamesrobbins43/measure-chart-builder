@@ -236,7 +236,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 :root:not([data-print]):not([data-look="light"]) .fline.has .ck{background:var(--accent);border-color:var(--accent)} :root:not([data-print]):not([data-look="light"]) .fline.has .ck::after{border-color:var(--on-accent)}
 .lookSw{display:inline-flex;align-items:center;gap:0;margin-left:4px;font-family:var(--f-ui);font-size:12px;color:var(--muted)} .lookSw>span{margin-right:6px} .lookSw button{border-radius:0;margin-left:-1px} .lookSw button:first-of-type{border-radius:8px 0 0 8px;margin-left:0} .lookSw button:last-of-type{border-radius:0 8px 8px 0} .lookSw button{padding:5px 10px;font-size:13px} .lookSw button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)} :root:not([data-print]):not([data-look="light"]) .lookSw button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:700}
 </style>
-<script>/* CJ: dark or light background, remembered in this browser */ try{ if(localStorage.getItem("mcb-look")==="light") document.documentElement.setAttribute("data-look","light"); }catch(e){}</script>
+<script>/* CJ: dark or light background, remembered in this browser */ /* CJ: light is the default */ let lk=null; try{ lk=localStorage.getItem("mcb-look2"); }catch(e){} if(lk!=="dark") document.documentElement.setAttribute("data-look","light");</script>
 
 
 <!-- ===== upload ===== -->
@@ -272,7 +272,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
       <button type="button" id="choBtn" aria-pressed="false" title="Play only the choruses, one after another">Choruses only</button>
       <button type="button" id="verBtn" hidden aria-pressed="false" title="Play only the verses, one after another">Verses only</button>
       <button type="button" id="mixBtn" aria-expanded="true" aria-controls="mixer">Mixer</button>
-      <span class="lookSw" role="group" aria-label="Background"><span>Background</span> <button type="button" id="lookDark" aria-pressed="true">Dark</button><button type="button" id="lookLight" aria-pressed="false">Light</button></span>
+      <span class="lookSw" role="group" aria-label="Background"><span>Background</span> <button type="button" id="lookLight" aria-pressed="true">Light</button><button type="button" id="lookDark" aria-pressed="false">Dark</button></span>
     </div>
     <div class="mixer" id="mixer">
       <label class="strip" for="clickVol"><output id="clickV">off</output><input class="fader" id="clickVol" type="range" min="0" max="200" step="1" value="0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 21h7L13 4h-2z"/><path d="M12 17l5-9"/><path d="M7 21h10"/></svg><span>Click</span></label>
@@ -1125,9 +1125,9 @@ async function build(){
 }
 // ---------- song library: saved fixes, shared through the artifact's db ----------
 /* CJ: choose a dark or light background */
-function setLook(v){ const L=v==='light'; if(L) document.documentElement.setAttribute('data-look','light'); else document.documentElement.removeAttribute('data-look'); try{ localStorage.setItem('mcb-look',L?'light':'dark'); }catch(e){} $('lookDark').setAttribute('aria-pressed',String(!L)); $('lookLight').setAttribute('aria-pressed',String(L)); }
+function setLook(v,save=true){ const L=v==='light'; if(L) document.documentElement.setAttribute('data-look','light'); else document.documentElement.removeAttribute('data-look'); if(save) try{ localStorage.setItem('mcb-look2',L?'light':'dark'); }catch(e){} $('lookDark').setAttribute('aria-pressed',String(!L)); $('lookLight').setAttribute('aria-pressed',String(L)); }
 $('lookDark').addEventListener('click',()=>setLook('dark')); $('lookLight').addEventListener('click',()=>setLook('light'));
-setLook(document.documentElement.getAttribute('data-look')==='light'?'light':'dark');
+setLook(document.documentElement.getAttribute('data-look')==='light'?'light':'dark',false);
 // song library on this site's server (/api/songs); same shape as the artifact database the page was written for
 let DB=(()=>{
   let key=null; try{ const u=new URL(location.href), k=u.searchParams.get('editor'); if(k){ localStorage.setItem('mcb-editor',k); u.searchParams.delete('editor'); history.replaceState(null,'',u); } key=localStorage.getItem('mcb-editor'); }catch(e){}

@@ -127,7 +127,7 @@ html:has(#upload:not([hidden])) body{background:#000}
 .beats{display:flex;gap:5px;align-items:center}
 .beats i{font-style:normal;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;font-family:var(--f-ui);font-size:13px;font-weight:500;color:var(--muted)}
 .beats i.on{background:var(--accent);color:var(--paper);font-weight:700}
-.beats i.on.one{background:#fff;color:#000;box-shadow:inset 0 0 0 1.5px #6b6b6b} /* CJ: beat one is a white circle with a black number */
+.chordnow{display:none!important} /* CJ: the count, Now and Next in the header aren't needed */ .beats i.on.one{background:#fff;color:#000;box-shadow:inset 0 0 0 1.5px #6b6b6b} /* CJ: beat one is a white circle with a black number */
 .where{font-family:var(--f-ui);font-size:12px;color:var(--muted)}
 
 /* toolbar */
@@ -879,7 +879,7 @@ function render(forcePer){
       for(let q=0;q<M;q++) h+=`<span class="ch" style="grid-column:${q+1}">${chB[q].join(' ')}</span><span class="bt${q?'':' one'}" style="grid-column:${q+1}"><b>${q+1}</b>${ands.has(q)?'<i class="plus" aria-label="and">+</i>':''}</span>`;
       // lyrics flow as one line: each beat's words start at their beat, and a long phrase pushes the next one along
       // instead of being squeezed into its own narrow column
-      if((showLyr || (b.lyr0!=null && b.lyr0!==JSON.stringify(b.lyrics||[]))) && lyB.some(x=>x.length)){ let lh='', q=0;
+      if((showLyr || b.lyU) && lyB.some(x=>x.length)){ /* only words someone typed (CJ: no chart lyrics) */ let lh='', q=0;
         while(q<M){ let span=1; while(q+span<M && !lyB[q+span].length) span++;
           lh+=`<span style="min-width:calc(100% * ${span} / ${M})">${lyB[q].join(' ')}</span>`; q+=span; }
         h+=`<div class="lyr">${lh}</div>`; }
@@ -1263,7 +1263,8 @@ $('lgSave').addEventListener('click',()=>{
   for(const [i,[cs,ws]] of todo){ const b=ST.song.bars[i]; if(!b) continue; const lyrics=[], chords=[];
     ws.forEach((v,p)=>v.split(/\s+/).filter(Boolean).forEach(w=>lyrics.push([p*R,w])));
     cs.forEach((v,p)=>{ const c=v.split(/\s+/).filter(Boolean).pop(); if(c && isChord(c)) chords.push([1+p/G,lgIn(c)]); }); // one chord per box
-    ST.overrides[i]={chords, lyrics}; b.chords=chords; b.lyrics=lyrics; n++; }
+    const wd=x=>(x||[]).map(w=>w[1]).join(' '), lyU=!!(ST.overrides[i]?.lyU || (lyrics.length && wd(lyrics)!==wd(b.lyrics)));
+    ST.overrides[i]=lyU?{chords, lyrics, lyU:1}:{chords, lyrics}; b.chords=chords; b.lyrics=lyrics; b.lyU=lyU; n++; }
   lgDraft={};
   render(); sectionCheck(); update(true,true); markSel(); saveLast(); lgBuild();
   $('lgMsg').textContent=`Saved ${n} bar${n===1?'':'s'}.`;

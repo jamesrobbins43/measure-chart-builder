@@ -234,7 +234,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 :root:not([data-print]):not([data-look="light"]) .editor{background:var(--paper);border-top-color:var(--accent);box-shadow:0 -8px 24px rgba(0,0,0,.5)}
 :root:not([data-print]):not([data-look="light"]) .qchord{box-shadow:0 6px 18px rgba(0,0,0,.6)}
 :root:not([data-print]):not([data-look="light"]) .fline.has .ck{background:var(--accent);border-color:var(--accent)} :root:not([data-print]):not([data-look="light"]) .fline.has .ck::after{border-color:var(--on-accent)}
-.lookSw{display:inline-flex;align-items:center;gap:0;margin-left:4px;font-family:var(--f-ui);font-size:12px;color:var(--muted)} .lookSw>span{margin-right:6px} .lookSw button{border-radius:0;margin-left:-1px} .lookSw button:first-of-type{border-radius:8px 0 0 8px;margin-left:0} .lookSw button:last-of-type{border-radius:0 8px 8px 0} .lookSw button{padding:5px 10px;font-size:13px} .lookSw button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)} :root:not([data-print]):not([data-look="light"]) .lookSw button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:700}
+.msg.lib{color:var(--ink);font-weight:600;border-left:3px solid var(--accent);padding-left:8px} .lookSw{display:inline-flex;align-items:center;gap:0;margin-left:4px;font-family:var(--f-ui);font-size:12px;color:var(--muted)} .lookSw>span{margin-right:6px} .lookSw button{border-radius:0;margin-left:-1px} .lookSw button:first-of-type{border-radius:8px 0 0 8px;margin-left:0} .lookSw button:last-of-type{border-radius:0 8px 8px 0} .lookSw button{padding:5px 10px;font-size:13px} .lookSw button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)} :root:not([data-print]):not([data-look="light"]) .lookSw button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:700}
 </style>
 <script>/* CJ: dark or light background, remembered in this browser */ /* CJ: light is the default */ let lk=null; try{ lk=localStorage.getItem("mcb-look2"); }catch(e){} if(lk!=="dark") document.documentElement.setAttribute("data-look","light");</script>
 
@@ -1177,7 +1177,8 @@ async function libFind(dur,env){
 }
 // fixes saved before the server existed were made against the page's own chord reading, so they keep it
 function useCf(src){ if(src==='srv'&&ST.CfSrv){ ST.Cf=ST.CfSrv; ST.cfSrc='srv'; } else if(ST.CfLocal){ ST.Cf=ST.CfLocal; ST.cfSrc='local'; } }
-function libShow(){ if(!ST.libAl) return realign(false); ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration); ST.al=ST.libAl; ST.libAl=null; finish(false); }
+function libShow(){ if(!ST.libAl) realign(false); else { ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration); ST.al=ST.libAl; ST.libAl=null; finish(false); }
+  /* CJ: say so when the song came from the library */ if(ST.libId){ const m=$('msg'); m.className='msg lib'; m.textContent=ST.libSame===false?'This song has been uploaded before and corrections have been made. The timing from the corrected version is used with your chart.':'This song has been uploaded before and corrections have been made, so you\'re seeing the corrected version.'; } }
 function applyLib(h){
   const v=h.v; if(!(v.P>0)) return false;
   ST.P=v.P; ST.meter=v.meter||ST.meter; ST.shift=v.shift||0; if(v.den){ ST.den=v.den; ST.compound=!!v.compound; }

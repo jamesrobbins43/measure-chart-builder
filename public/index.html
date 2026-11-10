@@ -1828,7 +1828,7 @@ function lgBuild(){
   $('lgFrom').value=a; $('lgTo').value=z; let h='';
   const G=lgG(), R=4/G; // CJ: in 6/8 each count splits in two (1 +), not four
   for(let i=a-1;i<z;i++){ const L=bLen(i)*G, words=Array.from({length:L},()=>[]);
-    ST.song.bars[i].lyrics.forEach(([p,w])=>words[Math.min(L-1,Math.max(0,Math.round(p/R)))].push(w));
+    if(ST.song.bars[i].lyU) ST.song.bars[i].lyrics.forEach(([p,w])=>words[Math.min(L-1,Math.max(0,Math.round(p/R)))].push(w));
     const chs=Array.from({length:L},()=>[]); ST.song.bars[i].chords.forEach(([bt,c])=>chs[Math.min(L-1,Math.max(0,Math.round((bt-1)*G)))].push(lgOut(c)));
     const orig=[chs.map(x=>x.join(' ')), words.map(x=>x.join(' '))], dr=lgDraft[i]&&lgDraft[i][0].length===L?lgDraft[i]:null;
     lgOrig[i]=JSON.stringify(orig);
@@ -1862,7 +1862,7 @@ $('lgSave').addEventListener('click',()=>{
   for(const [i,[cs,ws]] of todo){ const b=ST.song.bars[i]; if(!b) continue; const lyrics=[], chords=[];
     ws.forEach((v,p)=>v.split(/\s+/).filter(Boolean).forEach(w=>lyrics.push([p*R,w])));
     cs.forEach((v,p)=>{ const c=v.split(/\s+/).filter(Boolean).pop(); if(c && isChord(c)) chords.push([1+p/G,lgIn(c)]); }); // one chord per box
-    const wd=x=>(x||[]).map(w=>w[1]).join(' '), lyU=!!(ST.overrides[i]?.lyU || (lyrics.length && wd(lyrics)!==wd(b.lyrics)));
+    const wd=x=>(x||[]).map(w=>w[1]).join(' '), lyU=lyrics.length>0; if(!lyU) lyrics.push(...(b.lyU?[]:(b.lyrics||[]))); /* CJ: only typed words count; the chart's own stay hidden (they guide the vocal slider) */
     ST.overrides[i]=lyU?{chords, lyrics, lyU:1}:{chords, lyrics}; b.chords=chords; b.lyrics=lyrics; b.lyU=lyU; n++; }
   lgDraft={};
   render(); sectionCheck(); update(true,true); markSel(); saveLast(); lgBuild();

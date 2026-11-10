@@ -246,11 +246,11 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
   <div class="drops">
     <div class="drop drop1" id="dropBoth">
       <h2>Song and chord chart</h2>
-      <p class="d1hint">Drag both files in here, together or one at a time. Or click a line to choose a file.</p>
+      <p class="d1hint">Drag both the song file and chord chart in here.</p>
       <input type="file" id="bothFile" multiple accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,application/pdf,.pdf,.txt" aria-label="Choose the song and chart files">
-      <label class="fline" id="dropSong"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Song</b><span class="fhint">MP3, WAV or M4A of the recording</span><span class="fname" id="songName"></span></span><input type="file" id="songFile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" aria-label="Choose song file"></label>
-      <label class="fline" id="dropChart"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Chart</b><span class="fhint" id="chartHint">PDF with chords over lyrics, like a WorshipOnline chart</span><span class="fname" id="chartName"></span></span><input type="file" id="chartFile" accept="application/pdf,.pdf,.txt" aria-label="Choose chart PDF"></label>
-      <div class="alt">No PDF? <button type="button" id="pasteBtn">Paste chart text</button></div>
+      <label class="fline" id="dropSong"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Song</b><span class="fname" id="songName"></span></span><input type="file" id="songFile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" aria-label="Choose song file"></label>
+      <label class="fline" id="dropChart"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Chart</b><span class="fname" id="chartName"></span></span><input type="file" id="chartFile" accept="application/pdf,.pdf,.txt" aria-label="Choose chart PDF"></label>
+      <div class="alt">No PDF? <button type="button" id="pasteBtn">Paste chart text with song sections</button></div>
       <textarea id="chartText" hidden placeholder="VERSE 1&#10;Ab                Db&#10;Again and again, and again and again&#10;..."></textarea>
     </div>
   </div>

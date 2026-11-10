@@ -1302,8 +1302,8 @@ async function recallCheck(){ if(!DB||!ST.audio||recallFor===ST.audio) return; r
   if(h&&h.sameChart){ recallHit=h; $('libRecall').hidden=false; $('libRecall').title=`Load the library version saved ${h.v.savedAt?new Date(h.v.savedAt).toLocaleString():''}`; } }
 $('libRecall').addEventListener('click',()=>{ if(!recallHit) return; if(playing) pause(); pushUndo(); if(applyLib(recallHit)){ if(document.body.classList.contains('stfirst')) stFirstDone(); libShow(); saveLast(); $('libMsg').textContent=`Recalled the library version${recallHit.v.savedAt?' saved '+new Date(recallHit.v.savedAt).toLocaleDateString():''}. Undo puts your chart back.`; } });
 /* CJ (editor/private): every song in the library, listed under the upload area. The songs themselves aren't kept, so picking one uses its saved chart: then drop in just the song file */
-let libRowsAll=[];
-async function libList(){ const box=$('libList'); if(!DB||!showChecks()){ box.hidden=true; return; } box.hidden=false; $('libListMsg').textContent='Loading…';
+let libRowsAll=[]; const IS_PRIVATE=/\(private\)/.test(document.title); // CJ's own private copy gets the library tools too
+async function libList(){ const box=$('libList'); if(!DB||!(showChecks()||IS_PRIVATE)){ box.hidden=true; return; } box.hidden=false; $('libListMsg').textContent='Loading…';
   try{ libRowsAll = DB.site&&DB.list ? await DB.list() : (await DB.collection('songs').get()).docs.map(d=>{ const v=d.data()||{}; return {id:d.id,title:v.title,artist:v.artist,chartKey:v.chartKey,dur:v.dur,savedAt:v.savedAt,hasChart:!!(v.chart&&v.chart.sections),_full:v}; }); }
   catch(e){ libRowsAll=[]; $('libListMsg').textContent="Couldn't load the library just now."; $('libRows').innerHTML=''; return; }
   libRowsAll.sort((a,b)=>String(a.title||'~').localeCompare(String(b.title||'~'))); libListRender(); }
@@ -1322,7 +1322,7 @@ async function libPick(r){ let v=r._full; $('libListMsg').textContent='Opening�
   $('libListMsg').textContent=ST.songFile?`Chart set to "${v.title||'saved chart'}". Press Build chart.`:`Chart set to "${v.title||'saved chart'}". Now drop in its song file.`; $('dropBoth').scrollIntoView({block:'nearest',behavior:'smooth'}); }
 (async()=>{ for(let i=0;i<40&&!DB;i++) await new Promise(r=>setTimeout(r,250)); if(!$('upload').hidden) libList(); })();
 function libUI(){ recallCheck();
-  $('libGroup').hidden=!DB || !showChecks(); // members don't see the library at all (CJ) $('libSave').hidden=!!DB && DB.canSave===false;
+  $('libGroup').hidden=!DB || !(showChecks()||IS_PRIVATE); // members don't see the library at all (CJ) $('libSave').hidden=!!DB && DB.canSave===false;
   $('libImport').hidden=!(DB && DB.site && DB.canSave); $('libFresh').hidden=false; /* CJ: Start fresh is always there, not only for library songs */ $('libDel').hidden=!(ST.libId && DB && DB.canSave!==false);
   const dg=ST.libDiag, why=!dg?'':dg.err?` (Couldn't reach the library: ${dg.err}.)`:dg.n?` (Not matched: checked ${dg.n} saved song${dg.n===1?'':'s'} of this length, closest ${Math.round(dg.top*100)}%; it needs 90%.)`:' (No saved songs of this length.)';
   $('libMsg').textContent=ST.libDate?`Using fixes saved ${new Date(ST.libDate).toLocaleDateString()}${ST.libSame===false?' (timing only: this PDF is different from the one saved)':''}.`:(why&&DB&&DB.canSave!==false)?'Not in the library yet.'+why:(DB&&DB.canSave===false?'':'Save once the bars look right, so this song lines up on its own next time.');

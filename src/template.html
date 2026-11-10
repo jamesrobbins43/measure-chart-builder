@@ -102,7 +102,7 @@ html:has(#upload:not([hidden])) body{background:#000}
 .titleblock{min-width:0}
 .titleblock h1{font-size:21px}
 .meta{font-family:var(--f-ui);font-size:12px;color:var(--muted);margin-top:2px}
-.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1 1 auto} .playfloat{position:absolute;left:0;right:0;top:100%;display:flex;justify-content:flex-end;padding-top:8px;pointer-events:none} .playfloat button{pointer-events:auto;box-shadow:0 2px 10px rgba(0,0,0,.25);min-width:5.5em} body.stfirst .playfloat{top:0;bottom:0;align-items:center;padding-top:0} body.stfirst .tin{padding-right:max(110px,calc(16px + 100px))}
 #play{min-width:84px}
 .time{font-family:var(--f-ui);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:96px}
 .knob{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)}
@@ -304,7 +304,6 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;h
   <div class="transport"><div class="tin wrap">
     <div class="titleblock"><h1 id="songTitle">Song</h1><div class="meta" id="songMeta"></div></div>
     <div class="controls">
-      <button class="primary" id="play" type="button">Play</button>
       <span class="time" id="time">0:00</span>
       <button type="button" id="rateBtn" aria-pressed="false" title="Play the song faster while you check the section times">1.5× speed</button>
       <button type="button" id="choBtn" aria-pressed="false" title="Play only the choruses, one after another">Choruses only</button>
@@ -327,7 +326,8 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;h
       <div class="where" id="where"></div>
     </div>
   </div><nav class="secnav wrap" id="secNav" aria-label="Jump to a section (plays a four-count first)"></nav>
-  <div class="secadd wrap" id="secAdd" hidden><span>Add a whole</span> <select id="saSec" aria-label="Section to add"></select> <span>starting at bar</span> <input type="number" id="saBar" min="1" step="1" aria-label="Bar it starts on"> <input type="text" id="saName" hidden maxlength="30" placeholder="Name, e.g. Tag" aria-label="Name of the new section"> <button type="button" class="primary" id="saGo">Add</button> <button type="button" id="saX">Cancel</button><small id="saMsg"></small></div></div>
+  <div class="secadd wrap" id="secAdd" hidden><span>Add a whole</span> <select id="saSec" aria-label="Section to add"></select> <span>starting at bar</span> <input type="number" id="saBar" min="1" step="1" aria-label="Bar it starts on"> <input type="text" id="saName" hidden maxlength="30" placeholder="Name, e.g. Tag" aria-label="Name of the new section"> <button type="button" class="primary" id="saGo">Add</button> <button type="button" id="saX">Cancel</button><small id="saMsg"></small></div>
+  <div class="playfloat wrap"><button class="primary" id="play" type="button">Play</button></div></div> <!-- CJ: Play floats at the chart's top-right corner, under the section buttons -->
   <div class="toolbar wrap">
     <div class="group" id="keyGroup" style="flex-basis:100%"><label for="keyChartSel">Chords in</label> <select id="keyChartSel"></select> <label for="keyHearSel">Hear in</label> <select id="keyHearSel"></select> <button type="button" id="numBtn" aria-pressed="false" title="Show chords as numbers (1 4 5 6m) in the chart's key">Numbers</button> <span id="keyMsg" class="keymsg" role="status"></span></div>
     <div class="group"><span class="help" tabindex="0" role="img" aria-label="Help: If the highlighted beat counter is off, use this slider to sync it with the tempo." data-tip="If the highlighted beat counter is off, use this slider to sync it with the tempo.">?</span><label for="sync" style="display:inline-flex;align-items:center;gap:6px" aria-label="Beat highlight timing"><small>later</small><input id="sync" type="range" min="-400" max="250" step="10" value="0" style="width:90px;accent-color:var(--accent)"><small>sooner</small></label><b id="syncV">0 ms</b></div>

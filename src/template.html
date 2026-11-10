@@ -258,7 +258,7 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;h
 #stRows .stok{white-space:nowrap} #stRows li.ok .stok{background:var(--ok);border-color:var(--ok);color:#fff} #stRows li.ok .n{color:var(--ok);font-weight:700}
 .stdots button.todo{background:var(--paper);border-color:var(--accent)} .stdots button.done{background:var(--ok)}
 #stLeft{font-size:12.5px;color:var(--muted);margin-left:4px}
-#rateBtn{display:none} body.stfirst #rateBtn{display:inline-block} body.stfirst #stClose{display:none} body.stfirst #stRows{max-height:none}
+#rateBtn{display:none} body.stfirst #rateBtn{display:inline-block} body.stfirst #stClose{display:none} body.stfirst #stRows{max-height:var(--stH,60vh);overscroll-behavior:contain;padding-right:4px}
 </style>
 <script>/* CJ: dark or light background, remembered in this browser */ /* CJ: light is the default */ let lk=null; try{ lk=localStorage.getItem("mcb-look2"); }catch(e){} if(lk!=="dark") document.documentElement.setAttribute("data-look","light");</script>
 
@@ -1045,7 +1045,7 @@ function setupPlayer(){
 }
 let lastBar=-2,lastBeat=-1,liveCh=null,aheadRow=null,qsJob=0,lastKeyB=null,ciBar=null,ciUntil=0,ciN=4,ciQ=0.5,ciFour=false,lastCi=false,secSp=[],lastSec=-2;
 // fast eased scroll (~0.3 s) that keeps up with the music; instant if the viewer prefers reduced motion
-function quickScroll(y){ y=Math.max(0,Math.min(y,document.documentElement.scrollHeight-innerHeight)); const y0=window.scrollY, d=y-y0; if(Math.abs(d)<4) return;
+function quickScroll(y){ if(document.body.classList.contains('stfirst')) return; /* step 1: the page stays put (CJ) */ y=Math.max(0,Math.min(y,document.documentElement.scrollHeight-innerHeight)); const y0=window.scrollY, d=y-y0; if(Math.abs(d)<4) return;
   if(matchMedia('(prefers-reduced-motion: reduce)').matches){ window.scrollTo(0,y); return; }
   const job=++qsJob, t0=performance.now(), D=300;
   (function step(now){ if(job!==qsJob) return; const k=Math.min(1,(now-t0)/D), e=1-Math.pow(1-k,3); window.scrollTo(0,y0+d*e); if(k<1) requestAnimationFrame(step); })(t0); }
@@ -1490,6 +1490,9 @@ function stLineTick(){ if($('stPanel').hidden||!ST.audio) return; const t=Math.m
   L.addEventListener('pointerup',e=>{ if(!drag) return; drag=false; stSeek(at(e)); });
   L.addEventListener('keydown',e=>{ if(!ST.audio) return; const d=e.key==='ArrowRight'?5:e.key==='ArrowLeft'?-5:0; if(d){ e.preventDefault(); stSeek(songTime()+d); } }); }
 addEventListener('resize',()=>{ if(!$('stPanel').hidden){ stPeaks=null; stWaveDraw(); } });
+/* CJ: in step 1 the song line stays put and only the list scrolls */
+function stFit(){ if(!document.body.classList.contains('stfirst')) return; const ol=$('stRows'), top=ol.getBoundingClientRect().top+scrollY, foot=($('stPanel').getBoundingClientRect().bottom-ol.getBoundingClientRect().bottom)+24; document.body.style.setProperty('--stH',Math.max(160,innerHeight-top-foot)+'px'); }
+addEventListener('resize',stFit);
 (function stLoop(){ stLineTick(); requestAnimationFrame(stLoop); })();
 function stSort(){ stRows.sort((a,b)=>a.t-b.t); stRender(); }
 function stOpen(show){ const pn=$('stPanel'), on=show??pn.hidden; pn.hidden=!on; $('stBtn').setAttribute('aria-expanded',String(on)); if(on){ stRows=stFromChart(); $('stMsg').textContent=''; $('stMsg').className=''; stRender(); stPeaks=null; requestAnimationFrame(stWaveDraw); } }
@@ -1502,7 +1505,7 @@ function stSnap(t){ let b=barAt(t); if(b<0) b=0; const n=ST.song.bars.length; if
 let stSnap0=null; const stKey=r=>JSON.stringify(r.map(x=>[x.sec,Math.round(x.t*10),x.name||'']));
 function stFirst(){ document.body.classList.add('stfirst'); try{ sessionStorage.setItem('mcb-st1','1'); }catch(e){} stOpen(true); stSnap0=stKey(stRows);
   $('stTitle').textContent='Step 1: Section times'; $('stHelp').textContent='Play the song and check where every section starts. Fix a time by typing it (like 1:23.5) or by pressing Now at the right moment. Press Confirm on each section once its start is right (pressing Now or changing it confirms it too). Click the line above to jump around the song. When every section has a check mark, press Confirm section times.';
-  $('stGo').textContent='Confirm section times and build the chart'; scrollTo(0,0); }
+  $('stGo').textContent='Confirm section times and build the chart'; scrollTo(0,0); requestAnimationFrame(stFit); }
 function stFirstDone(){ document.body.classList.remove('stfirst'); $('stLeft').textContent=''; if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; stOpen(false);
   $('stTitle').textContent='Section times'; $('stHelp').textContent='Set where every section starts. Type a time (like 1:23.5) or press Now while the song plays, then press Build chart from this list.'; $('stGo').textContent='Build chart from this list';
   render(); lastBar=-2; lastBeat=-1; update(false); scrollTo(0,0); }

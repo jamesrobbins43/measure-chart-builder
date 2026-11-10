@@ -102,7 +102,7 @@ html:has(#upload:not([hidden])) body{background:#000}
 .titleblock{min-width:0}
 .titleblock h1{font-size:21px}
 .meta{font-family:var(--f-ui);font-size:12px;color:var(--muted);margin-top:2px}
-.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1 1 auto} .playfloat{position:absolute;left:0;right:0;top:100%;display:flex;justify-content:flex-end;padding-top:8px;pointer-events:none} .playfloat button{pointer-events:auto;box-shadow:0 2px 10px rgba(0,0,0,.25);min-width:5.5em} body.stfirst .playfloat{top:0;bottom:0;align-items:center;padding-top:0} body.stfirst .tin{padding-right:max(110px,calc(16px + 100px))}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1 1 auto} .playfloat{position:absolute;left:0;right:0;top:100%;display:flex;justify-content:flex-end;padding-top:8px;pointer-events:none} .playfloat button{pointer-events:auto;box-shadow:0 2px 10px rgba(0,0,0,.25);min-width:5.5em;transition:transform .3s ease,opacity .3s ease} .playfloat{overflow:hidden;padding-bottom:14px} body.isplaying:not(.stfirst) .playfloat button{transform:translateY(calc(-100% - 12px));opacity:0;pointer-events:none} body:not(.stfirst) #time{cursor:pointer} /* CJ: Play tucks under the header while the song plays; tap the time to stop */ body.stfirst .playfloat{top:0;bottom:0;align-items:center;padding-top:0} body.stfirst .tin{padding-right:max(110px,calc(16px + 100px))}
 #play{min-width:84px}
 .time{font-family:var(--f-ui);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:96px}
 .knob{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)}
@@ -1984,7 +1984,8 @@ function redoFix(){ if(!redoStack.length) return; undoStack.push(snapFix()); app
 function undoSay(t){ if(!$('editor').hidden) $('edLenMsg').textContent=t; else { $('msg').className='msg'; $('msg').textContent=t; } }
 $('tbUndo').addEventListener('click',undoFix); $('tbRedo').addEventListener('click',redoFix);
 $('edUndo').addEventListener('click',undoFix);
-$('edPlay').addEventListener('click',()=>$('play').click()); new MutationObserver(()=>{ $('edPlay').textContent=$('play').textContent; }).observe($('play'),{childList:true,characterData:true,subtree:true}); // a Play button in the editor (CJ)
+$('edPlay').addEventListener('click',()=>$('play').click()); new MutationObserver(()=>{ $('edPlay').textContent=$('play').textContent; document.body.classList.toggle('isplaying',$('play').textContent==='Pause'); }).observe($('play'),{childList:true,characterData:true,subtree:true}); // a Play button in the editor (CJ)
+$('time').addEventListener('click',()=>{ if(playing) $('play').click(); }); $('time').title='Tap to stop';
 $('edRedo').addEventListener('click',redoFix);
 document.addEventListener('keydown',e=>{ if($('result').hidden || !(e.metaKey||e.ctrlKey) || e.altKey) return; // CJ: undo works after leaving Fix bars too const t=e.target; if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&t.type!=='range') return; // text boxes keep their own undo
   const k=e.key.toLowerCase(); if(k==='z'&&!e.shiftKey){ e.preventDefault(); undoFix(); } else if((k==='z'&&e.shiftKey)||k==='y'){ e.preventDefault(); redoFix(); } });

@@ -1987,7 +1987,10 @@ function pinSection(){
   const song=ST.song, path=ST.al?.path||[];
   for(const p of path){ const e=ST.events[p.j]; if(!e||e.k!==0||String(p.j)===String(j)) continue; const s0=p.start-ST.downPhase, bi=song.bars.findIndex(b=>Math.abs((b.s0??b.s)-s0)<1e-6);
     if(bi>selBar){ if(ST.anchors[p.j]==null) ST.anchors[p.j]={t:bT(bi)+1e-3}; break; } }
-  ST.anchors[j]={t:bT(selBar)+1e-3}; /* by time, so earlier bar edits can't shift it a bar */ ST.overrides={}; ST.breaks={}; ST.barEdits=(ST.barEdits||[]).filter(e=>e.at<=selBar); const keep=selBar; realign(); openEditor(keep,true);
+  ST.anchors[j]={t:bT(selBar)+1e-3}; /* by time, so earlier bar edits can't shift it a bar */ ST.overrides={}; ST.breaks={}; ST.barEdits=(ST.barEdits||[]).filter(e=>e.at<=selBar); const keep=selBar; realign();
+  /* CJ (Trust In God, Bridge at bar 72): the chart has that section later in the song, so it can't start here in the chart's order. Undo, and add it as a new pass here instead */
+  if(!ST.al?.path?.length){ applySnap(undoStack.pop()); undoUI(); selBar=keep; if(newPass(+j,nm)) return; openEditor(keep,true); $('edSection').value=''; $('edLenMsg').textContent=`Couldn't start ${nm} at bar ${keep+1}, so nothing was changed. Try "+ Add section" or a nearby bar.`; return; }
+  openEditor(keep,true);
   $('edSection').value='';
   $('edLenMsg').textContent=`${nm} now starts at bar ${keep+1}; the section after it stayed where it was.`;
 }

@@ -1101,7 +1101,7 @@ async function build(){
       if(hit0 && (!own || Date.parse(hit0.v.savedAt||0)>(ST.restoreAt||0))){ ST.restore=null; if(applyLib(hit0)){ s=step(showChecks()?'Checking the song library':'Lining the chart up with the song'); if(showChecks()) s.done('Found this song in the library'); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); libShow(); return; } } }
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
       Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null}); setOrder(v.order); useCf(v.cf);
-      s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); if(ST.restoreUndo){ [undoStack,redoStack]=ST.restoreUndo; ST.restoreUndo=null; undoUI(); } realign(false); return; } // CJ: undo still works after a refresh
+      s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); if(ST.restoreUndo){ [undoStack,redoStack]=ST.restoreUndo; ST.restoreUndo=null; undoUI(); } realign(false); if(!ST.al?.path?.length) await recoverEmpty(); return; } // CJ: undo still works after a refresh
     s=step(showChecks()?'Checking the song library':'Lining the chart up with the song');
     const hit=chk(await libFind(ST.audio.duration,ST.env));
     /* CJ: the same recording is in the library with a different chart: offer the fixed version first (another person's chart is likely as rough as the first upload was) */
@@ -1221,6 +1221,10 @@ $('libDel').addEventListener('click',async()=>{ const b=$('libDel');
   try{ await DB.collection('songs').doc(ST.libId).delete(); ST.libId=null; ST.libDate=null; b.textContent='Remove from library'; b.disabled=false; await freshStart(); $('libMsg').textContent='Removed from the library and worked out again from scratch.'; }
   catch(e){ b.textContent='Remove from library'; b.disabled=false; $('libMsg').textContent="Couldn't remove it just now. Try again in a moment."; }
 });
+/* CJ (Trust In God): a chart kept from before a fix that left it empty: drop those fixes and line it up again */
+async function recoverEmpty(){ Object.assign(ST,{anchors:{},overrides:{},barLens:{},breaks:{},barEdits:[]}); setOrder(null); undoClear(); realign(false);
+  if(!ST.al?.path?.length) await freshStart();
+  $('msg').className='msg warn'; $('msg').textContent='Your last fixes to this song left the chart empty, so they were cleared and the chart was lined up again.'; }
 async function freshStart(){ pushUndo(); // CJ: Start fresh can be undone too
   // ignore the saved version and work the song out from scratch
   $('libFresh').disabled=true; $('libMsg').textContent='Working it out from scratch…';
@@ -2050,7 +2054,7 @@ const anaKey=f=>f?(f.name||'')+'|'+f.size:'';
 async function anaGet(k){ if(!k) return null; try{ const r=await idb('readonly',st=>st.get('ana')); return r&&r.key===k&&r.v===ANA_V?r:null; }catch(e){ return null; } }
 function anaPut(rec){ idb('readwrite',st=>st.put({...rec,v:ANA_V},'ana')).catch(e=>console.warn('could not keep the listening results',e)); }
 const ANA_V=1; // bump when onsetEnvelope / chromaFrames / vocalOnsets / the server reply change
-function saveLast(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(!ST.songFile) return;
+function saveLast(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(!ST.songFile || !ST.al?.path?.length) return; /* never keep an empty chart for next time */
   const rec={song:ST.songFile, songName:ST.songFile.name, chartMode:ST.chartMode, chart:ST.chartMode==='pdf'?ST.chartFile:null, chartName:ST.chartFile?.name||'', chartText:ST.chartMode==='text'?$('chartText').value:'',
     bpmIn:$('bpmIn').value, meterIn:$('meterIn').value,
     state:{P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', libId:ST.libId, libDate:ST.libDate}, undo:undoStack.slice(-30).map(({al,...r})=>r), redo:redoStack.slice(-30).map(({al,...r})=>r), savedAt:Date.now()};

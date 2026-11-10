@@ -258,7 +258,7 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;h
 #stRows .stok{white-space:nowrap} #stRows li.ok .stok{background:var(--ok);border-color:var(--ok);color:#fff} #stRows li.ok .n{color:var(--ok);font-weight:700}
 .stdots button.todo{background:var(--paper);border-color:var(--accent)} .stdots button.done{background:var(--ok)}
 #stLeft{font-size:12.5px;color:var(--muted);margin-left:4px}
-#rateBtn{display:none} body.stfirst #rateBtn{display:inline-block} body.stfirst #stClose{display:none} body.stfirst #stRows{max-height:var(--stH,60vh);overscroll-behavior:contain;padding-right:4px}
+#rateBtn{display:none} body.stfirst #rateBtn{display:inline-block} body.stfirst #stClose{display:none} body.stfirst #stRows .bar{display:none} /* CJ: step 1 is only about times, not bars */ body.stfirst #stRows{max-height:var(--stH,60vh);overscroll-behavior:contain;padding-right:4px}
 </style>
 <script>/* CJ: dark or light background, remembered in this browser */ /* CJ: light is the default */ let lk=null; try{ lk=localStorage.getItem("mcb-look2"); }catch(e){} if(lk!=="dark") document.documentElement.setAttribute("data-look","light");</script>
 
@@ -1512,7 +1512,7 @@ function stFirstDone(){ document.body.classList.remove('stfirst'); $('stLeft').t
 $('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.ok)){ const i=stRows.findIndex(r=>!r.ok), m=$('stMsg'); m.className='warn'; m.textContent=`Confirm every section first (${stRows.filter(r=>!r.ok).length} left). Next up is number ${i+1}.`; $('stRows').children[i]?.scrollIntoView({block:'center',behavior:'smooth'}); return; } if(stSnap0!==null && stKey(stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t))===stSnap0 && stRows.every(r=>r.t>=0)){ stFirstDone(); return; } const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
   if(!rows.some(r=>r.sec!=='custom')){ msg.className='warn'; msg.textContent='Add at least one section from the chart.'; return; }
   if(rows.some(r=>r.sec==='custom'&&!String(r.name||'').trim())){ msg.className='warn'; msg.textContent='Give every "Not on the chart" section a name.'; return; }
-  const bars=rows.map(r=>stSnap(r.t)); for(let i=1;i<bars.length;i++) if(bars[i]<=bars[i-1]){ msg.className='warn'; msg.textContent=`Sections ${i} and ${i+1} start on the same bar (bar ${bars[i]+1}). Move one of them.`; return; }
+  const bars=rows.map(r=>stSnap(r.t)); for(let i=1;i<bars.length;i++) if(bars[i]<=bars[i-1]){ msg.className='warn'; msg.textContent=`Sections ${i} and ${i+1} (at ${fmtT(rows[i-1].t)} and ${fmtT(rows[i].t)}) are too close together. Move one of them.`; return; }
   if(playing) pause(); pushUndo();
   const times=bars.map(b=>bT(b)); /* on the bar lines as they are now */
   const chart=rows.map((r,i)=>({r,t:times[i]})).filter(x=>x.r.sec!=='custom'), customs=rows.map((r,i)=>({r,t:times[i],i})).filter(x=>x.r.sec==='custom');

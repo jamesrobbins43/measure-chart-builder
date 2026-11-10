@@ -462,7 +462,7 @@ async function build(){
     // CJ: the library wins over this browser's last chart unless this browser has fixes of its own that are newer
     if(ST.restore){ const v=ST.restore, own=(v.order||[]).length+(v.barEdits||[]).length+Object.keys(v.overrides||{}).length+Object.keys(v.anchors||{}).length+Object.keys(v.barLens||{}).length;
       const hit0=await libFind(ST.audio.duration,ST.env); chk();
-      if(hit0 && (!own || Date.parse(hit0.v.savedAt||0)>(ST.restoreAt||0))){ ST.restore=null; if(applyLib(hit0)){ s=step(showChecks()?'Checking the song library':'Lining the chart up with the song'); if(showChecks()) s.done('Found this song in the library'); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); realign(false); return; } } }
+      if(hit0 && (!own || Date.parse(hit0.v.savedAt||0)>(ST.restoreAt||0))){ ST.restore=null; if(applyLib(hit0)){ s=step(showChecks()?'Checking the song library':'Lining the chart up with the song'); if(showChecks()) s.done('Found this song in the library'); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); libShow(); return; } } }
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
       Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null}); setOrder(v.order); useCf(v.cf);
       s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); if(ST.restoreUndo){ [undoStack,redoStack]=ST.restoreUndo; ST.restoreUndo=null; undoUI(); } realign(false); return; } // CJ: undo still works after a refresh
@@ -470,7 +470,7 @@ async function build(){
     const hit=chk(await libFind(ST.audio.duration,ST.env));
     /* CJ: the same recording is in the library with a different chart: offer the fixed version first (another person's chart is likely as rough as the first upload was) */
     if(hit && !hit.sameChart && hit.v.chart && Array.isArray(hit.v.chart.sections) && chk(await askLibChart(hit,s))){ useLibChart(hit); s=step('Lining the chart up with the song'); }
-    if(hit && applyLib(hit)){ if(showChecks()) s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); realign(false); return; }
+    if(hit && applyLib(hit)){ if(showChecks()) s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); libShow(); return; }
     if(hit===undefined || !showChecks()) steps.lastElementChild?.remove(); else s.done('Not in the library yet');
     s=step('Finding the tempo');
     const hint=+$('bpmIn').value || parsed.meta.bpm || 0;
@@ -527,6 +527,7 @@ async function libFind(dur,env){
 }
 // fixes saved before the server existed were made against the page's own chord reading, so they keep it
 function useCf(src){ if(src==='srv'&&ST.CfSrv){ ST.Cf=ST.CfSrv; ST.cfSrc='srv'; } else if(ST.CfLocal){ ST.Cf=ST.CfLocal; ST.cfSrc='local'; } }
+function libShow(){ if(!ST.libAl) return realign(false); ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration); ST.al=ST.libAl; ST.libAl=null; finish(false); }
 function applyLib(h){
   const v=h.v; if(!(v.P>0)) return false;
   ST.P=v.P; ST.meter=v.meter||ST.meter; ST.shift=v.shift||0; if(v.den){ ST.den=v.den; ST.compound=!!v.compound; }
@@ -536,6 +537,8 @@ function applyLib(h){
   ST.nudge=v.nudge||0;
   ST.anchors=h.sameChart?{...(v.anchors||{})}:{}; ST.overrides=h.sameChart?JSON.parse(JSON.stringify(v.overrides||{})):{}; ST.barLens=h.sameChart?{...(v.barLens||{})}:{}; ST.breaks=h.sameChart?{...(v.breaks||{})}:{}; ST.barEdits=h.sameChart?JSON.parse(JSON.stringify(v.barEdits||[])):[]; setOrder(h.sameChart?v.order:null);
   ST.libId=h.id; ST.libDate=v.savedAt||null; ST.libSame=!!h.sameChart; useCf(h.sameChart?v.cf:'srv');
+  /* CJ (In Christ Alone): the saved line-up itself, so every page shows exactly the chords that were saved, even one that hears the song differently (no server) */
+  ST.libAl=h.sameChart&&k===0&&v.al&&Array.isArray(v.al.path)&&v.al.path.length?JSON.parse(JSON.stringify(v.al)):null;
   return true;
 }
 const chartPack=sec=>JSON.parse(JSON.stringify(sec,(k,v)=>Array.isArray(v)&&v.pickup?{__pk:[...v]}:v));
@@ -550,7 +553,7 @@ async function libSave(){
   if(!DB) return;
   const b=$('libSave'); b.disabled=true; $('libMsg').textContent='Saving…';
   const doc={dur:Math.round(ST.audio.duration*100)/100, env:ST.env, title:ST.meta.title||'', artist:ST.meta.artist||'', chartKey:ST.meta.key||'', chartSig:ST.chartSig,
-    P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', chart:{meta:ST.meta, sections:chartPack(ST.base||ST.sections)}, savedAt:new Date().toISOString()};
+    P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', al:ST.al||null, chart:{meta:ST.meta, sections:chartPack(ST.base||ST.sections)}, savedAt:new Date().toISOString()};
   try{
     const ref=ST.libId?DB.collection('songs').doc(ST.libId):DB.collection('songs').doc();
     await ref.set(doc); ST.libId=ref.id; ST.libDate=doc.savedAt;

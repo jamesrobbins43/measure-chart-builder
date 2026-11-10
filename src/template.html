@@ -238,11 +238,15 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
 .stpanel{flex-basis:100%;display:block;padding:12px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--paper);max-width:760px}
 .stpanel .sthead{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;margin-bottom:8px} .stpanel .sthead b{font-size:14px;color:var(--ink)}
 #stRows{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:50vh;overflow:auto}
-#stRows li{display:grid;grid-template-columns:2.2em minmax(9em,1.4fr) 6.5em auto auto auto 1fr;gap:6px;align-items:center} #stRows li .n{color:var(--muted);text-align:right}
+#stRows li{display:grid;grid-template-columns:2.2em minmax(9em,16em) 6.5em auto auto auto 1fr;gap:6px;align-items:center} #stRows li .n{color:var(--muted);text-align:right}
 #stRows select,#stRows input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--bg);color:var(--ink);min-width:0} #stRows input.bad{border-color:var(--flag)}
 #stRows .stname{grid-column:2} #stRows .bar{color:var(--muted);font-size:12px}
 .stbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px} #stMsg{font-size:12px;color:var(--muted)} #stMsg.warn{color:var(--flag)}
 @media (max-width:600px){ #stRows li{grid-template-columns:2em 1fr 6em auto auto auto} #stRows .bar{display:none} }
+
+/* CJ: step 1 is only the section times list; the chart and every other option wait until the list is confirmed */
+body.stfirst #choBtn,body.stfirst #mixBtn,body.stfirst .lookSw,body.stfirst .mixer,body.stfirst .chordnow,body.stfirst #secNav,body.stfirst #secAdd,body.stfirst .toolbar>.group:not(#stPanel):not(#newGroup),body.stfirst #msg,body.stfirst #checks,body.stfirst main.out,body.stfirst #editor{display:none!important}
+body.stfirst .stpanel{max-width:none;margin-top:6px} #rateBtn{display:none} body.stfirst #rateBtn{display:inline-block} body.stfirst #stClose{display:none} body.stfirst #stRows{max-height:none}
 </style>
 <script>/* CJ: dark or light background, remembered in this browser */ /* CJ: light is the default */ let lk=null; try{ lk=localStorage.getItem("mcb-look2"); }catch(e){} if(lk!=="dark") document.documentElement.setAttribute("data-look","light");</script>
 
@@ -276,6 +280,7 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="controls">
       <button class="primary" id="play" type="button">Play</button>
       <span class="time" id="time">0:00</span>
+      <button type="button" id="rateBtn" aria-pressed="false" title="Play the song twice as fast while you check the section times">2× speed</button>
       <button type="button" id="choBtn" aria-pressed="false" title="Play only the choruses, one after another">Choruses only</button>
       <button type="button" id="verBtn" hidden aria-pressed="false" title="Play only the verses, one after another">Verses only</button>
       <button type="button" id="mixBtn" aria-expanded="true" aria-controls="mixer">Mixer</button>
@@ -314,8 +319,8 @@ main.out{margin:0 auto;padding-block:14px 48px} /* the chart uses the full windo
     <div class="group" id="vidNote" hidden role="dialog" aria-labelledby="vidNoteT" style="flex-basis:100%;max-width:640px;padding:10px 12px;border:1px solid var(--rule);border-left:3px solid var(--accent);border-radius:8px;background:var(--paper);font-family:var(--f-ui);font-size:13px;gap:8px 10px"><span id="vidNoteT" style="flex-basis:100%">Please note: Due to licensing restrictions, this download contains only click and chord progressions, the lyrics and music have been removed.</span><button class="primary" type="button" id="vidGo">Continue</button><button type="button" id="vidCancel">Cancel</button></div>
     <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libFresh" hidden>Start fresh</button><button type="button" id="libDel" hidden>Remove from library</button><button type="button" id="libImport" hidden title="Add songs saved in the Claude version of this tool">Import saved songs</button><input type="file" id="libImportFile" accept=".json,application/json" hidden><span id="libMsg"></span></div>
     <div class="group"><button type="button" id="reportBtn">Report a problem</button></div>
-    <div class="group" style="margin-left:auto"><button type="button" id="newBtn">New song</button></div> <!-- CJ: New song furthest right -->
-    <div class="group stpanel" id="stPanel" hidden><div class="sthead"><b>Section times</b> <span>Set where every section starts. Type a time (like 1:23.5) or press Now while the song plays, then press Build chart from this list.</span></div><ol id="stRows"></ol><div class="stbtns"><button type="button" id="stAdd">+ Add a section</button><button type="button" class="primary" id="stGo">Build chart from this list</button><button type="button" id="stClose">Close</button><span id="stMsg" role="status"></span></div></div>
+    <div class="group" id="newGroup" style="margin-left:auto"><button type="button" id="newBtn">New song</button></div> <!-- CJ: New song furthest right -->
+    <div class="group stpanel" id="stPanel" hidden><div class="sthead"><b id="stTitle">Section times</b> <span id="stHelp">Set where every section starts. Type a time (like 1:23.5) or press Now while the song plays, then press Build chart from this list.</span></div><ol id="stRows"></ol><div class="stbtns"><button type="button" id="stAdd">+ Add a section</button><button type="button" class="primary" id="stGo">Build chart from this list</button><button type="button" id="stClose">Close</button><span id="stMsg" role="status"></span></div></div>
     <p class="msg" id="msg"></p>
     <div class="checks" id="checks" hidden role="status"></div>
     <div class="report" id="report" hidden>
@@ -518,15 +523,15 @@ async function build(){
     // CJ: the library wins over this browser's last chart unless this browser has fixes of its own that are newer
     if(ST.restore){ const v=ST.restore, own=(v.order||[]).length+(v.barEdits||[]).length+Object.keys(v.overrides||{}).length+Object.keys(v.anchors||{}).length+Object.keys(v.barLens||{}).length;
       const hit0=await libFind(ST.audio.duration,ST.env); chk();
-      if(hit0 && (!own || Date.parse(hit0.v.savedAt||0)>(ST.restoreAt||0))){ ST.restore=null; if(applyLib(hit0)){ s=step(showChecks()?'Checking the song library':'Lining the chart up with the song'); if(showChecks()) s.done('Found this song in the library'); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); libShow(); return; } } }
+      if(hit0 && (!own || Date.parse(hit0.v.savedAt||0)>(ST.restoreAt||0))){ ST.restore=null; if(applyLib(hit0)){ s=step(showChecks()?'Checking the song library':'Lining the chart up with the song'); if(showChecks()) s.done('Found this song in the library'); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); libShow(); stFirst(); return; } } }
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
       Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null}); setOrder(v.order); useCf(v.cf);
-      s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); if(ST.restoreUndo){ [undoStack,redoStack]=ST.restoreUndo; ST.restoreUndo=null; undoUI(); } realign(false); if(!ST.al?.path?.length) await recoverEmpty(); return; } // CJ: undo still works after a refresh
+      s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); if(ST.restoreUndo){ [undoStack,redoStack]=ST.restoreUndo; ST.restoreUndo=null; undoUI(); } realign(false); if(!ST.al?.path?.length) await recoverEmpty(); try{ if(sessionStorage.getItem('mcb-st1')) stFirst(); }catch(e){} return; } // CJ: undo still works after a refresh
     s=step(showChecks()?'Checking the song library':'Lining the chart up with the song');
     const hit=chk(await libFind(ST.audio.duration,ST.env));
     /* CJ: the same recording is in the library with a different chart: offer the fixed version first (another person's chart is likely as rough as the first upload was) */
     if(hit && !hit.sameChart && hit.v.chart && Array.isArray(hit.v.chart.sections) && chk(await askLibChart(hit,s))){ useLibChart(hit); s=step('Lining the chart up with the song'); }
-    if(hit && applyLib(hit)){ if(showChecks()) s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); libShow(); return; }
+    if(hit && applyLib(hit)){ if(showChecks()) s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); libShow(); stFirst(); return; }
     if(hit===undefined || !showChecks()) steps.lastElementChild?.remove(); else s.done('Not in the library yet');
     s=step('Finding the tempo');
     const hint=+$('bpmIn').value || parsed.meta.bpm || 0;
@@ -539,7 +544,7 @@ async function build(){
     ST.halved=false; await fitSearch([G.beat0%G.P, (G.beat0+G.P/2)%G.P]); chk(); await halveIfDouble(); chk(); building=false;
     ST.showRec=false;
     s.done('Chart lined up'+(ST.shift?` (recording is in ${recKey()}, chart is in ${ST.meta.key||'another key'})`:''));
-    finish();
+    finish(); stFirst();
   }catch(e){ if(e===CANCEL) return; building=false; console.error(e); const li=[...steps.children].pop(); (li?{err:t=>{li.className='err';li.textContent='✕ '+t;}}:step('')).err('Stopped: '+(e.message||e)); $('buildBtn').disabled=false; }
 }
 // ---------- song library: saved fixes, shared through the artifact's db ----------
@@ -855,6 +860,7 @@ function buildGraph(ac,dest,songBuffer,clickBuffer,vocal,clickGain,stems){
   merge.connect(master); master.connect(bus);
   let c=null, cg=ac.createGain(); cg.gain.value=clickGain; { const cs=ac.createWaveShaper(); cs.curve=SOFTCLIP; cs.oversample='none'; cg.connect(cs); cs.connect(dest); } /* a loud click (up to 200%) is limited instead of distorting */
   if(clickBuffer){ c=ac.createBufferSource(); c.buffer=clickBuffer; c.connect(cg); }
+  for(const n of [s,vs,c,ds,bsrc,gsrc]) if(n) n.playbackRate.value=rate; /* CJ: 2× speed while checking section times */
   const start=(when,off)=>{ s.start(when,off); vs&&vs.start(when,off); c&&c.start(when,off); ds&&ds.start(when,off); bsrc&&bsrc.start(when,off); gsrc&&gsrc.start(when,off); };
   return {s,c,cut,cg,ds,bsrc,gsrc,dg,bg,gg,vs,master,fade,start};
 }
@@ -893,7 +899,10 @@ async function startStems(){
 }
 function showMix(){ const m=mixGains(); const lock=id=>$(id).disabled&&ST.stems; if(!lock('drumVol')) $('drumV').textContent=Math.round(m.d*100)+'%'; if(!lock('bassVol')) $('bassV').textContent=Math.round(m.b*100)+'%'; if(!lock('gtrVol')) $('gtrV').textContent=Math.round(m.g*100)+'%'; $('restV').textContent=Math.round(m.o*100)+'%'; }
 function ctxNow(){ const ac=getAC(); if(ac.getOutputTimestamp){ const ts=ac.getOutputTimestamp(); if(ts.contextTime>0) return ts.contextTime+(performance.now()-ts.performanceTime)/1000; } return ac.currentTime-(ac.outputLatency||ac.baseLatency||0); }
-function songTime(){ return (playing? offsetAt+(ctxNow()-startAt) : pausedAt) - userSync/1000; }
+let rate=1;
+function songTime(){ return (playing? offsetAt+(ctxNow()-startAt)*rate : pausedAt) - userSync/1000; }
+function setRate(r){ const t=songTime()+userSync/1000; rate=r; $('rateBtn').setAttribute('aria-pressed',String(r===2)); if(playing) startAtTime(t); }
+$('rateBtn').addEventListener('click',()=>setRate(rate===2?1:2));
 function stopSrc(){ ciBar=null; if(nodes){ for(const n of [nodes.s,nodes.c,nodes.ds,nodes.bsrc,nodes.gsrc,nodes.vs,nodes.ci]) if(n){ try{n.onended=null;n.stop();}catch(e){} } nodes=null; } }
 // the vocal cut only works while someone is singing (bars with lyrics), so instrumental parts keep centred guitars and keys
 function singSpans(){
@@ -904,7 +913,7 @@ function singSpans(){
 }
 function scheduleCut(param,ctxT0,songT0,level){
   const full=-(1-level), spans=singSpans();
-  param.cancelScheduledValues(0);
+  param.cancelScheduledValues(0); if(rate!==1){ param.setValueAtTime(full,ctxT0); return; }
   if(ST.stems&&ST.stems.vocals){ param.setValueAtTime(full,ctxT0); return; } // separated singing: no need to guess where the words are
   const inside=t=>spans.some(([a,b])=>t>=a&&t<b);
   param.setValueAtTime(inside(songT0)?full:0, ctxT0);
@@ -1425,7 +1434,7 @@ function pinSection(){
 /* ---------- CJ: Section times — a list of every section and the time it starts; the chart is built from the list ---------- */
 let stRows=[];
 function stOptions(){ const base=ST.base||ST.sections, cnt={}; base.forEach(s=>{ cnt[s.label]=(cnt[s.label]||0)+1; }); const seen={};
-  return base.map((s,i)=>{ seen[s.label]=(seen[s.label]||0)+1; return {v:String(i), l:s.label+(cnt[s.label]>1?' '+seen[s.label]:'')}; }); }
+  return base.map((s,i)=>{ seen[s.label]=(seen[s.label]||0)+1; const nm=s.label.replace(/\s*\(\d+x\)\s*$/i,''); return {v:String(i), l:nm+(cnt[s.label]>1&&!/\d$/.test(nm)?' '+seen[s.label]:'')}; }); }
 function stFromChart(){ const rows=[], song=ST.song; if(!song) return rows; const at={};
   for(const p of (ST.al?.path||[])){ const e=ST.events[p.j]; if(!e||e.k!==0) continue; const bi=barOfStart(p); if(bi>=0 && at[bi]==null) at[bi]=String(ST.order?ordBase(ST.order[e.sec]):e.sec); }
   /* one row for every section name on the chart as it is now; a name the chart doesn't have becomes a "not on the chart" row */
@@ -1451,7 +1460,16 @@ $('stBtn').addEventListener('click',()=>stOpen()); $('stClose').addEventListener
 $('stAdd').addEventListener('click',()=>{ const t=Math.max(0,songTime()); stRows.push({sec:stRows.length?stRows[stRows.length-1].sec:'0', t}); stSort(); $('stMsg').className=''; $('stMsg').textContent=`Added a section at ${fmtT(t)}. Pick which one it is.`; });
 /* the start of the bar nearest to a time */
 function stSnap(t){ let b=barAt(t); if(b<0) b=0; const n=ST.song.bars.length; if(b<n-1 && Math.abs(bT(b+1)-t)<Math.abs(bT(b)-t)) b++; return Math.min(b,n-1); }
-$('stGo').addEventListener('click',()=>{ const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
+
+/* CJ: right from the start, the list of section times comes first; the chart is only built once the list is confirmed */
+let stSnap0=null; const stKey=r=>JSON.stringify(r.map(x=>[x.sec,Math.round(x.t*10),x.name||'']));
+function stFirst(){ document.body.classList.add('stfirst'); try{ sessionStorage.setItem('mcb-st1','1'); }catch(e){} stOpen(true); stSnap0=stKey(stRows);
+  $('stTitle').textContent='Step 1: Section times'; $('stHelp').textContent='Play the song and check where every section starts. Fix a time by typing it (like 1:23.5) or by pressing Now at the right moment. Add, remove or change sections as needed. When the list is right, press Confirm section times.';
+  $('stGo').textContent='Confirm section times and build the chart'; scrollTo(0,0); }
+function stFirstDone(){ document.body.classList.remove('stfirst'); if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; stOpen(false);
+  $('stTitle').textContent='Section times'; $('stHelp').textContent='Set where every section starts. Type a time (like 1:23.5) or press Now while the song plays, then press Build chart from this list.'; $('stGo').textContent='Build chart from this list';
+  render(); lastBar=-2; lastBeat=-1; update(false); scrollTo(0,0); }
+$('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stKey(stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t))===stSnap0 && stRows.every(r=>r.t>=0)){ stFirstDone(); return; } const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
   if(!rows.some(r=>r.sec!=='custom')){ msg.className='warn'; msg.textContent='Add at least one section from the chart.'; return; }
   if(rows.some(r=>r.sec==='custom'&&!String(r.name||'').trim())){ msg.className='warn'; msg.textContent='Give every "Not on the chart" section a name.'; return; }
   const bars=rows.map(r=>stSnap(r.t)); for(let i=1;i<bars.length;i++) if(bars[i]<=bars[i-1]){ msg.className='warn'; msg.textContent=`Sections ${i} and ${i+1} start on the same bar (bar ${bars[i]+1}). Move one of them.`; return; }
@@ -1467,7 +1485,7 @@ $('stGo').addEventListener('click',()=>{ const rows=stRows.filter(r=>r.t>=0).sli
       E.push({op:/^end$/i.test(nm)?'lab':'name',at:b0,name:nm}); for(let b=b0;b<next;b++){ ST.overrides[b]={chords:[],lyrics:[]}; if(b>b0) E.push({op:'nosec',at:b}); } }
     ST.barEdits=E; finish(true); }
   buildSecNav(); stRows=stFromChart(); stRender(); saveLast();
-  msg.textContent=`Chart built from ${rows.length} section${rows.length>1?'s':''}. Undo puts it back.`; });
+  msg.textContent=`Chart built from ${rows.length} section${rows.length>1?'s':''}. Undo puts it back.`; if(stSnap0!==null) stFirstDone(); });
 // CJ: say when a section starts (a time in the song) and line the chart up from there
 function parseTime(v){ v=String(v||'').trim(); if(!v) return NaN; const m=v.match(/^(?:(\d+):)?(\d+(?:\.\d*)?)$/); if(!m) return NaN; return (+(m[1]||0))*60+(+m[2]); }
 const fmtT=t=>{ const m=Math.floor(t/60), x=t-m*60; return m+':'+(x<10?'0':'')+x.toFixed(1); };
@@ -1543,7 +1561,7 @@ function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
   // CJ (Nov 9): a refresh never starts working on its own; the song and chart wait, ticked, until Reopen or Build chart is pressed
 }catch(e){ /* storage blocked: start fresh */ } })();
 function clearPicked(){ ST.songFile=null; ST.chartFile=null; ST.chartMode='pdf'; for(const [d,n] of [['dropSong','songName'],['dropChart','chartName']]){ $(d).classList.remove('has'); $(n).textContent=''; } $('chartText').hidden=true; $('chartText').value=''; $('songFile').value=''; $('chartFile').value=''; ready(); }
-$('newBtn').addEventListener('click',()=>{ forgetLast(); try{ sessionStorage.removeItem('mcb-open'); }catch(e){} $('bpmIn').value=''; $('meterIn').value=''; if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
+$('newBtn').addEventListener('click',()=>{ forgetLast(); document.body.classList.remove('stfirst'); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-open'); }catch(e){} $('bpmIn').value=''; $('meterIn').value=''; if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
 
 // ---------- downloads ----------
 let dl=null; (async()=>{ try{ dl=await window.claude?.use?.('downloads'); }catch(e){ dl=null; } })();

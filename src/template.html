@@ -271,6 +271,7 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;h
 #libRows button{all:unset;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;width:100%;padding:7px 10px;border-radius:6px;cursor:pointer}
 #libRows button:hover,#libRows button:focus-visible{background:var(--accent-soft)} #libRows button[aria-pressed=true]{background:var(--accent-soft);outline:1.5px solid var(--accent)}
 #libRows b{font-weight:600;color:var(--ink)} #libRows small{color:var(--muted);font-size:12px}
+#upload .liblist{background:var(--e-panel);border-color:var(--e-line);border-radius:14px;padding:18px 20px} #upload .liblist h2{font-family:inherit;text-transform:uppercase;letter-spacing:.14em;font-size:13px;font-weight:600;color:var(--e-ink)} #upload .liblist input{background:var(--e-panel2);border-color:var(--e-line);color:var(--e-ink)} #upload #libListMsg,#upload #libRows small{color:var(--e-mute)} #upload #libRows b{color:var(--e-ink);font-size:15px} #upload #libRows button:hover,#upload #libRows button:focus-visible,#upload #libRows button[aria-pressed=true]{background:var(--e-panel2)} #upload #libRows button[aria-pressed=true]{outline-color:var(--e-amber)} /* CJ: the library list in the entry page's dark look, easy to spot */
 </style>
 <script>/* CJ: dark or light background, remembered in this browser */ /* CJ: light is the default */ let lk=null; try{ lk=localStorage.getItem("mcb-look2"); }catch(e){} if(lk!=="dark") document.documentElement.setAttribute("data-look","light");</script>
 

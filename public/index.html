@@ -581,16 +581,17 @@ function findGrid(O,dur,bpmHint){
   let ab=0,bl=lo;
   for(let l=lo;l<=hi;l++){ let s=0; for(let i=0;i+l<env.length;i+=2) s+=env[i]*env[i+l]; if(s>ab){ab=s;bl=l;} }
   let Pa=bl/fps; while(60/Pa>140) Pa*=2; while(60/Pa<66) Pa/=2;
-  if(bpmHint){ const Ph=60/bpmHint; cands=[Ph];
-    /* CJ (Cornerstone): charts can be off by a few BPM (71.5 on the chart, 75 on the recording), so also try the tempo the audio itself repeats at, when it's near the chart's */
-    let q=Pa; while(q>Ph*1.33) q/=2; while(q<Ph*0.75) q*=2; if(q>Ph*0.85 && q<Ph*1.18 && Math.abs(q/Ph-1)>0.025) cands.push(q); }
+  if(bpmHint){ const Ph=60/bpmHint;
+    /* CJ: always follow the tempo heard in the song, not the one written on the chart. The chart's number only picks
+       which octave to count in (71 vs 142), and stays as a second guess in case the audio's repeat is a 3-against-2 */
+    let q=Pa; while(q>Ph*1.33) q/=2; while(q<Ph*0.75) q*=2; cands=[q]; if(Math.abs(q/Ph-1)>0.006) cands.push(Ph); }
   else cands=[Pa];
   let best={s:-1};
   for(const [ci,P0] of cands.entries()){
     // search the half-beat grid (catches 8th-note pulse), then decide which half is the beat
     for(let P=P0*0.97; P<=P0*1.03; P+=0.0004){
       const h=P/2;
-      for(let ph=0; ph<h; ph+=0.004){ const raw=gridScore(O,h,ph,0,dur), s=raw*(ci?1:1.03); /* a small edge to the chart's tempo */ if(s>best.s) best={s,raw,P,ph}; }
+      for(let ph=0; ph<h; ph+=0.004){ const raw=gridScore(O,h,ph,0,dur), s=raw; if(s>best.s) best={s,raw,P,ph}; }
     }
   }
   // fine search around the best

@@ -662,9 +662,12 @@ $('workSave').addEventListener('click',async()=>{ if(!ST.audio) return; const d=
 async function libSave(){
   if(!DB) return;
   const b=$('libSave'); b.disabled=true; $('libMsg').textContent='Saving…';
-  const doc={dur:Math.round(ST.audio.duration*100)/100, env:ST.env, title:ST.meta.title||'', artist:ST.meta.artist||'', chartKey:ST.meta.key||'', chartSig:ST.chartSig,
-    P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', al:ST.al||null, chart:{meta:ST.meta, sections:chartPack(ST.base||ST.sections)}, savedAt:new Date().toISOString()};
+  const doc={...workDoc(), chart:{meta:ST.meta, sections:chartPack(ST.base||ST.sections)}}; /* includes your bar notes */
   try{
+    /* CJ: one copy per song. If this song with this chart is already in the library, save over it instead of adding a second copy */
+    if(!ST.libId){ try{ const d=ST.audio.duration, q=await DB.collection('songs').where('dur','>=',d-3).where('dur','<=',d+3).get();
+      let best=null; for(const x of q.docs){ const v=x.data()||{}; if(v.chartSig!==ST.chartSig) continue; const m=envMatch(v.env||[],ST.env); if(m.corr>0.9&&(!best||m.corr>best.c)) best={id:x.id,c:m.corr}; }
+      if(best) ST.libId=best.id; }catch(e){} }
     const ref=ST.libId?DB.collection('songs').doc(ST.libId):DB.collection('songs').doc();
     await ref.set(doc); ST.libId=ref.id; ST.libDate=doc.savedAt;
     $('libMsg').textContent='Saved. Anyone who uploads this song here will get these fixes.';

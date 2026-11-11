@@ -1942,9 +1942,10 @@ new MutationObserver(()=>{ const open=!$('editor').hidden;
   else if(!open && mixWas!==null){ if(mixWas && $('mixer').hidden) $('mixBtn').click(); mixWas=null; } }).observe($('editor'),{attributes:true,attributeFilter:['hidden']});
 // CJ: "re-evaluate the chords for bars 70-81": listen to those bars again and choose, from the chart's own chords, the ones that fit,
 // changing only on beat 1 or the middle of the bar (6/8: beat 1 or 4). Words and bar lines stay; it's one Undo.
-function rehearChords(a,z){ const bars=ST.song.bars, Cf=ST.Cf, P=ST.song.beat, sh=ST.shift||0; if(!Cf||!bars.length) return 0;
+function rehearChords(a,z,only){ const bars=ST.song.bars, Cf=ST.Cf, P=ST.song.beat, sh=ST.shift||0; if(!Cf||!bars.length) return 0;
+  const evAll=[...ST.events,...(ST.base?expandEvents(ST.base):[])]; /* chords from the whole chart, even sections left out of the order */
   a=Math.max(0,Math.min(bars.length-1,a)); z=Math.max(a,Math.min(bars.length-1,z));
-  const names=[...new Set(ST.events.map(e=>e.chord).filter(c=>c&&!/^N\.?C/i.test(c)))], tps=names.map(n=>chordTemplate(n)).filter(Boolean), cand=names.filter(n=>chordTemplate(n));
+  const names=(only&&only.length)?[...new Set(only)]:[...new Set(evAll.map(e=>e.chord).filter(c=>c&&!/^N\.?C/i.test(c)))], tps=names.map(n=>chordTemplate(n)).filter(Boolean), cand=names.filter(n=>chordTemplate(n));
   const vec=(t0,t1)=>{ const c=new Float64Array(12), b=new Float64Array(12); const f0=Math.max(0,Math.floor((t0-Cf.offset)*Cf.fps)), f1=Math.min(Cf.frames,Math.max(f0+1,Math.floor((t1-Cf.offset)*Cf.fps)));
     for(let f=f0;f<f1;f++) for(let k=0;k<12;k++){ c[k]+=Cf.C[f*12+k]; b[k]+=Cf.B[f*12+k]; }
     const nc=Math.hypot(...c)||1, nb=Math.max(...b)||1; return {c:c.map(x=>x/nc), b:b.map(x=>x/nb)}; };
@@ -2190,23 +2191,35 @@ $('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.
   const bars=rows.map(r=>stSnap(r.t)); for(let i=1;i<bars.length;i++) if(bars[i]<=bars[i-1]){ msg.className='warn'; msg.textContent=`Sections ${i} and ${i+1} (at ${fmtT(rows[i-1].t)} and ${fmtT(rows[i].t)}) are too close together. Move one of them.`; return; }
   if(playing) pause(); pushUndo();
   const times=bars.map(b=>bT(b)); /* on the bar lines as they are now */
-  const chart=rows.map((r,i)=>({r,t:times[i]})).filter(x=>x.r.sec!=='custom'), customs=rows.map((r,i)=>({r,t:times[i],i})).filter(x=>x.r.sec==='custom');
-  setOrder(chart.map(x=>{ const i=+x.r.sec, s=(ST.base||[])[i]; return s&&(s.repeat||1)>1?1000+i:i; })); const A={}; /* each row is one pass */
-  chart.forEach((x,pos)=>{ const j=ST.events.findIndex(e=>e.sec===pos&&e.k===0&&e.pass===0); if(j>=0) A[j]={t:x.t+1e-3}; });
-  Object.assign(ST,{anchors:A, overrides:{}, breaks:{}, barEdits:[{op:'nolead',t:times[0]}]}); realign();
-  if(!ST.al?.path?.length){ applySnap(undoStack.pop()); undoUI(); msg.className='warn'; msg.textContent="The chart's chords don't fit those times, so nothing was changed. Check that each section starts where it really does."; return; }
+  /* CJ: build from the list whatever happens. If the chart's chords can't fit a section's time, that section keeps its time and name and gets its chords heard from the song */
+  const snap0=undoStack[undoStack.length-1], secName=r=>String(r.sec==='custom'||r.rn?(r.name||''):((ST.base||[])[+r.sec]?.label||'Section')).replace(/\s*\(\d+x\)\s*$/i,'').trim().slice(0,30);
+  const tryBuild=heard=>{ const chart=rows.map((r,i)=>({r,t:times[i],i})).filter(x=>x.r.sec!=='custom'&&!heard.has(x.i));
+    if(heard.size) applySnap(snap0);
+    if(!chart.length){ Object.assign(ST,{anchors:{}, overrides:{}, breaks:{}, barEdits:[{op:'nolead',t:times[0]}]}); finish(true); return true; } /* nothing from the chart fits: keep the bars as they are */
+    setOrder(chart.map(x=>{ const i=+x.r.sec, s=(ST.base||[])[i]; return s&&(s.repeat||1)>1?1000+i:i; })); const A={}; /* each row is one pass */
+    chart.forEach((x,pos)=>{ const j=ST.events.findIndex(e=>e.sec===pos&&e.k===0&&e.pass===0); if(j>=0) A[j]={t:x.t+1e-3}; });
+    Object.assign(ST,{anchors:A, overrides:{}, breaks:{}, barEdits:[{op:'nolead',t:times[0]}]}); realign(); return !!ST.al?.path?.length; };
+  let heard=new Set(); const chartIdx=rows.map((r,i)=>r.sec!=='custom'?i:-1).filter(i=>i>=0);
+  if(!tryBuild(heard)){ let ok=false; /* find the one section that doesn't fit, then two in a row */
+    for(const i of chartIdx){ if(tryBuild(new Set([i]))){ heard=new Set([i]); ok=true; break; } }
+    if(!ok) for(let k=0;k+1<chartIdx.length&&!ok;k++){ const h=new Set([chartIdx[k],chartIdx[k+1]]); if(tryBuild(h)){ heard=h; ok=true; } }
+    if(!ok){ heard=new Set(chartIdx); tryBuild(heard); } }
+  const customs=rows.map((r,i)=>({r:heard.has(i)?{...r,sec:'custom',name:secName(r)}:r,t:times[i],i})).filter(x=>x.r.sec==='custom');
   /* sections that aren't on the chart: their name from their start to the next section, and no chords until you type them */
   if(customs.length){ const E=[]; for(const c of customs){ const b0=stSnap(c.t), next=rows.slice(c.i+1).map(r=>stSnap(r.t))[0]??ST.song.bars.length; const nm=String(c.r.name).trim();
       E.push({op:/^end$/i.test(nm)?'lab':'name',at:b0,name:nm}); for(let b=b0;b<next;b++){ ST.overrides[b]={chords:[],lyrics:[]}; if(b>b0) E.push({op:'nosec',at:b}); } }
     ST.barEdits=[...(ST.barEdits||[]),...E]; finish(true);
     /* CJ: a section that isn't on the chart (an extra chorus) gets the chords heard in the song, from the chart's own chords */
-    for(const c of customs){ const b0=stSnap(c.t), next=rows.slice(c.i+1).map(r=>stSnap(r.t))[0]??ST.song.bars.length; if(next>b0){ rehearChords(b0,next-1); undoStack.pop(); } }
+    const chordsOf=c=>{ const base=ST.base||[]; let k=c.r.sec==='custom'&&heard.has(c.i)?+rows[c.i].sec:-1; /* CJ: a section heard from the song uses the chords its part of the chart has */
+      if(k<0){ const nm=String(c.r.name||'').toLowerCase().replace(/\s*\d+$/,'').trim(); k=base.findIndex(s=>String(s.label||'').toLowerCase().replace(/\s*\(\d+x\)\s*$/,'').replace(/\s*\d+$/,'').trim()===nm); }
+      if(k<0||!base[k]) return null; const cs=expandEvents([base[k]]).map(e=>e.chord).filter(ch=>ch&&!/^N\.?C/i.test(ch)&&chordTemplate(ch)); return new Set(cs).size>=2?cs:null; };
+    for(const c of customs){ const b0=stSnap(c.t), next=rows.slice(c.i+1).map(r=>stSnap(r.t))[0]??ST.song.bars.length; if(next>b0){ rehearChords(b0,next-1,chordsOf(c)); undoStack.pop(); } }
     finish(true); }
   /* CJ: rename any section on the chart (its chords stay) */
   const ren=rows.map((r,i)=>({r,b:stSnap(r.t)})).filter(x=>x.r.sec!=='custom'&&x.r.rn&&String(x.r.name||'').trim());
   if(ren.length){ ST.barEdits=[...(ST.barEdits||[]), ...ren.map(x=>({op:'name',at:x.b,name:String(x.r.name).trim().slice(0,30)}))]; finish(true); }
   buildSecNav(); stRows=stFromChart(); stRender(); saveLast();
-  msg.textContent=`Chart built from ${rows.length} section${rows.length>1?'s':''}. Undo puts it back.`; if(stSnap0!==null) stFirstDone(); });
+  msg.textContent=`Chart built from ${rows.length} section${rows.length>1?'s':''}.`+(heard.size?` The chart's chords didn't fit ${[...heard].map(i=>secName(rows[i])).join(', ')} at ${heard.size>1?'those times':'that time'}, so ${heard.size>1?'their':'its'} chords were heard from the song. Check them with Fix bars.`:'')+' Undo puts it back.'; if(heard.size){ msg.className='warn'; $('msg').className='msg warn'; $('msg').textContent=msg.textContent; } if(stSnap0!==null) stFirstDone(); });
 // CJ: say when a section starts (a time in the song) and line the chart up from there
 function parseTime(v){ v=String(v||'').trim(); if(!v) return NaN; const m=v.match(/^(?:(\d+):)?(\d+(?:\.\d*)?)$/); if(!m) return NaN; return (+(m[1]||0))*60+(+m[2]); }
 const fmtT=t=>{ const m=Math.floor(t/60), x=t-m*60; return m+':'+(x<10?'0':'')+x.toFixed(1); };

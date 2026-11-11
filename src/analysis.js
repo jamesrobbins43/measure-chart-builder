@@ -69,24 +69,25 @@ function gridScore(O,P,ph,t0,t1){ let s=0,n=0; for(let t=ph; t<t1; t+=P){ if(t>=
 // steady-tempo beat grid: period P (seconds per counted beat) and phase of the first beat
 function findGrid(O,dur,bpmHint){
   let cands=[];
-  if(bpmHint) cands=[60/bpmHint];
-  else{
-    // autocorrelation of the envelope for 50-200 BPM, then fold into 66-140
-    const fps=O.fps, env=O.env, lo=Math.round(0.3*fps), hi=Math.round(1.2*fps);
-    let best=0,bl=lo;
-    for(let l=lo;l<=hi;l++){ let s=0; for(let i=0;i+l<env.length;i+=2) s+=env[i]*env[i+l]; if(s>best){best=s;bl=l;} }
-    let P=bl/fps; while(60/P>140) P*=2; while(60/P<66) P/=2; cands=[P];
-  }
+  // autocorrelation of the envelope for 50-200 BPM, then fold into 66-140
+  const fps=O.fps, env=O.env, lo=Math.round(0.3*fps), hi=Math.round(1.2*fps);
+  let ab=0,bl=lo;
+  for(let l=lo;l<=hi;l++){ let s=0; for(let i=0;i+l<env.length;i+=2) s+=env[i]*env[i+l]; if(s>ab){ab=s;bl=l;} }
+  let Pa=bl/fps; while(60/Pa>140) Pa*=2; while(60/Pa<66) Pa/=2;
+  if(bpmHint){ const Ph=60/bpmHint; cands=[Ph];
+    /* CJ (Cornerstone): charts can be off by a few BPM (71.5 on the chart, 75 on the recording), so also try the tempo the audio itself repeats at, when it's near the chart's */
+    let q=Pa; while(q>Ph*1.33) q/=2; while(q<Ph*0.75) q*=2; if(q>Ph*0.85 && q<Ph*1.18 && Math.abs(q/Ph-1)>0.025) cands.push(q); }
+  else cands=[Pa];
   let best={s:-1};
-  for(const P0 of cands){
+  for(const [ci,P0] of cands.entries()){
     // search the half-beat grid (catches 8th-note pulse), then decide which half is the beat
     for(let P=P0*0.97; P<=P0*1.03; P+=0.0004){
       const h=P/2;
-      for(let ph=0; ph<h; ph+=0.004){ const s=gridScore(O,h,ph,0,dur); if(s>best.s) best={s,P,ph}; }
+      for(let ph=0; ph<h; ph+=0.004){ const raw=gridScore(O,h,ph,0,dur), s=raw*(ci?1:1.03); /* a small edge to the chart's tempo */ if(s>best.s) best={s,raw,P,ph}; }
     }
   }
   // fine search around the best
-  let {P,ph}=best, s0=best.s;
+  let {P,ph}=best, s0=best.raw;
   for(let p=P-0.0006;p<=P+0.0006;p+=0.00005) for(let q=ph-0.006;q<=ph+0.006;q+=0.001){ const s=gridScore(O,p/2,q,0,dur); if(s>s0){s0=s;P=p;ph=q;} }
   // correct slow drift with a line fit through local phase offsets
   const pts=[];

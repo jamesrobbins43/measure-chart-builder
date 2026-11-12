@@ -1606,7 +1606,7 @@ function stSort(){ stRows.sort((a,b)=>a.t-b.t); stRender(); }
 function stOpen(show){ const pn=$('stPanel'), on=show??pn.hidden; pn.hidden=!on; $('stBtn').setAttribute('aria-expanded',String(on)); if(on){ stRows=stFromChart(); $('stMsg').textContent=''; $('stMsg').className=''; stRender(); stPeaks=null; requestAnimationFrame(stWaveDraw); } }
 /* CJ: from the chart, go back to the section times step; the list is already confirmed */
 $('stBtn').addEventListener('click',()=>{ if(playing) pause(); stFirst(true); }); $('stClose').addEventListener('click',()=>{ if(document.body.classList.contains('stfirst')) stFirstDone(); else stOpen(false); });
-$('stAdd').addEventListener('click',()=>{ const t=Math.max(0,songTime()); const nr={sec:'pick', t, ok:true}; stRows.push(nr); stSort(); $('stMsg').className=''; $('stMsg').textContent=`Added a section at ${fmtT(t)}. Pick which one it is.`;
+$('stAdd').addEventListener('click',()=>{ const t=Math.max(0,songTime()); const nr={sec:'pick', t, ok:false}; stRows.push(nr); stSort(); $('stMsg').className=''; $('stMsg').textContent=`Added a section at ${fmtT(t)}. Pick which one it is.`;
   /* CJ: a new section starts blank with its list open */ const sel=$('stRows').children[stRows.indexOf(nr)]?.querySelector('select'); if(sel){ sel.scrollIntoView({block:'center'}); sel.focus(); try{ sel.showPicker(); }catch(e){} } });
 /* the start of the bar nearest to a time */
 function stSnap(t){ let b=barAt(t); if(b<0) b=0; const n=ST.song.bars.length; if(b<n-1 && Math.abs(bT(b+1)-t)<Math.abs(bT(b)-t)) b++; return Math.min(b,n-1); }

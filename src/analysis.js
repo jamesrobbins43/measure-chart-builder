@@ -58,9 +58,23 @@ async function chromaFrames(x,sr,progress){
     E[f]=Math.sqrt(e/N);
     fft(re,im);
     for(let k=1;k<N/2;k++){ const m=Math.hypot(re[k],im[k]); if(pcOf[k]>=0) C[f*12+pcOf[k]]+=m; if(bassOf[k]>=0) B[f*12+bassOf[k]]+=m; }
-    if((f&255)===0){ progress&&progress(f/frames); await tick(); }
+    if((f&255)===0){ progress&&progress(f/frames*0.8); await tick(); }
   }
-  return {C,B,E,fps:sr/hop,offset:N/2/sr,frames};
+  /* CJ (Battle Belongs: Db heard as C, Gb as G): low notes are only 2-4 Hz apart, finer than this FFT's 5.4 Hz bins, so the bass smeared into the
+     note next door. The bass is read again from a low-passed copy at 1/8 the rate with a 2048 window: 1.35 Hz bins, same frame times. */
+  { const D=8, sr2=sr/D, T=127, h=new Float64Array(T), fc=300/sr; let hs=0;
+    for(let i=0;i<T;i++){ const m=i-(T-1)/2, w=0.42-0.5*Math.cos(2*Math.PI*i/(T-1))+0.08*Math.cos(4*Math.PI*i/(T-1)); h[i]=(m===0?2*fc:Math.sin(2*Math.PI*fc*m)/(Math.PI*m))*w; hs+=h[i]; }
+    for(let i=0;i<T;i++) h[i]/=hs;
+    const n2=Math.floor(x.length/D), y=new Float32Array(n2);
+    for(let j=0;j<n2;j++){ const c=j*D; let a=0; for(let i=0;i<T;i++){ const q=c+i-(T>>1); if(q>=0&&q<x.length) a+=h[i]*x[q]; } y[j]=a; if((j&65535)===0) await tick(); }
+    const N2=2048, fft2=makeFFT(N2), win2=hann(N2), bo=new Int8Array(N2/2).fill(-1), bw=new Float32Array(N2/2);
+    for(let k=1;k<N2/2;k++){ const fq=k*sr2/N2; if(fq>=38&&fq<=160){ // above 160 Hz the 3rd overtone of a low root reads as its 5th
+      const v=12*Math.log2(fq/440)+69; bo[k]=((Math.round(v)%12)+12)%12; bw[k]=Math.max(0,1-2*Math.abs(v-Math.round(v))); } } // weight bins near a note's centre
+    const r2=new Float64Array(N2), i2=new Float64Array(N2), Bf=new Float32Array(frames*12);
+    for(let f=0;f<frames;f++){ const c=(f*hop+N/2)/D, o=Math.round(c-N2/2); for(let i=0;i<N2;i++){ const q=o+i; r2[i]=(q>=0&&q<n2?y[q]:0)*win2[i]; i2[i]=0; } fft2(r2,i2);
+      for(let k=1;k<N2/2;k++) if(bo[k]>=0) Bf[f*12+bo[k]]+=Math.hypot(r2[k],i2[k])*bw[k];
+      if((f&255)===0){ progress&&progress(0.8+0.2*f/frames); await tick(); } }
+    return {C,B,Bf,E,fps:sr/hop,offset:N/2/sr,frames}; } /* Bf: the fine bass, for hearing chords; B stays as it was for lining the chart up */
 }
 
 function envAt(env,fps,offset,t){ const i=(t-offset)*fps; if(i<0||i>=env.length-1) return 0; const a=i|0, fr=i-a; return env[a]*(1-fr)+env[a+1]*fr; }

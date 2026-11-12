@@ -2158,7 +2158,7 @@ function pinSection(){
 let stRows=[];
 function stOptions(){ const base=ST.base||ST.sections, cnt={}; base.forEach(s=>{ cnt[s.label]=(cnt[s.label]||0)+1; }); const seen={};
   return base.map((s,i)=>{ seen[s.label]=(seen[s.label]||0)+1; const nm=s.label.replace(/\s*\(\d+x\)\s*$/i,''); return {v:String(i), l:nm+(cnt[s.label]>1&&!/\d$/.test(nm)?' '+seen[s.label]:'')}; }).concat(genSecs(base).map(n=>({v:'g:'+n,l:n}))); } /* CJ: lyric charts leave out the Interlude, Instrumental and Outro */
-function genSecs(base){ return ['Interlude','Instrumental','Outro'].filter(n=>!(base||[]).some(s=>new RegExp('^'+n,'i').test(s.label))); }
+function genSecs(base){ return ['Interlude','Instrumental','Outro','End'].filter(n=>!(base||[]).some(s=>new RegExp('^'+n,'i').test(s.label))); }
 function stFromChart(){ const rows=[], song=ST.song; if(!song) return rows; const at={};
   for(const p of (ST.al?.path||[])){ const e=ST.events[p.j]; if(!e||e.k!==0) continue; const bi=barOfStart(p); if(bi>=0 && at[bi]==null) at[bi]=String(ST.order?ordBase(ST.order[e.sec]):e.sec); }
   /* one row for every section name on the chart as it is now; a name the chart doesn't have becomes a "not on the chart" row */
@@ -2218,8 +2218,12 @@ function stPlace(r){ const i=stRows.indexOf(r), ok=stRows.filter(x=>x.ok&&x!==r)
     let k; if(prev) k=stRows.indexOf(prev)+1; else { const nx=ok.filter(x=>x.t>r.t).sort((a,b)=>a.t-b.t)[0]; k=nx?stRows.indexOf(nx):stRows.length; } stRows.splice(k,0,r); }
   stRender(); }
 /* CJ: an Outro is always the last section */
-function stOutroLast(r){ const nm=r.sec==='custom'?r.name:((ST.base||ST.sections||[])[+r.sec]?.label); if(!/^outro/i.test(String(nm||'').trim())) return; const i=stRows.indexOf(r); if(i<0||i===stRows.length-1) return; stRows.splice(i,1); stRows.push(r);
+function stOutroLast(r){ const nm=r.sec==='custom'?r.name:((ST.base||ST.sections||[])[+r.sec]?.label); if(!/^(outro|end)/i.test(String(nm||'').trim())) return; const i=stRows.indexOf(r); if(i<0||i===stRows.length-1) return; stRows.splice(i,1); stRows.push(r);
   const last=stRows.slice(0,-1).reduce((m,x)=>Math.max(m,x.t),0); if(r.t<last){ r.t=Math.min((ST.audio?.duration||last+1)-0.1,last+0.01); if(r.ok) r.ok=false; } }
+/* CJ: the End keeps only the chord on its first beat (usually held to the end); every other chord in it is removed */
+function stEndChords(rows,bars,nameOf){ const sg=ST.song; let ch=false; rows.forEach((r,i)=>{ if(!/^end(ing)?\b/i.test(nameOf(r))) return; const b0=bars[i]; const nx=bars[i+1]??sg.bars.length;
+      let c1=null; const fb=sg.bars[b0]; if(fb?.chords?.length&&fb.chords[0][0]<=1) c1=fb.chords[0][1]; else for(let k=b0-1;k>=0&&!c1;k--){ const cs=sg.bars[k].chords; if(cs.length) c1=cs[cs.length-1][1]; }
+      for(let b=b0;b<nx&&b<sg.bars.length;b++){ ST.overrides[b]={...(ST.overrides[b]||{}), chords:b===b0&&c1?[[1,c1]]:[], lyrics:ST.overrides[b]?.lyrics||[]}; } ch=true; }); if(ch) finish(true); }
 function stSort(){ stRows.sort((a,b)=>a.t-b.t); stRender(); }
 function stOpen(show){ const pn=$('stPanel'), on=show??pn.hidden; pn.hidden=!on; $('stBtn').setAttribute('aria-expanded',String(on)); if(on){ stRows=stFromChart(); $('stMsg').textContent=''; $('stMsg').className=''; stRender(); stPeaks=null; requestAnimationFrame(stWaveDraw); } }
 /* CJ: from the chart, go back to the section times step; the list is already confirmed */
@@ -2247,7 +2251,7 @@ $('stLibNo').addEventListener('click',()=>{ $('stLibAsk').hidden=true; stRows.fo
 function stFirstDone(){ document.body.classList.remove('stfirst','stback'); $('stLibAsk').hidden=true; if(stClickPrev!==null){ setClickVol(stClickPrev); stClickPrev=null; } $('stClose').textContent='Close'; $('stLeft').textContent=''; if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; stOpen(false);
   $('stTitle').textContent='Section times'; $('stHelp').textContent='Set where every section starts. Type a time (like 1:23.5) or press Now while the song plays, then press Build Chart.'; $('stGo').textContent='Build Chart';
   render(); lastBar=-2; lastBeat=-1; update(false); scrollTo(0,0); }
-$('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.ok)){ const i=stRows.findIndex(r=>!r.ok), m=$('stMsg'); m.className='warn'; m.textContent=`Confirm every section first (${stRows.filter(r=>!r.ok).length} left). Next up is number ${i+1}.`; $('stRows').children[i]?.scrollIntoView({block:'center',behavior:'smooth'}); return; } if(stSnap0!==null && stKey(stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t))===stSnap0 && stRows.every(r=>r.t>=0) && !stRows.some(r=>r.auto)){ const r0=stRows.slice().sort((a,b)=>a.t-b.t)[0]; if(r0 && !(ST.barEdits||[]).some(e=>e.op==='nolead')){ ST.barEdits=[{op:'nolead',t:bT(stSnap(r0.t))},...(ST.barEdits||[])]; finish(true); saveLast(); } stFirstDone(); return; } const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
+$('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.ok)){ const i=stRows.findIndex(r=>!r.ok), m=$('stMsg'); m.className='warn'; m.textContent=`Confirm every section first (${stRows.filter(r=>!r.ok).length} left). Next up is number ${i+1}.`; $('stRows').children[i]?.scrollIntoView({block:'center',behavior:'smooth'}); return; } if(stSnap0!==null && stKey(stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t))===stSnap0 && stRows.every(r=>r.t>=0) && !stRows.some(r=>r.auto)){ const r0=stRows.slice().sort((a,b)=>a.t-b.t)[0]; if(r0 && !(ST.barEdits||[]).some(e=>e.op==='nolead')){ ST.barEdits=[{op:'nolead',t:bT(stSnap(r0.t))},...(ST.barEdits||[])]; finish(true); const rs=stRows.slice().sort((a,b)=>a.t-b.t); stEndChords(rs,rs.map(r=>stSnap(r.t)),r=>String(r.sec==='custom'||r.rn?(r.name||''):((ST.base||[])[+r.sec]?.label||'')).replace(/\s*\(\d+x\)\s*$/i,'').trim()); saveLast(); } stFirstDone(); return; } const rows=stRows.filter(r=>r.t>=0).slice().sort((a,b)=>a.t-b.t), msg=$('stMsg'); msg.className='';
   { const k=stRows.findIndex(r=>r.sec==='pick'); if(k>=0){ msg.className='warn'; msg.textContent=`Pick which section number ${k+1} is.`; $('stRows').children[k]?.querySelector('select')?.focus(); return; } }
   if(!rows.some(r=>r.sec!=='custom')){ msg.className='warn'; msg.textContent='Add at least one section from the chart.'; return; }
   rows.forEach(r=>{ if(r.rn&&!String(r.name||'').trim()) r.rn=false; });
@@ -2290,6 +2294,8 @@ $('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.
   /* CJ: rename any section on the chart (its chords stay) */
   const ren=rows.map((r,i)=>({r,b:stSnap(r.t)})).filter(x=>x.r.sec!=='custom'&&x.r.rn&&String(x.r.name||'').trim());
   if(ren.length){ ST.barEdits=[...(ST.barEdits||[]), ...ren.map(x=>({op:'name',at:x.b,name:String(x.r.name).trim().slice(0,30)}))]; finish(true); }
+  /* CJ: the End keeps only the chord on its first beat (usually held to the end); every other chord in it is removed */
+  stEndChords(rows,times.map(t=>stSnap(t)),secName);
   /* a section the line-up put at the bar line before a short bar goes back to where you set it (only its name moves) */
   if(lenE.length){ const sg=ST.song, done=new Set(), fx=[], at=t=>{ const k=stSnap(t); return Math.abs(bT(k)-t)<0.06?k:-1; }, mine=rows.map((r,i)=>at(times[i]));
     mine.forEach(tb=>{ if(tb<0) return; if(sg.bars[tb]?.section){ done.add(tb); return; } for(const k of [tb-1,tb+1]) if(k>=0&&sg.bars[k]?.section&&!done.has(k)&&!mine.includes(k)){ fx.push({op:'sec',at:tb,from:k}); done.add(tb); break; } });

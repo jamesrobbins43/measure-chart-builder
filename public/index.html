@@ -1671,7 +1671,7 @@ function buildSecNav(){ const nav=$('secNav'); if(!nav) return; secSp=ST.song?se
    it goes in at the chosen bar, everything before stays put, and the rest of the song is lined up again after it (same as Fix bars > section start). */
 function openSecAdd(){ const box=$('secAdd'); if(!box.hidden){ box.hidden=true; return; }
   const opts=[], seen=new Set(), base=ST.base||ST.sections; ST.events.forEach((e,j)=>{ const bi=ST.order?ordBase(ST.order[e.sec]):e.sec; if(e.k===0&&e.pass===0&&!seen.has(bi)){ seen.add(bi); const n=base.filter(s=>s.label===e.label).length>1?' '+base.slice(0,bi+1).filter(s=>s.label===e.label).length:''; opts.push(`<option value="${j}">${esc(e.label+n)}</option>`); } });
-  $('saSec').innerHTML=opts.join('')+''+(base.some(s=>/^interlude/i.test(s.label))?'':'<option value="gInterlude">Interlude</option>')+'<option value="end">End (runs to the end of the song)</option><option value="custom">A section not on the chart…</option>'; $('saName').hidden=true; $('saName').value=''; const nb=ST.song.bars.length, cur=Math.max(0,Math.min(nb-1,barAt(songTime()+userSync/1000)));
+  $('saSec').innerHTML=opts.join('')+''+genSecs(base).map(n=>`<option value="g:${n}">${n}</option>`).join('')+'<option value="end">End (runs to the end of the song)</option><option value="custom">A section not on the chart…</option>'; $('saName').hidden=true; $('saName').value=''; const nb=ST.song.bars.length, cur=Math.max(0,Math.min(nb-1,barAt(songTime()+userSync/1000)));
   $('saBar').max=nb; $('saBar').value=cur+1; $('saMsg').textContent=''; box.hidden=false; $('saSec').focus(); }
 $('saX').addEventListener('click',()=>{ $('secAdd').hidden=true; });
 $('saSec').addEventListener('change',()=>{ const c=$('saSec').value==='custom'; $('saName').hidden=!c; if(c) $('saName').focus(); });
@@ -1680,7 +1680,7 @@ function addCustomSection(bar,name){ name=String(name||'').trim().replace(/\s+/g
   $('edLenMsg').textContent=`${name} now starts at bar ${bar} and runs to the next section. No chords moved; change them in Chords & words if you need to.`; $('msg').className='msg'; $('msg').textContent=$('edLenMsg').textContent; buildSecNav(); return true; }
 $('saGo').addEventListener('click',()=>{ const j=+$('saSec').value, nb=ST.song.bars.length, bar=Math.round(+$('saBar').value);
   if(!(bar>=1&&bar<=nb)){ $('saMsg').textContent=`Pick a bar from 1 to ${nb}.`; return; }
-  if($('saSec').value==='gInterlude'){ addCustomSection(bar,'Interlude'); $('secAdd').hidden=true; return; }
+  if($('saSec').value.startsWith('g:')){ addCustomSection(bar,$('saSec').value.slice(2)); $('secAdd').hidden=true; return; }
   if($('saSec').value==='custom'){ if(!addCustomSection(bar,$('saName').value)){ $('saMsg').textContent='Type a name for the new section.'; $('saName').focus(); return; } $('secAdd').hidden=true; return; }
   if($('saSec').value==='end'){ if(playing) pause(); barEdit('lab',bar-1,'End'); $('edLenMsg').textContent=`The End now starts at bar ${bar} and runs to the end of the song. No chords moved.`; $('secAdd').hidden=true; buildSecNav(); return; }
   const nm=$('saSec').selectedOptions[0]?.textContent||ST.events[j].label; if(playing) pause(); selBar=bar-1;
@@ -2153,7 +2153,8 @@ function pinSection(){
 /* ---------- CJ: Section times — a list of every section and the time it starts; the chart is built from the list ---------- */
 let stRows=[];
 function stOptions(){ const base=ST.base||ST.sections, cnt={}; base.forEach(s=>{ cnt[s.label]=(cnt[s.label]||0)+1; }); const seen={};
-  return base.map((s,i)=>{ seen[s.label]=(seen[s.label]||0)+1; const nm=s.label.replace(/\s*\(\d+x\)\s*$/i,''); return {v:String(i), l:nm+(cnt[s.label]>1&&!/\d$/.test(nm)?' '+seen[s.label]:'')}; }).concat(base.some(s=>/^interlude/i.test(s.label))?[]:[{v:'g:Interlude',l:'Interlude'}]); } /* CJ: lyric charts leave out the Interlude */
+  return base.map((s,i)=>{ seen[s.label]=(seen[s.label]||0)+1; const nm=s.label.replace(/\s*\(\d+x\)\s*$/i,''); return {v:String(i), l:nm+(cnt[s.label]>1&&!/\d$/.test(nm)?' '+seen[s.label]:'')}; }).concat(genSecs(base).map(n=>({v:'g:'+n,l:n}))); } /* CJ: lyric charts leave out the Interlude, Instrumental and Outro */
+function genSecs(base){ return ['Interlude','Instrumental','Outro'].filter(n=>!(base||[]).some(s=>new RegExp('^'+n,'i').test(s.label))); }
 function stFromChart(){ const rows=[], song=ST.song; if(!song) return rows; const at={};
   for(const p of (ST.al?.path||[])){ const e=ST.events[p.j]; if(!e||e.k!==0) continue; const bi=barOfStart(p); if(bi>=0 && at[bi]==null) at[bi]=String(ST.order?ordBase(ST.order[e.sec]):e.sec); }
   /* one row for every section name on the chart as it is now; a name the chart doesn't have becomes a "not on the chart" row */

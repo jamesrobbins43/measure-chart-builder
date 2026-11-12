@@ -1988,7 +1988,9 @@ function rehearChords(a,z,only){ const bars=ST.song.bars, Cf=ST.Cf, P=ST.song.be
   const fit=(tp,v)=>{ let d=0, n=0; for(let k=0;k<12;k++){ d+=tp.t[k]*v.c[(k+sh)%12]; n+=tp.t[k]*tp.t[k]; } return d/(Math.sqrt(n)||1)+0.35*v.b[(tp.bass+sh)%12]; };
   const slots=[]; // [bar, beat (1-based), start, end]
   for(let i=a;i<=z;i++){ const L=bLen(i), half=ST.compound?3:(L>=4&&L%2===0?L/2:L), t=bT(i); for(let x=0;x<L-1e-6;x+=half) slots.push([i,1+x,t+x*P,t+Math.min(L,x+half)*P]); }
-  const S=slots.map(s=>{ const v=vec(s[2],s[3]); return tps.map(tp=>fit(tp,v)); });
+  /* CJ (Battle Belongs: Fm where Db is played): with lyrics only, the key's own chords are weighed by how often worship songs use them: I, IV, V most, vi some, iii rarely (it shares two notes with I). Checked on 6 songs: 67% -> 72% of half-bars right */
+  const kc=ST.noChords?keyChords():[], pri=kc.length?{[kc[0]]:.06,[kc[3]]:.05,[kc[4]]:.05,[kc[5]]:.03,[kc[1]]:0,[kc[2]]:-.12}:{};
+  const S=slots.map(s=>{ const v=vec(s[2],s[3]); return tps.map((tp,j)=>fit(tp,v)+(pri[cand[j]]||0)); });
   const prev=a>0?bars[a-1].chords.at(-1)?.[1]:null; // keep going from the chord before, when that fits
   const N=cand.length, dp=S.map(()=>new Float64Array(N)), bp=S.map(()=>new Int16Array(N));
   for(let s=0;s<S.length;s++) for(let c=0;c<N;c++){ const cost=slots[s][1]===1?0.08:0.16;

@@ -1439,11 +1439,11 @@ function refineChords(al){
   const fit=(n,h)=>{ const t=tp(n); if(!t||h<0||h>=S.n) return 0; let v=0; for(let k=0;k<12;k++) v+=t.t[k]*S.C[h*12+((k+sh)%12+12)%12]; return v+0.4*S.B[h*12+((t.bass+sh)%12+12)%12]; };
   const P=al.path;
   for(let i=1;i<P.length-1;i++){ const e=ST.events[P[i].j], pe=ST.events[P[i-1].j]; if(!e||!pe||!e.chord||!pe.chord||e.k===0||e.chord===pe.chord) continue;
-    const a=P[i-1].start, z=P[i+1].start, st=P[i].start, m2=!ST.compound&&ST.P<0.7, lo=Math.max(a+1,st-2,m2?a+Math.min(2,st-a):0), hi=Math.min(z-1,st+2,m2?z-Math.min(2,z-st):1e9); if(hi<=lo) continue; /* CJ (Praise): in quicker 4/4 songs sliding must not squeeze a chord under 2 beats */
+    const a=P[i-1].start, z=P[i+1].start, st=P[i].start, m2=!ST.compound, lo=Math.max(a+1,st-2,m2?a+Math.min(2,st-a):0), hi=Math.min(z-1,st+2,m2?z-Math.min(2,z-st):1e9); if(hi<=lo) continue; /* CJ (Praise; Battle Belongs chorus F C | G Am): sliding must not squeeze a chord under 2 beats (unless it already was) */
     const w0=Math.max(a,st-2.5), w1=Math.min(z,st+2.5);
     const score=c=>{ let v=0; for(let x=w0;x<w1-1e-6;x+=0.5){ v+=fit(x<c-1e-6?pe.chord:e.chord, Math.round(x*2)); } return v; };
     const onG=c=>!ST.compound||e.quick||(((Math.round(c)-ST.downPhase)%3)+3)%3===0; // 6/8: a change may only slide to a big beat (CJ, I Believe)
-    let best=st, bv=score(st)+(onG(st)?0.25:-1e9); for(let c=st-Math.floor(st-lo+1e-6);c<=hi+1e-6;c+=1){ if(!onG(c)) continue; const v=score(c); if(v>bv){ bv=v; best=c; } }
+    let best=st, bv=score(st)+(onG(st)?0.25:-1e9); for(let c=st-Math.floor(st-lo+1e-6);c<=hi+1e-6;c+=1){ if(!onG(c)) continue; const v=score(c)-(!ST.compound&&ST.meter===4&&Math.abs(c-st)%2===1?0.25 /* CJ: changes land on beats 1 and 3; a 1-beat slide has to earn it */:0); if(v>bv){ bv=v; best=c; } }
     P[i].start=best; }
   return al;
 }
@@ -2010,7 +2010,7 @@ function rehearChords(a,z,only){ const bars=ST.song.bars, Cf=ST.Cf, P=ST.song.be
   const S=slots.map(s=>{ const v=vec(s[2],s[3]), st=s[1]===1&&!!bars[s[0]]?.section; return tps.map((tp,j)=>fit(tp,v)+(pri[cand[j]]||0)+(st&&kc.length&&cand[j]===kc[2]?(X.iiiStart??0):0)); });
   const prev=a>0?bars[a-1].chords.at(-1)?.[1]:null; // keep going from the chord before, when that fits
   const N=cand.length, dp=S.map(()=>new Float64Array(N)), bp=S.map(()=>new Int16Array(N));
-  for(let s=0;s<S.length;s++) for(let c=0;c<N;c++){ const cost=slots[s][1]===1?0.08:0.16;
+  for(let s=0;s<S.length;s++) for(let c=0;c<N;c++){ const cost=(slots[s][1]===1?0.08:0.16);
     if(!s){ dp[s][c]=S[s][c]-(prev&&cand[c]!==prev?cost:0); continue; }
     let best=-1e9,bi=0; for(let q=0;q<N;q++){ const v=dp[s-1][q]-(q===c?0:cost); if(v>best){ best=v; bi=q; } } dp[s][c]=best+S[s][c]; bp[s][c]=bi; }
   let c=0; for(let q=1;q<N;q++) if(dp[S.length-1][q]>dp[S.length-1][c]) c=q; const pick=new Array(S.length);
@@ -2275,13 +2275,13 @@ $('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.
   if(!rows.some(r=>r.sec!=='custom')){ msg.className='warn'; msg.textContent='Add at least one section from the chart.'; return; }
   rows.forEach(r=>{ if(r.rn&&!String(r.name||'').trim()) r.rn=false; });
   if(rows.some(r=>r.sec==='custom'&&!String(r.name||'').trim())){ msg.className='warn'; msg.textContent='Give every new section a name.'; return; }
-  /* CJ (Battle Belongs intro a beat late): the first section you set starts a bar, so the bar lines move to it */
-  let rephased=false; { const M=ST.meter, sg=ST.song, d=((Math.round((rows[0].t-sg.bar0)/sg.beat)%M)+M)%M; if(d&&!ST.compound){ if(playing) pause(); pushUndo(); rephased=true; ST.downPhase=(ST.downPhase+d)%M;
-    if(ST.noChords){ lyricsOnlyLayout(true); finish(true); } else { Object.assign(ST,{anchors:{}, overrides:{}, barLens:{}, breaks:{}, barEdits:[]}); realign(); } } }
+  let rephased=false;
   /* CJ (Battle Belongs bar 28): a section you set half a bar or more off the bar lines means the bar before it is short (2 beats); keep the section where you set it */
-  let lenE=[]; if(!ST.compound && rows.length>1 && ST.song?.bars?.length){ if(!rephased){ if(playing) pause(); pushUndo(); rephased=true; } const nl={op:'nolead',t:bT(stSnap(rows[0].t))}; ST.barEdits=[nl]; finish(true);
-    for(let i=1;i<rows.length;i++){ const sg=ST.song, t=rows[i].t, b=barAt(t); if(b<0||b>=sg.bars.length) continue; const off=(t-bT(b))/sg.beat, d=Math.round(off), L=sg.bars[b].len;
-      if(Math.abs(off-d)<0.3 && d>=2 && L-d>=2){ lenE.push({op:'len',at:b,len:d}); ST.barEdits=[nl,...lenE]; finish(true); } } }
+  let lenE=[], nlT=null; if(!ST.compound && rows.length>1 && ST.song?.bars?.length){ if(!rephased){ if(playing) pause(); pushUndo(); rephased=true; } nlT=bT(Math.max(0,barAt(rows[0].t+0.05))); const nl={op:'nolead',t:nlT}; ST.barEdits=[nl]; finish(true);
+    /* CJ (Battle Belongs: intro a beat late, then chords a beat off the bar lines when every bar line moved to the intro): each section starts exactly where you set it;
+       the bar before it is shortened to fit, and the bar lines after it follow the music again at the next section */
+    for(let i=0;i<rows.length;i++){ const sg=ST.song, t=rows[i].t, b=barAt(t); if(b<0||b>=sg.bars.length) continue; const off=(t-bT(b))/sg.beat, d=Math.round(off), L=sg.bars[b].len;
+      if(Math.abs(off-d)<0.3 && d>=1 && L-d>=1){ lenE.push({op:'len',at:b,len:d}); ST.barEdits=[nl,...lenE]; finish(true); } } }
   const bars=rows.map(r=>stSnap(r.t)); for(let i=1;i<bars.length;i++) if(bars[i]<=bars[i-1]){ msg.className='warn'; msg.textContent=`Sections ${i} and ${i+1} (at ${fmtT(rows[i-1].t)} and ${fmtT(rows[i].t)}) are too close together. Move one of them.`; return; }
   if(playing) pause(); if(!rephased) pushUndo();
   const times=bars.map(b=>bT(b)); /* on the bar lines as they are now */
@@ -2289,10 +2289,10 @@ $('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.
   const snap0=rephased?snapFix():undoStack[undoStack.length-1], secName=r=>String(r.sec==='custom'||r.rn?(r.name||''):((ST.base||[])[+r.sec]?.label||'Section')).replace(/\s*\(\d+x\)\s*$/i,'').trim().slice(0,30);
   const tryBuild=heard=>{ const chart=rows.map((r,i)=>({r,t:times[i],i})).filter(x=>x.r.sec!=='custom'&&!heard.has(x.i));
     if(heard.size) applySnap(snap0);
-    if(!chart.length){ Object.assign(ST,{anchors:{}, overrides:{}, breaks:{}, barEdits:[{op:'nolead',t:times[0]},...lenE]}); finish(true); return true; } /* nothing from the chart fits: keep the bars as they are */
+    if(!chart.length){ Object.assign(ST,{anchors:{}, overrides:{}, breaks:{}, barEdits:[{op:'nolead',t:nlT??times[0]},...lenE]}); finish(true); return true; } /* nothing from the chart fits: keep the bars as they are */
     setOrder(chart.map(x=>{ const i=+x.r.sec, s=(ST.base||[])[i]; return s&&(s.repeat||1)>1?1000+i:i; })); const A={}; /* each row is one pass */
     chart.forEach((x,pos)=>{ const j=ST.events.findIndex(e=>e.sec===pos&&e.k===0&&e.pass===0); if(j>=0) A[j]={t:x.t+1e-3}; });
-    Object.assign(ST,{anchors:A, overrides:{}, breaks:{}, barEdits:[{op:'nolead',t:times[0]},...lenE]}); realign(); return !!ST.al?.path?.length; };
+    Object.assign(ST,{anchors:A, overrides:{}, breaks:{}, barEdits:[{op:'nolead',t:nlT??times[0]},...lenE]}); realign(); return !!ST.al?.path?.length; };
   let heard=new Set(); const chartIdx=rows.map((r,i)=>r.sec!=='custom'?i:-1).filter(i=>i>=0);
   if(ST.noChords){ heard=new Set(chartIdx); tryBuild(heard); }
   else if(!tryBuild(heard)){ let ok=false; /* find the one section that doesn't fit, then two in a row */
@@ -2318,6 +2318,7 @@ $('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.
   /* a section the line-up put at the bar line before a short bar goes back to where you set it (only its name moves) */
   if(lenE.length){ const sg=ST.song, done=new Set(), fx=[], at=t=>{ const k=stSnap(t); return Math.abs(bT(k)-t)<0.06?k:-1; }, mine=rows.map((r,i)=>at(times[i]));
     mine.forEach(tb=>{ if(tb<0) return; if(sg.bars[tb]?.section){ done.add(tb); return; } for(const k of [tb-1,tb+1]) if(k>=0&&sg.bars[k]?.section&&!done.has(k)&&!mine.includes(k)){ fx.push({op:'sec',at:tb,from:k}); done.add(tb); break; } });
+    if(mine[0]===1 && lenE.some(e=>e.at===0)) fx.push({op:'name',at:0,name:'Lead-in'}); /* the short bar before a first section set off the bar line is lead-in, not part of it */
     if(fx.length){ ST.barEdits=[...ST.barEdits,...fx]; finish(true); } }
   buildSecNav(); stRows=stFromChart(); stRender(); saveLast();
   msg.textContent=`Chart built from ${rows.length} section${rows.length>1?'s':''}.`+(ST.noChords?' The chords were heard from the song; check them with Fix bars.':heard.size?` The chart's chords didn't fit ${[...heard].map(i=>secName(rows[i])).join(', ')} at ${heard.size>1?'those times':'that time'}, so ${heard.size>1?'their':'its'} chords were heard from the song. Check them with Fix bars.`:'')+' Undo puts it back.'; if(heard.size&&!ST.noChords){ msg.className='warn'; $('msg').className='msg warn'; $('msg').textContent=msg.textContent; } if(stSnap0!==null) stFirstDone(); });

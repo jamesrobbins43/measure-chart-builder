@@ -82,7 +82,7 @@ html:has(#upload:not([hidden])) body{background:#000}
 .fline .ck{flex:none;width:20px;height:20px;border:1.5px solid currentColor;border-radius:4px;display:grid;place-items:center;opacity:.6}
 .fline.has .ck{opacity:1;background:var(--ok);border-color:var(--ok)} .fline.has .ck::after{content:'';width:5px;height:10px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:translateY(-1px) rotate(45deg)}
 .fline .fl{display:flex;flex-direction:column;gap:2px;min-width:0} .fline .fhint{font-family:var(--f-ui);font-size:12px;color:var(--muted)} .fline.has .fhint{display:none}
-.fline input[type=file]{z-index:2}
+.fline input[type=file]{z-index:2} .fline .fx{display:none;position:relative;z-index:3;margin-left:auto;flex:none;width:28px;height:28px;padding:0;border-radius:50%;font-size:18px;line-height:1} .fline.has .fx{display:inline-grid;place-items:center} .fline.has .ck{position:relative;z-index:3;cursor:pointer} /* CJ: take a file back out */
 #upload .fline{border-color:var(--e-line);background:var(--e-panel2)} #upload .fline b{font-size:15px} #upload .fline .fhint{font-family:inherit;color:var(--e-mute)}
 #upload .fline.has{border-color:var(--e-amber)} #upload .fline.has .ck{background:var(--e-amber);border-color:var(--e-amber)} #upload .fline.has .ck::after{border-color:var(--e-amber-ink)} #upload .drop1{gap:10px}
 #upload button:focus-visible,#upload textarea:focus-visible,#upload .drop:focus-within{outline-color:var(--e-amber)}
@@ -286,10 +286,10 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;h
       <h2>Song and chord chart</h2>
       <p class="d1hint">Drag both the song file and chord chart in here.</p>
       <input type="file" id="bothFile" multiple accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,application/pdf,.pdf,.txt,.json,application/json" aria-label="Choose the song, chart and saved chart files">
-      <label class="fline" id="dropSong"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Song</b><span class="fname" id="songName"></span></span><input type="file" id="songFile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" aria-label="Choose song file"></label>
-      <label class="fline" id="dropChart"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Chart</b><span class="fname" id="chartName"></span></span><input type="file" id="chartFile" accept="application/pdf,.pdf,.txt" aria-label="Choose chart PDF"></label>
-      <label class="fline" id="dropWork"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Saved chart file <span class="fhint" style="display:inline">(optional)</span></b><span class="fname" id="workName"></span></span><input type="file" id="workFile" accept=".json,application/json" aria-label="Choose a saved chart file"></label>
-      <div class="alt">No PDF? <button type="button" id="pasteBtn">Paste chart text with song sections</button></div>
+      <label class="fline" id="dropSong"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Song</b><span class="fname" id="songName"></span></span><input type="file" id="songFile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" aria-label="Choose song file"><button type="button" class="fx" data-x="dropSong" aria-label="Remove this file" title="Remove this file">×</button></label>
+      <label class="fline" id="dropChart"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Chart</b><span class="fname" id="chartName"></span></span><input type="file" id="chartFile" accept="application/pdf,.pdf,.txt" aria-label="Choose chart PDF"><button type="button" class="fx" data-x="dropChart" aria-label="Remove this file" title="Remove this file">×</button></label>
+      <label class="fline" id="dropWork"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Saved chart file <span class="fhint" style="display:inline">(optional)</span></b><span class="fname" id="workName"></span></span><input type="file" id="workFile" accept=".json,application/json" aria-label="Choose a saved chart file"><button type="button" class="fx" data-x="dropWork" aria-label="Remove this file" title="Remove this file">×</button></label>
+      <div class="alt"><button type="button" id="clearAll" hidden>Clear all</button> No PDF? <button type="button" id="pasteBtn">Paste chart text with song sections</button></div>
       <textarea id="chartText" hidden placeholder="VERSE 1&#10;Ab                Db&#10;Again and again, and again and again&#10;..."></textarea>
     </div>
   </div>
@@ -463,7 +463,14 @@ async function takeWork(f){ cancelBuild(); let v=null; try{ v=JSON.parse(await f
   d.addEventListener('drop',e=>{e.preventDefault(); d.classList.remove('over'); takeFiles([...e.dataTransfer.files]); }); }
 $('pasteBtn').addEventListener('click',()=>{ const t=$('chartText'); t.hidden=!t.hidden; ST.chartMode=t.hidden?'pdf':'text'; if(!t.hidden){ t.focus(); $('chartFile').style.pointerEvents='none'; } else $('chartFile').style.pointerEvents=''; ready(); });
 $('chartText').addEventListener('input',ready);
-function ready(){ const chartOk = ST.chartMode==='text' ? $('chartText').value.trim().length>20 : ST.chartMode==='lib' ? !!ST.libChartDoc : !!ST.chartFile; $('buildBtn').disabled=!(ST.songFile&&chartOk); $('dropChart').classList.toggle('has', ST.chartMode==='pdf'?!!ST.chartFile:chartOk); $('dropBoth').classList.toggle('has', !!ST.songFile&&chartOk); }
+/* CJ: remove an uploaded file (the × on its line), or clear them all */
+function dropFile(d){ if(d==='dropSong'){ ST.songFile=null; $('songName').textContent=''; $('songFile').value=''; $('dropSong').classList.remove('has'); }
+  else if(d==='dropChart'){ ST.chartFile=null; ST.libChartDoc=null; ST.chartMode='pdf'; $('chartName').textContent=''; $('chartFile').value=''; $('chartText').hidden=true; $('chartText').value=''; $('dropChart').classList.remove('has'); }
+  else { ST.work=null; $('workName').textContent=''; $('workFile').value=''; $('dropWork').classList.remove('has'); $('workMsg')&&($('workMsg').textContent=''); }
+  ST.restore=null; $('reopenNote')?.remove(); if(!ST.songFile&&!ST.chartFile&&!ST.libChartDoc&&!ST.work) forgetLast(); ready(); try{ libListRender(); }catch(e){} }
+document.querySelectorAll('.fline .ck').forEach(c=>c.addEventListener('click',e=>{ const l=c.closest('.fline'); if(!l.classList.contains('has')) return; e.preventDefault(); e.stopPropagation(); dropFile(l.id); })); /* unticking the box removes the file */
+document.querySelectorAll('.fline .fx').forEach(b=>b.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); dropFile(b.dataset.x); }));
+function ready(){ const chartOk = ST.chartMode==='text' ? $('chartText').value.trim().length>20 : ST.chartMode==='lib' ? !!ST.libChartDoc : !!ST.chartFile; $('buildBtn').disabled=!(ST.songFile&&chartOk); $('dropChart').classList.toggle('has', ST.chartMode==='pdf'?!!ST.chartFile:chartOk); $('dropBoth').classList.toggle('has', !!ST.songFile&&chartOk); const any=!!(ST.songFile||ST.chartFile||ST.libChartDoc||ST.work||$('chartText').value.trim()); const ca=$('clearAll'); if(ca) ca.hidden=!any; }
 
 const steps=$('steps');
 function step(text){ const li=document.createElement('li'); li.className='run'; li.textContent='… '+text; steps.appendChild(li); return {
@@ -1707,6 +1714,7 @@ function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
   steps.innerHTML=''; steps.appendChild(li); li.querySelector('#reopenBtn').addEventListener('click',build);
   // CJ (Nov 9): a refresh never starts working on its own; the song and chart wait, ticked, until Reopen or Build chart is pressed
 }catch(e){ /* storage blocked: start fresh */ } })();
+$('clearAll').addEventListener('click',()=>{ for(const d of ['dropSong','dropChart','dropWork']) dropFile(d); steps.innerHTML=''; });
 function clearPicked(){ ST.songFile=null; ST.chartFile=null; ST.chartMode='pdf'; for(const [d,n] of [['dropSong','songName'],['dropChart','chartName']]){ $(d).classList.remove('has'); $(n).textContent=''; } $('chartText').hidden=true; $('chartText').value=''; $('songFile').value=''; $('chartFile').value=''; ready(); }
 $('newBtn').addEventListener('click',()=>{ forgetLast(); setTimeout(libList,0); ST.work=null; $('workName').textContent=''; $('dropWork').classList.remove('has'); $('workMsg').textContent=''; document.body.classList.remove('stfirst'); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-open'); }catch(e){} $('bpmIn').value=''; $('meterIn').value=''; if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
 

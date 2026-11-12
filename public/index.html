@@ -2184,7 +2184,7 @@ function stRender(){ const ol=$('stRows'), opts=stOptions(); ol.innerHTML='';
     if(document.body.classList.contains('stfirst')){ const ck=document.createElement('button'); ck.type='button'; ck.className='stck'; ck.textContent=r.ok?'✓':''; ck.setAttribute('aria-pressed',String(!!r.ok)); ck.title=r.ok?'Confirmed. Tap to uncheck':'Not confirmed yet. Tap to check'; ck.setAttribute('aria-label',`Section ${i+1} confirmed`); ck.addEventListener('click',()=>{ r.ok=!r.ok; stRender(); $('stRows').children[i]?.querySelector('.stck')?.focus(); }); li.querySelector('.stnow').before(ck); }
     sel.addEventListener('change',()=>{ if(sel.value==='remove'){ stRows.splice(i,1); stRender(); const m=$('stMsg'); m.className=''; m.textContent='Removed that section. To put one back, press + Add a section.'; return; } if(sel.value==='lead'){ r.sec='custom'; r.name='Lead-in'; r.rn=false; stRender(); return; } if(sel.value.startsWith('g:')){ r.sec='custom'; r.name=sel.value.slice(2); r.rn=false; stRender(); return; } if(sel.value==='rn') return; if(sel.value==='rename'){ r.name=''; r.typing=true; if(r.sec==='pick'){ r.sec='custom'; stRender(); $('stRows').children[i]?.querySelector('.stname')?.focus(); return; } if(r.sec!=='custom') r.rn=true; stRender(); $('stRows').children[i]?.querySelector('.stname')?.focus(); return; } r.sec=sel.value; r.rn=false; r.typing=false; if(r.sec==='custom'&&!r.name) r.name=''; stRender(); if(r.sec==='custom') $('stRows').children[i]?.querySelector('.stname')?.focus(); });
     ti.addEventListener('change',()=>{ const v=parseTime(ti.value); ti.classList.toggle('bad',!(v>=0)); if(v>=0){ r.t=v; r.ok=true; st1?stPlace(r):stSort(); } });
-    li.querySelector('.stnow').addEventListener('click',()=>{ const t=Math.max(0,songTime()); r.t=(ST.song?.bars?.length&&document.body.classList.contains('stfirst'))?Math.max(0,bT(stSnap(t))):t; /* CJ: on the nearest bar line of the click */ r.ok=true; st1?stPlace(r):stSort(); }); /* CJ: in step 1 the list stays in order */
+    li.querySelector('.stnow').addEventListener('click',()=>{ const t=Math.max(0,songTime()); r.t=(ST.song?.bars?.length&&document.body.classList.contains('stfirst'))?Math.max(0,ST.song.bar0+Math.round((t-ST.song.bar0)/ST.song.beat)*ST.song.beat):t; /* CJ: on the nearest beat of the click (the bar lines follow the first section) */ r.ok=true; st1?stPlace(r):stSort(); }); /* CJ: in step 1 the list stays in order */
     li.querySelector('.stplay').addEventListener('click',()=>{ getAC().resume().then(()=>startAtTime(Math.max(0,r.t-0.05))); });
     li.querySelector('.stdel').addEventListener('click',()=>{ stRows.splice(i,1); stRender(); });
     ol.appendChild(li); }); stDotsDraw(); stLeftUI(); }
@@ -2249,11 +2249,14 @@ $('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.
   if(!rows.some(r=>r.sec!=='custom')){ msg.className='warn'; msg.textContent='Add at least one section from the chart.'; return; }
   rows.forEach(r=>{ if(r.rn&&!String(r.name||'').trim()) r.rn=false; });
   if(rows.some(r=>r.sec==='custom'&&!String(r.name||'').trim())){ msg.className='warn'; msg.textContent='Give every new section a name.'; return; }
+  /* CJ (Battle Belongs intro a beat late): the first section you set starts a bar, so the bar lines move to it */
+  let rephased=false; { const M=ST.meter, sg=ST.song, d=((Math.round((rows[0].t-sg.bar0)/sg.beat)%M)+M)%M; if(d&&!ST.compound){ if(playing) pause(); pushUndo(); rephased=true; ST.downPhase=(ST.downPhase+d)%M;
+    if(ST.noChords){ lyricsOnlyLayout(true); finish(true); } else { Object.assign(ST,{anchors:{}, overrides:{}, barLens:{}, breaks:{}, barEdits:[]}); realign(); } } }
   const bars=rows.map(r=>stSnap(r.t)); for(let i=1;i<bars.length;i++) if(bars[i]<=bars[i-1]){ msg.className='warn'; msg.textContent=`Sections ${i} and ${i+1} (at ${fmtT(rows[i-1].t)} and ${fmtT(rows[i].t)}) are too close together. Move one of them.`; return; }
-  if(playing) pause(); pushUndo();
+  if(playing) pause(); if(!rephased) pushUndo();
   const times=bars.map(b=>bT(b)); /* on the bar lines as they are now */
   /* CJ: build from the list whatever happens. If the chart's chords can't fit a section's time, that section keeps its time and name and gets its chords heard from the song */
-  const snap0=undoStack[undoStack.length-1], secName=r=>String(r.sec==='custom'||r.rn?(r.name||''):((ST.base||[])[+r.sec]?.label||'Section')).replace(/\s*\(\d+x\)\s*$/i,'').trim().slice(0,30);
+  const snap0=rephased?snapFix():undoStack[undoStack.length-1], secName=r=>String(r.sec==='custom'||r.rn?(r.name||''):((ST.base||[])[+r.sec]?.label||'Section')).replace(/\s*\(\d+x\)\s*$/i,'').trim().slice(0,30);
   const tryBuild=heard=>{ const chart=rows.map((r,i)=>({r,t:times[i],i})).filter(x=>x.r.sec!=='custom'&&!heard.has(x.i));
     if(heard.size) applySnap(snap0);
     if(!chart.length){ Object.assign(ST,{anchors:{}, overrides:{}, breaks:{}, barEdits:[{op:'nolead',t:times[0]}]}); finish(true); return true; } /* nothing from the chart fits: keep the bars as they are */

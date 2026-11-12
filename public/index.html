@@ -289,8 +289,8 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;h
       <label class="fline" id="dropSong"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Song</b><span class="fname" id="songName"></span></span><input type="file" id="songFile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" aria-label="Choose song file"><button type="button" class="fx" data-x="dropSong" aria-label="Remove this file" title="Remove this file">×</button></label>
       <label class="fline" id="dropChart"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Chart</b><span class="fname" id="chartName"></span></span><input type="file" id="chartFile" accept="application/pdf,.pdf,.txt" aria-label="Choose chart PDF"><button type="button" class="fx" data-x="dropChart" aria-label="Remove this file" title="Remove this file">×</button></label>
       <label class="fline" id="dropWork"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Saved chart file <span class="fhint" style="display:inline">(optional)</span></b><span class="fname" id="workName"></span></span><input type="file" id="workFile" accept=".json,application/json" aria-label="Choose a saved chart file"><button type="button" class="fx" data-x="dropWork" aria-label="Remove this file" title="Remove this file">×</button></label>
-      <div class="alt"><button type="button" id="clearAll" hidden>Clear all</button> No PDF? <button type="button" id="pasteBtn">Paste chart text with song sections</button></div>
-      <textarea id="chartText" hidden placeholder="VERSE 1&#10;Ab                Db&#10;Again and again, and again and again&#10;..."></textarea>
+      <div class="alt"><button type="button" id="clearAll" hidden>Clear all</button> No PDF? <button type="button" id="pasteBtn" title="Paste the lyrics with each section name (Verse 1, Chorus...) on its own line. Chords are optional; without them the chords are heard from the song.">Add Lyrics</button></div>
+      <textarea id="chartText" hidden placeholder="VERSE 1&#10;Again and again, and again and again&#10;...&#10;&#10;CHORUS&#10;...&#10;&#10;Put each section name on its own line. Chords above the words are optional."></textarea>
     </div>
   </div>
   <div class="opts">
@@ -863,7 +863,7 @@ function buildSong(meta,sections,S,P,downPhase,meter,events,al,dur,vox){
     const jumped=k>0 && al.path[k-1].j>=p.j;
     const isFirst=e.k===0 && (e.pass===0 || jumped);
     let {bar,half}=place(t0); if(bar<0){bar=0;half=0;} if(bar>=nb) return;
-    bars[bar].chords.push([1+half/2,e.chord]);
+    if(e.chord) bars[bar].chords.push([1+half/2,e.chord]); /* lyrics-only charts have no chords until they're heard */
     if(isFirst){ let sb=Math.max(0,Math.min(nb-1,nearBar((t0-bar0)/P))); while(sb<nb-1 && bars[sb].section) sb++; if(!bars[sb].section){ bars[sb].section=e.label; bars[sb].secIdx=e.sec; bars[sb].evIdx=p.j; } }
     // lyrics
     const main=e.lines.filter(l=>!l.pickup), pick=e.lines.filter(l=>l.pickup);
@@ -1123,7 +1123,8 @@ async function build(){
   try{
     let s=step('Reading the chart');
     const parsed = ST.chartMode==='text' ? parseLines(textToLines($('chartText').value)) : ST.chartMode==='lib' ? {meta:{...(ST.libChartDoc.chart.meta||{})}, sections:chartUnpack(ST.libChartDoc.chart.sections)} : chk(await readPdf(ST.chartFile));
-    if(!parsed.sections.length || !parsed.sections.some(x=>x.events.some(e=>e.chord))) throw new Error("couldn't find sections and chords in that chart. Section names (Verse 1, Chorus...) need to be on their own lines, with chords on the line above the lyrics.");
+    if(!parsed.sections.length) throw new Error("couldn't find any sections. Put each section name (Verse 1, Chorus...) on its own line above its lyrics.");
+    ST.noChords=!parsed.sections.some(x=>x.events.some(e=>e.chord)); /* CJ: lyrics with section names and no chords: the chords are heard from the song */
     ST.meta=parsed.meta; ST.base=parsed.sections; ST.order=null; ST.sections=parsed.sections;
     s.done(`Chart: ${parsed.sections.length} sections${parsed.meta.key?', key '+parsed.meta.key:''}${parsed.meta.bpm?', '+parsed.meta.bpm+' BPM':''}`);
     s=step('Decoding the song');
@@ -1153,7 +1154,7 @@ async function build(){
     { const [tn,td]=(parsed.meta.time||'4/4').split('/').map(Number); ST.meter=+$('meterIn').value || tn || 4; ST.den=td||4;
       // 6/8, 9/8, 12/8: count and click in eighth notes, accent every third
       ST.compound=ST.den===8 && ST.meter%3===0 && ST.meter>3; }
-    ST.events=expandEvents(ST.sections); ST.env=songEnv(ST.mono,sr); ST.chartSig=chartSig(ST.events); ST.libId=null; ST.libDiag=null; ST.libSame=null; ST.libDate=null;
+    ST.events=ST.noChords?lyricEvents(ST.sections):expandEvents(ST.sections); ST.env=songEnv(ST.mono,sr); ST.chartSig=chartSig(ST.events); ST.libId=null; ST.libDiag=null; ST.libSame=null; ST.libDate=null;
     if(!ST.restore) try{ logUse(); }catch(e){}
     if(ST.work){ const v=ST.work, m=envMatch(v.env||[],ST.env), same=v.chartSig===ST.chartSig;
       if(m.corr>0.8 && Math.abs((v.dur||0)-ST.audio.duration)<5){ ST.restore=null; if(applyLib({v,lag:m.lag,sameChart:same,id:null})){ ST.libId=null; s=step('Loading your saved chart'); s.done(same?'Loaded your saved chart':'Loaded your saved timing. The chart PDF is different, so your bar fixes were left out.'); building=false; ST.showRec=false; undoClear(); libShow(); if(!same) stFirst(); return; } }
@@ -1177,6 +1178,7 @@ async function build(){
     const G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,hint,ST.meter):hint);
     ST.P=G.P; ST.beat0=G.beat0; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear();
     s.done(`Tempo: ${(60/G.P).toFixed(1)} BPM`);
+    if(ST.noChords){ s=step('Hearing the chords'); await new Promise(r=>setTimeout(r,20)); lyricsOnlyLayout(); building=false; ST.showRec=false; s.done(`Key: ${ST.meta.key}. Now set where each section starts.`); finish(); hearAll(); stFirst(); return; }
     s=step('Lining the chart up with the song');
     await new Promise(r=>setTimeout(r,20));
     ST.halved=false; await fitSearch([G.beat0%G.P, (G.beat0+G.P/2)%G.P]); chk(); await halveIfDouble(); chk(); building=false;
@@ -1365,6 +1367,19 @@ async function halveIfDouble(){
   if(!fast && (hi+lo<30 || hi<1.6*Math.max(lo,1))) return false;
   const P1=ST.P, b0=ST.beat0; ST.P=P1*2; await fitSearch([b0%ST.P,(b0+P1)%ST.P]); ST.halved=true; return true;
 }
+/* CJ: lyrics with section names but no chords. Beat 1 is where the harmony changes most; the sections are spread over the song as a
+   first guess (you set the real start times next), and every bar's chords are heard from the song in the key it's in */
+const NOTE_FL=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'], NOTE_SH=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'], NOTE_NM=NOTE_FL;
+function lyricEvents(secs){ const ev=[]; secs.forEach((s,si)=>{ for(let r=0;r<(s.repeat||1);r++) ev.push({chord:null, lines:(s.events||[]).flatMap(e=>e.lines||[]), sec:si, label:s.label, k:0, pass:r}); }); return ev; } /* one stretch per section */
+function lyricsOnlyLayout(){ ST.shift=0; ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration); const S=ST.S, M=ST.meter;
+  const k=noteKey(S); if(!ST.meta.key) ST.meta.key=NOTE_NM[k?k.pc:0];
+  let bestPh=0,bv=-1; for(let ph=0;ph<M;ph++){ let v=0,n=0; for(let i=ph;i<S.n;i+=M){ if(i<1) continue; let d=0,na=0,nb=0; for(let q=0;q<12;q++){ const a=S.C[i*12+q], b=S.C[(i-1)*12+q]; d+=a*b; na+=a*a; nb+=b*b; } v+=1-d/(Math.sqrt(na*nb)||1); n++; } v/=n||1; if(v>bv){ bv=v; bestPh=ph; } }
+  ST.downPhase=bestPh; const emax=Math.max(...S.E); let first=0; while(first<S.n-1 && S.E[first]<emax*0.05) first++; first=bestPh+Math.max(0,Math.floor((first-bestPh)/M))*M; const end=S.n;
+  const w=ST.events.map(e=>Math.max(1,e.lines.filter(l=>!l.pickup).length)*(e.lines.length?1:1.5)), tot=w.reduce((a,b)=>a+b,0)||1; let x=first; const path=[];
+  let last=-1; ST.events.forEach((e,j)=>{ let st=bestPh+Math.round((x-bestPh)/M)*M; if(st<=last) st=last+M; path.push({j,start:st}); last=st; x+=(end-first)*w[j]/tot; }); /* each section starts on a bar line */
+  ST.al={path,end,score:0}; }
+function keyChords(){ const m=(ST.meta.key||'C').match(/^([A-G][b#]?)(m?)/), t=m?(PC[m[1]]+(m[2]?3:0))%12:0, NM=[7,2,9,4,11].includes(t)?NOTE_SH:NOTE_FL, n=q=>NM[(t+q)%12]; return [n(0),n(2)+'m',n(4)+'m',n(5),n(7),n(9)+'m']; }
+function hearAll(){ if(!ST.noChords||!ST.song?.bars?.length) return; rehearChords(0,ST.song.bars.length-1,keyChords()); undoStack.pop(); undoUI(); finish(true); }
 async function fitSearch(b0s){
   const S1=beatSegments(ST.Cf,ST.P,b0s[0],ST.audio.duration);
   const ks=keyShifts(S1,ST.events); let shifts=ks.slice(0,3).filter(x=>x[1]>=ks[0][1]-0.2).map(x=>x[0]); // a key that fits the recording's notes much worse isn't tried (I Believe matched a 4th away)
@@ -1411,7 +1426,7 @@ function refineChords(al){
     P[i].start=best; }
   return al;
 }
-function realign(keep=true){
+function realign(keep=true){ if(ST.noChords){ finish(keep); return; } /* lyrics-only: the bars stay where they are */
   ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration);
   // anchors are stored as bar numbers; convert to beats for this grid
   const anchors={}; for(const [j,bar] of Object.entries(ST.anchors)) anchors[j]= bar&&typeof bar==='object'&&bar.t!=null ? Math.max(0,Math.round((bar.t-ST.beat0)/ST.P)) : ST.downPhase+(ST.song?.bars[bar-1]?.s0??ST.song?.bars[bar-1]?.s??(bar-1)*ST.meter); // {t}: a start time CJ typed, on the nearest beat
@@ -2085,7 +2100,7 @@ function setBarLen(selBar,L){
 // the song's real order of sections (indexes into the chart's sections), when it repeats a section the chart writes once (CJ: Firm Foundation, Chorus again at bar 49)
 /* an order entry is a chart section's number; 1000 + the number means one pass of a section the chart repeats (Section times list, CJ) */
 const ordBase=o=>o>=1000?o-1000:o;
-function setOrder(o){ ST.order=Array.isArray(o)&&o.length?o:null; if(!ST.base) return; ST.sections=ST.order?ST.order.map(i=>{ const s=ST.base[ordBase(i)]; return s&&i>=1000?{...s,repeat:1,label:s.label.replace(/\s*\(\d+x\)\s*$/i,'')}:s; }).filter(Boolean):ST.base; ST.events=expandEvents(ST.sections); }
+function setOrder(o){ ST.order=Array.isArray(o)&&o.length?o:null; if(!ST.base) return; ST.sections=ST.order?ST.order.map(i=>{ const s=ST.base[ordBase(i)]; return s&&i>=1000?{...s,repeat:1,label:s.label.replace(/\s*\(\d+x\)\s*$/i,'')}:s; }).filter(Boolean):ST.base; ST.events=ST.noChords?lyricEvents(ST.sections):expandEvents(ST.sections); }
 function barOfStart(p){ const s0=p.start-ST.downPhase; return ST.song.bars.findIndex(b=>Math.abs((b.s0??b.s)-s0)<1e-6); }
 /* CJ (Trust In God, bar 122 moved 118): a change at one bar never moves the sections before it. Pin every section start before the bar where it is now */
 function pinBefore(bar,skip){ const A={...ST.anchors}; for(const p of (ST.al?.path||[])){ const e=ST.events[p.j]; if(!e||e.k!==0||String(p.j)===String(skip)) continue; const bi=barOfStart(p); if(bi<0) continue; if(bi>=bar) break; if(A[p.j]==null) A[p.j]={t:bT(bi)+1e-3}; } ST.anchors=A; }
@@ -2220,7 +2235,8 @@ $('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.
     chart.forEach((x,pos)=>{ const j=ST.events.findIndex(e=>e.sec===pos&&e.k===0&&e.pass===0); if(j>=0) A[j]={t:x.t+1e-3}; });
     Object.assign(ST,{anchors:A, overrides:{}, breaks:{}, barEdits:[{op:'nolead',t:times[0]}]}); realign(); return !!ST.al?.path?.length; };
   let heard=new Set(); const chartIdx=rows.map((r,i)=>r.sec!=='custom'?i:-1).filter(i=>i>=0);
-  if(!tryBuild(heard)){ let ok=false; /* find the one section that doesn't fit, then two in a row */
+  if(ST.noChords){ heard=new Set(chartIdx); tryBuild(heard); }
+  else if(!tryBuild(heard)){ let ok=false; /* find the one section that doesn't fit, then two in a row */
     for(const i of chartIdx){ if(tryBuild(new Set([i]))){ heard=new Set([i]); ok=true; break; } }
     if(!ok) for(let k=0;k+1<chartIdx.length&&!ok;k++){ const h=new Set([chartIdx[k],chartIdx[k+1]]); if(tryBuild(h)){ heard=h; ok=true; } }
     if(!ok){ heard=new Set(chartIdx); tryBuild(heard); } }
@@ -2232,14 +2248,14 @@ $('stGo').addEventListener('click',()=>{ if(stSnap0!==null && stRows.some(r=>!r.
     /* CJ: a section that isn't on the chart (an extra chorus) gets the chords heard in the song, from the chart's own chords */
     const chordsOf=c=>{ const base=ST.base||[]; let k=c.r.sec==='custom'&&heard.has(c.i)?+rows[c.i].sec:-1; /* CJ: a section heard from the song uses the chords its part of the chart has */
       if(k<0){ const nm=String(c.r.name||'').toLowerCase().replace(/\s*\d+$/,'').trim(); k=base.findIndex(s=>String(s.label||'').toLowerCase().replace(/\s*\(\d+x\)\s*$/,'').replace(/\s*\d+$/,'').trim()===nm); }
-      if(k<0||!base[k]) return null; const cs=expandEvents([base[k]]).map(e=>e.chord).filter(ch=>ch&&!/^N\.?C/i.test(ch)&&chordTemplate(ch)); return new Set(cs).size>=2?cs:null; };
+      if(k<0||!base[k]) return ST.noChords?keyChords():null; const cs=expandEvents([base[k]]).map(e=>e.chord).filter(ch=>ch&&!/^N\.?C/i.test(ch)&&chordTemplate(ch)); return new Set(cs).size>=2?cs:(ST.noChords?keyChords():null); };
     for(const c of customs){ const b0=stSnap(c.t), next=rows.slice(c.i+1).map(r=>stSnap(r.t))[0]??ST.song.bars.length; if(next>b0){ rehearChords(b0,next-1,chordsOf(c)); undoStack.pop(); } }
     finish(true); }
   /* CJ: rename any section on the chart (its chords stay) */
   const ren=rows.map((r,i)=>({r,b:stSnap(r.t)})).filter(x=>x.r.sec!=='custom'&&x.r.rn&&String(x.r.name||'').trim());
   if(ren.length){ ST.barEdits=[...(ST.barEdits||[]), ...ren.map(x=>({op:'name',at:x.b,name:String(x.r.name).trim().slice(0,30)}))]; finish(true); }
   buildSecNav(); stRows=stFromChart(); stRender(); saveLast();
-  msg.textContent=`Chart built from ${rows.length} section${rows.length>1?'s':''}.`+(heard.size?` The chart's chords didn't fit ${[...heard].map(i=>secName(rows[i])).join(', ')} at ${heard.size>1?'those times':'that time'}, so ${heard.size>1?'their':'its'} chords were heard from the song. Check them with Fix bars.`:'')+' Undo puts it back.'; if(heard.size){ msg.className='warn'; $('msg').className='msg warn'; $('msg').textContent=msg.textContent; } if(stSnap0!==null) stFirstDone(); });
+  msg.textContent=`Chart built from ${rows.length} section${rows.length>1?'s':''}.`+(ST.noChords?' The chords were heard from the song; check them with Fix bars.':heard.size?` The chart's chords didn't fit ${[...heard].map(i=>secName(rows[i])).join(', ')} at ${heard.size>1?'those times':'that time'}, so ${heard.size>1?'their':'its'} chords were heard from the song. Check them with Fix bars.`:'')+' Undo puts it back.'; if(heard.size&&!ST.noChords){ msg.className='warn'; $('msg').className='msg warn'; $('msg').textContent=msg.textContent; } if(stSnap0!==null) stFirstDone(); });
 // CJ: say when a section starts (a time in the song) and line the chart up from there
 function parseTime(v){ v=String(v||'').trim(); if(!v) return NaN; const m=v.match(/^(?:(\d+):)?(\d+(?:\.\d*)?)$/); if(!m) return NaN; return (+(m[1]||0))*60+(+m[2]); }
 const fmtT=t=>{ const m=Math.floor(t/60), x=t-m*60; return m+':'+(x<10?'0':'')+x.toFixed(1); };

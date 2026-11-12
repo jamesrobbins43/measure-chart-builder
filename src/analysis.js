@@ -355,7 +355,7 @@ function buildSong(meta,sections,S,P,downPhase,meter,events,al,dur,vox){
     const jumped=k>0 && al.path[k-1].j>=p.j;
     const isFirst=e.k===0 && (e.pass===0 || jumped);
     let {bar,half}=place(t0); if(bar<0){bar=0;half=0;} if(bar>=nb) return;
-    bars[bar].chords.push([1+half/2,e.chord]);
+    if(e.chord) bars[bar].chords.push([1+half/2,e.chord]); /* lyrics-only charts have no chords until they're heard */
     if(isFirst){ let sb=Math.max(0,Math.min(nb-1,nearBar((t0-bar0)/P))); while(sb<nb-1 && bars[sb].section) sb++; if(!bars[sb].section){ bars[sb].section=e.label; bars[sb].secIdx=e.sec; bars[sb].evIdx=p.j; } }
     // lyrics
     const main=e.lines.filter(l=>!l.pickup), pick=e.lines.filter(l=>l.pickup);

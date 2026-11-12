@@ -569,17 +569,17 @@ async function build(){
       else { s=step('Checking your saved chart file'); s.done("That saved chart file is for a different recording, so it wasn't used."); } }
     // CJ: the library wins over this browser's last chart unless this browser has fixes of its own that are newer
     if(ST.restore){ const v=ST.restore, own=(v.order||[]).length+(v.barEdits||[]).length+Object.keys(v.overrides||{}).length+Object.keys(v.anchors||{}).length+Object.keys(v.barLens||{}).length;
-      const hit0=await libFind(ST.audio.duration,ST.env); chk();
+      const hit0=ST.noChords?null:await libFind(ST.audio.duration,ST.env); chk();
       if(hit0 && (!own || Date.parse(hit0.v.savedAt||0)>(ST.restoreAt||0))){ ST.restore=null; if(applyLib(hit0)){ s=step(showChecks()?'Checking the song library':'Lining the chart up with the song'); if(showChecks()) s.done('Found this song in the library'); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); libShow(); /* CJ: Reopen goes straight to the chart */ try{ if(sessionStorage.getItem('mcb-st1')) stFirst(); }catch(e){} return; } } }
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
       ST.notes=v.notes||{}; Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null}); setOrder(v.order); useCf(v.cf);
       s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); if(ST.restoreUndo){ [undoStack,redoStack]=ST.restoreUndo; ST.restoreUndo=null; undoUI(); } realign(false); if(!ST.al?.path?.length) await recoverEmpty(); try{ if(sessionStorage.getItem('mcb-st1')) stFirst(); }catch(e){} return; } // CJ: undo still works after a refresh
     s=step(showChecks()?'Checking the song library':'Lining the chart up with the song');
-    const hit=chk(await libFind(ST.audio.duration,ST.env));
+    const hit=ST.noChords?null:chk(await libFind(ST.audio.duration,ST.env)); /* lyrics without chords: always set the sections yourself */
     /* CJ: the same recording is in the library with a different chart: offer the fixed version first (another person's chart is likely as rough as the first upload was) */
     if(hit && !hit.sameChart && hit.v.chart && Array.isArray(hit.v.chart.sections) && chk(await askLibChart(hit,s))){ useLibChart(hit); s=step('Lining the chart up with the song'); }
     if(hit && applyLib(hit)){ if(showChecks()) s.done(`Found this song in the library${hit.sameChart?'':' (with a different chart, so only the timing was reused)'}`); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); libShow(); if(!hit.sameChart) stFirst(); else stFirst(false,hit.v.savedAt||''); /* CJ: say a saved version exists and ask whether to use it */ /* CJ: a song already saved with this chart goes straight to the chart, no re-confirming */ return; }
-    if(hit===undefined || !showChecks()) steps.lastElementChild?.remove(); else s.done('Not in the library yet');
+    if(hit===undefined || !showChecks() || ST.noChords) steps.lastElementChild?.remove(); else s.done('Not in the library yet');
     s=step('Finding the tempo');
     const hint=+$('bpmIn').value || parsed.meta.bpm || 0;
     await new Promise(r=>setTimeout(r,20));
@@ -770,10 +770,10 @@ async function halveIfDouble(){
    first guess (you set the real start times next), and every bar's chords are heard from the song in the key it's in */
 const NOTE_FL=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'], NOTE_SH=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'], NOTE_NM=NOTE_FL;
 function lyricEvents(secs){ const ev=[]; secs.forEach((s,si)=>{ for(let r=0;r<(s.repeat||1);r++) ev.push({chord:null, lines:(s.events||[]).flatMap(e=>e.lines||[]), sec:si, label:s.label, k:0, pass:r}); }); return ev; } /* one stretch per section */
-function lyricsOnlyLayout(){ ST.shift=0; ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration); const S=ST.S, M=ST.meter;
+function lyricsOnlyLayout(keepPhase){ ST.shift=0; ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration); const S=ST.S, M=ST.meter;
   const k=noteKey(S); if(!ST.meta.key) ST.meta.key=NOTE_NM[k?k.pc:0];
   let bestPh=0,bv=-1; for(let ph=0;ph<M;ph++){ let v=0,n=0; for(let i=ph;i<S.n;i+=M){ if(i<1) continue; let d=0,na=0,nb=0; for(let q=0;q<12;q++){ const a=S.C[i*12+q], b=S.C[(i-1)*12+q]; d+=a*b; na+=a*a; nb+=b*b; } v+=1-d/(Math.sqrt(na*nb)||1); n++; } v/=n||1; if(v>bv){ bv=v; bestPh=ph; } }
-  ST.downPhase=bestPh; const emax=Math.max(...S.E); let first=0; while(first<S.n-1 && S.E[first]<emax*0.05) first++; first=bestPh+Math.max(0,Math.floor((first-bestPh)/M))*M; const end=S.n;
+  if(keepPhase&&ST.downPhase!=null) bestPh=ST.downPhase; ST.downPhase=bestPh; const emax=Math.max(...S.E); let first=0; while(first<S.n-1 && S.E[first]<emax*0.05) first++; first=bestPh+Math.max(0,Math.floor((first-bestPh)/M))*M; const end=S.n;
   const w=ST.events.map(e=>Math.max(1,e.lines.filter(l=>!l.pickup).length)*(e.lines.length?1:1.5)), tot=w.reduce((a,b)=>a+b,0)||1; let x=first; const path=[];
   let last=-1; ST.events.forEach((e,j)=>{ let st=bestPh+Math.round((x-bestPh)/M)*M; if(st<=last) st=last+M; path.push({j,start:st}); last=st; x+=(end-first)*w[j]/tot; }); /* each section starts on a bar line */
   ST.al={path,end,score:0}; }
@@ -825,7 +825,7 @@ function refineChords(al){
     P[i].start=best; }
   return al;
 }
-function realign(keep=true){ if(ST.noChords){ finish(keep); return; } /* lyrics-only: the bars stay where they are */
+function realign(keep=true){ if(ST.noChords){ ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration); if(!ST.al?.path?.length||ST.al.path.some(p=>!ST.events[p.j])){ lyricsOnlyLayout(true); finish(keep); hearAll(); } else finish(keep); return; } /* lyrics-only: the bars stay where they are */
   ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration);
   // anchors are stored as bar numbers; convert to beats for this grid
   const anchors={}; for(const [j,bar] of Object.entries(ST.anchors)) anchors[j]= bar&&typeof bar==='object'&&bar.t!=null ? Math.max(0,Math.round((bar.t-ST.beat0)/ST.P)) : ST.downPhase+(ST.song?.bars[bar-1]?.s0??ST.song?.bars[bar-1]?.s??(bar-1)*ST.meter); // {t}: a start time CJ typed, on the nearest beat

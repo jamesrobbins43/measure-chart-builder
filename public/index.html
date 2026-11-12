@@ -285,10 +285,10 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;h
     <div class="drop drop1" id="dropBoth">
       <h2>Song and chord chart</h2>
       <p class="d1hint">Drag both the song file and chord chart in here.</p>
-      <input type="file" id="bothFile" multiple accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,application/pdf,.pdf,.txt,.json,application/json" aria-label="Choose the song, chart and saved chart files">
+      <input type="file" id="bothFile" multiple accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,application/pdf,.pdf,.txt,.json,application/json" aria-label="Choose the song and the chart or saved project file">
       <label class="fline" id="dropSong"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Song</b><span class="fname" id="songName"></span></span><input type="file" id="songFile" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" aria-label="Choose song file"><button type="button" class="fx" data-x="dropSong" aria-label="Remove this file" title="Remove this file">×</button></label>
-      <label class="fline" id="dropChart"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Chart</b><span class="fname" id="chartName"></span></span><input type="file" id="chartFile" accept="application/pdf,.pdf,.txt" aria-label="Choose chart PDF"><button type="button" class="fx" data-x="dropChart" aria-label="Remove this file" title="Remove this file">×</button></label>
-      <label class="fline" id="dropWork"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Saved chart file <span class="fhint" style="display:inline">(optional)</span></b><span class="fname" id="workName"></span></span><input type="file" id="workFile" accept=".json,application/json" aria-label="Choose a saved chart file"><button type="button" class="fx" data-x="dropWork" aria-label="Remove this file" title="Remove this file">×</button></label>
+      <label class="fline" id="dropChart"><span class="ck" aria-hidden="true"></span><span class="fl"><b>Chart or saved project file</b><span class="fname" id="chartName"></span></span><input type="file" id="chartFile" accept="application/pdf,.pdf,.txt,.json,application/json" aria-label="Choose the chart PDF or a saved project file"><button type="button" class="fx" data-x="dropChart" aria-label="Remove this file" title="Remove this file">×</button></label>
+      <label class="fline" id="dropWork" hidden><span class="ck" aria-hidden="true"></span><span class="fl"><b>Saved chart file <span class="fhint" style="display:inline">(optional)</span></b><span class="fname" id="workName"></span></span><input type="file" id="workFile" accept=".json,application/json" aria-label="Choose a saved chart file"><button type="button" class="fx" data-x="dropWork" aria-label="Remove this file" title="Remove this file">×</button></label>
       <div class="alt"><button type="button" id="clearAll" hidden>Clear all</button> No PDF? <button type="button" id="pasteBtn" title="Paste the lyrics with each section name (Verse 1, Chorus...) on its own line. Chords are optional; without them the chords are heard from the song.">Add Lyrics</button></div>
       <textarea id="chartText" hidden placeholder="VERSE 1&#10;Again and again, and again and again&#10;...&#10;&#10;CHORUS&#10;...&#10;&#10;Put each section name on its own line. Chords above the words are optional."></textarea>
     </div>
@@ -346,7 +346,7 @@ body.stfirst .stpanel{max-width:none;margin-top:6px} .stline{position:relative;h
     <div class="group" hidden>Download <button type="button" id="dlMix">Song + click</button><button type="button" id="dlClick">Click only</button></div>
     <div class="group"><button type="button" id="dlPdf">Chart PDF</button><button type="button" id="dlVid" title="An MP4 of the chart with the beats lighting up and the click. No music.">Play-along video</button><span id="vidProgWrap" hidden style="display:inline-flex;align-items:center;gap:6px;font-family:var(--f-ui);font-size:12px;color:var(--muted)"><progress id="vidProg" max="100" value="0" style="width:140px;height:10px;accent-color:var(--accent)" aria-label="Video progress"></progress><b id="vidProgV">0%</b></span></div>
     <div class="group" id="vidNote" hidden role="dialog" aria-labelledby="vidNoteT" style="flex-basis:100%;max-width:640px;padding:10px 12px;border:1px solid var(--rule);border-left:3px solid var(--accent);border-radius:8px;background:var(--paper);font-family:var(--f-ui);font-size:13px;gap:8px 10px"><span id="vidNoteT" style="flex-basis:100%">Please note: Due to licensing restrictions, this download contains only click and chord progressions, the lyrics and music have been removed.</span><button class="primary" type="button" id="vidGo">Continue</button><button type="button" id="vidCancel">Cancel</button></div>
-    <div class="group"><button type="button" id="workSave" title="Saves your section times and fixes (no audio). Next time, drop this file in with the song and the chart.">Save chart file</button><span id="workMsg" role="status" style="font-size:12.5px;color:var(--muted)"></span></div>
+    <div class="group"><button type="button" id="workSave" title="Saves the chart, your section times and fixes (no audio). Next time, drop this file in with the song instead of the chart.">Save project file</button><span id="workMsg" role="status" style="font-size:12.5px;color:var(--muted)"></span></div>
     <div class="group" id="libGroup" hidden><button type="button" id="libSave">Save to library</button><button type="button" id="libRecall" hidden title="Load the version of this song and chart saved in the library">Recall from library</button><button type="button" id="libFresh" hidden>Start fresh</button><button type="button" id="libDel" hidden>Remove from library</button><button type="button" id="libImport" hidden title="Add songs saved in the Claude version of this tool">Import saved songs</button><input type="file" id="libImportFile" accept=".json,application/json" hidden><span id="libMsg"></span></div>
     <div class="group"><button type="button" id="reportBtn">Report a problem</button></div>
     <div class="group" id="newGroup" style="margin-left:auto"><button type="button" id="stClear" title="Start over: every section back to unconfirmed">Clear sections</button> <button type="button" id="newBtn">New song</button></div> <!-- CJ: New song furthest right -->
@@ -1043,12 +1043,16 @@ function takeFiles(list){ for(const f of list){ if(isAudio(f)) takeFile('songFil
 /* CJ: a saved chart file (section times and every fix, no audio) is the third thing you can drop in; it brings the chart back as you left it */
 const isWork=f=>f.type==='application/json'||/\.json$/i.test(f.name);
 async function takeWork(f){ cancelBuild(); let v=null; try{ v=JSON.parse(await f.text()); }catch(e){}
-  if(!v||v.kind!=='chart-play-along'||!(v.P>0)){ ST.work=null; $('workName').textContent="That isn't a saved chart file"; $('dropWork').classList.remove('has'); return; }
-  if(ST.restore){ ST.restore=null; $('reopenNote')?.remove(); } ST.work=v; $('workName').textContent=f.name; $('dropWork').classList.add('has'); }
+  if(!v||v.kind!=='chart-play-along'||!(v.P>0)){ ST.work=null; $('chartName').textContent="That isn't a saved project file"; return; }
+  if(ST.restore){ ST.restore=null; $('reopenNote')?.remove(); } ST.work=v;
+  /* CJ: Chart or saved project file: a project file has the chart in it, so no PDF is needed */
+  if(v.chart&&Array.isArray(v.chart.sections)){ ST.libChartDoc={id:null,title:v.title||'',chart:v.chart}; ST.chartMode='lib'; ST.chartFile=null; $('chartFile').value=''; $('chartText').hidden=true; $('chartFile').style.pointerEvents=''; $('chartName').textContent=f.name; $('dropChart').classList.add('has'); }
+  else { $('workName').textContent=f.name+' (an older saved file: add the chart PDF too)'; $('dropWork').hidden=false; $('dropWork').classList.add('has'); }
+  ready(); }
 { const d=$('dropBoth');
   $('bothFile').addEventListener('change',e=>{ takeFiles([...e.target.files]); e.target.value=''; });
   $('songFile').addEventListener('change',()=>{ if($('songFile').files[0]) takeFile('songFile',$('songFile').files[0]); });
-  $('chartFile').addEventListener('change',()=>{ if($('chartFile').files[0]) takeFile('chartFile',$('chartFile').files[0]); });
+  $('chartFile').addEventListener('change',()=>{ const f=$('chartFile').files[0]; if(!f) return; if(isWork(f)){ $('chartFile').value=''; takeWork(f); } else takeFile('chartFile',f); });
   $('workFile').addEventListener('change',()=>{ const f=$('workFile').files[0]; $('workFile').value=''; if(f) takeWork(f); });
   d.addEventListener('dragover',e=>{e.preventDefault(); d.classList.add('over');});
   d.addEventListener('dragleave',e=>{ if(!d.contains(e.relatedTarget)) d.classList.remove('over'); });
@@ -1057,8 +1061,8 @@ $('pasteBtn').addEventListener('click',()=>{ const t=$('chartText'); t.hidden=!t
 $('chartText').addEventListener('input',ready);
 /* CJ: remove an uploaded file (the × on its line), or clear them all */
 function dropFile(d){ if(d==='dropSong'){ ST.songFile=null; $('songName').textContent=''; $('songFile').value=''; $('dropSong').classList.remove('has'); }
-  else if(d==='dropChart'){ ST.chartFile=null; ST.libChartDoc=null; ST.chartMode='pdf'; $('chartName').textContent=''; $('chartFile').value=''; $('chartText').hidden=true; $('chartText').value=''; $('dropChart').classList.remove('has'); }
-  else { ST.work=null; $('workName').textContent=''; $('workFile').value=''; $('dropWork').classList.remove('has'); $('workMsg')&&($('workMsg').textContent=''); }
+  else if(d==='dropChart'){ if(ST.chartMode==='lib'&&ST.work&&!ST.libChartDoc?.id) ST.work=null; ST.chartFile=null; ST.libChartDoc=null; ST.chartMode='pdf'; $('chartName').textContent=''; $('chartFile').value=''; $('chartText').hidden=true; $('chartText').value=''; $('dropChart').classList.remove('has'); }
+  else { ST.work=null; $('workName').textContent=''; $('workFile').value=''; $('dropWork').classList.remove('has'); $('dropWork').hidden=true; $('workMsg')&&($('workMsg').textContent=''); }
   ST.restore=null; $('reopenNote')?.remove(); if(!ST.songFile&&!ST.chartFile&&!ST.libChartDoc&&!ST.work) forgetLast(); ready(); try{ libListRender(); }catch(e){} }
 document.querySelectorAll('.fline .ck').forEach(c=>c.addEventListener('click',e=>{ const l=c.closest('.fline'); if(!l.classList.contains('has')) return; e.preventDefault(); e.stopPropagation(); dropFile(l.id); })); /* unticking the box removes the file */
 document.querySelectorAll('.fline .fx').forEach(b=>b.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); dropFile(b.dataset.x); }));
@@ -1157,8 +1161,8 @@ async function build(){
     ST.events=ST.noChords?lyricEvents(ST.sections):expandEvents(ST.sections); ST.env=songEnv(ST.mono,sr); ST.chartSig=chartSig(ST.events); ST.libId=null; ST.libDiag=null; ST.libSame=null; ST.libDate=null; ST.stInit=null;
     if(!ST.restore) try{ logUse(); }catch(e){}
     if(ST.work){ const v=ST.work, m=envMatch(v.env||[],ST.env), same=v.chartSig===ST.chartSig;
-      if(m.corr>0.8 && Math.abs((v.dur||0)-ST.audio.duration)<5){ ST.restore=null; if(applyLib({v,lag:m.lag,sameChart:same,id:null})){ ST.libId=null; s=step('Loading your saved chart'); s.done(same?'Loaded your saved chart':'Loaded your saved timing. The chart PDF is different, so your bar fixes were left out.'); building=false; ST.showRec=false; undoClear(); libShow(); if(!same) stFirst(); return; } }
-      else { s=step('Checking your saved chart file'); s.done("That saved chart file is for a different recording, so it wasn't used."); } }
+      if(m.corr>0.8 && Math.abs((v.dur||0)-ST.audio.duration)<5){ ST.restore=null; if(applyLib({v,lag:m.lag,sameChart:same,id:null})){ ST.libId=null; s=step('Loading your saved project'); s.done(same?'Loaded your saved project':'Loaded your saved timing. The chart PDF is different, so your bar fixes were left out.'); building=false; ST.showRec=false; undoClear(); libShow(); if(!same) stFirst(); return; } }
+      else { s=step('Checking your saved project file'); s.done(v.chart?"That saved project file is for a different recording, so only its chart was used.":"That saved project file is for a different recording, so it wasn't used."); } }
     // CJ: the library wins over this browser's last chart unless this browser has fixes of its own that are newer
     if(ST.restore){ const v=ST.restore, own=(v.order||[]).length+(v.barEdits||[]).length+Object.keys(v.overrides||{}).length+Object.keys(v.anchors||{}).length+Object.keys(v.barLens||{}).length;
       const hit0=ST.noChords?null:await libFind(ST.audio.duration,ST.env); chk();
@@ -1266,10 +1270,10 @@ function useLibChart(hit){ const c=hit.v.chart; ST.meta={...ST.meta,...(c.meta||
   ST.events=expandEvents(ST.sections); ST.chartSig=chartSig(ST.events); hit.sameChart=ST.chartSig===hit.v.chartSig; ST.libChart=true; }
 function workDoc(){ return {dur:Math.round(ST.audio.duration*100)/100, env:ST.env, title:ST.meta.title||'', artist:ST.meta.artist||'', chartKey:ST.meta.key||'', chartSig:ST.chartSig,
     P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', al:ST.al||null, notes:ST.notes||{}, savedAt:new Date().toISOString()}; }
-$('workSave').addEventListener('click',async()=>{ if(!ST.audio) return; const d={kind:'chart-play-along',version:1,songName:ST.songFile?.name||'',...workDoc()};
+$('workSave').addEventListener('click',async()=>{ if(!ST.audio) return; const d={kind:'chart-play-along',version:2,songName:ST.songFile?.name||'',...workDoc(), chart:{meta:ST.meta, sections:chartPack(ST.base||ST.sections)}}; /* CJ: the project file carries the chart, so it can stand in for it */
   const nm=(ST.meta.title||ST.songFile?.name.replace(/\.[^.]+$/,'')||'song').replace(/[\\/:*?"<>|]+/g,'').trim().slice(0,60)||'song';
-  const ok=await save(nm+' - chart.json', new Blob([JSON.stringify(d)],{type:'application/json'}));
-  $('workMsg').textContent=ok?'Saved. Next time, drop this file in with the song and the chart.':"Couldn't save the file."; });
+  const ok=await save(nm+' - project.json', new Blob([JSON.stringify(d)],{type:'application/json'}));
+  $('workMsg').textContent=ok?'Saved. Next time, drop this file in with the song instead of the chart.':"Couldn't save the file."; });
 async function libSave(){
   if(!DB) return;
   const b=$('libSave'); b.disabled=true; $('libMsg').textContent='Saving…';
@@ -2179,8 +2183,8 @@ function stRender(){ const ol=$('stRows'), opts=stOptions(); ol.innerHTML='';
     li.classList.toggle('ok',!!r.ok); if(r.ok){ const n=li.querySelector('.n'); n.textContent='✓'; n.title='Confirmed'; n.setAttribute('aria-label',`Section ${i+1}, confirmed`); }
     if(document.body.classList.contains('stfirst')){ const ck=document.createElement('button'); ck.type='button'; ck.className='stck'; ck.textContent=r.ok?'✓':''; ck.setAttribute('aria-pressed',String(!!r.ok)); ck.title=r.ok?'Confirmed. Tap to uncheck':'Not confirmed yet. Tap to check'; ck.setAttribute('aria-label',`Section ${i+1} confirmed`); ck.addEventListener('click',()=>{ r.ok=!r.ok; stRender(); $('stRows').children[i]?.querySelector('.stck')?.focus(); }); li.querySelector('.stnow').before(ck); }
     sel.addEventListener('change',()=>{ if(sel.value==='remove'){ stRows.splice(i,1); stRender(); const m=$('stMsg'); m.className=''; m.textContent='Removed that section. To put one back, press + Add a section.'; return; } if(sel.value==='lead'){ r.sec='custom'; r.name='Lead-in'; r.rn=false; stRender(); return; } if(sel.value.startsWith('g:')){ r.sec='custom'; r.name=sel.value.slice(2); r.rn=false; stRender(); return; } if(sel.value==='rn') return; if(sel.value==='rename'){ r.name=''; r.typing=true; if(r.sec==='pick'){ r.sec='custom'; stRender(); $('stRows').children[i]?.querySelector('.stname')?.focus(); return; } if(r.sec!=='custom') r.rn=true; stRender(); $('stRows').children[i]?.querySelector('.stname')?.focus(); return; } r.sec=sel.value; r.rn=false; r.typing=false; if(r.sec==='custom'&&!r.name) r.name=''; stRender(); if(r.sec==='custom') $('stRows').children[i]?.querySelector('.stname')?.focus(); });
-    ti.addEventListener('change',()=>{ const v=parseTime(ti.value); ti.classList.toggle('bad',!(v>=0)); if(v>=0){ r.t=v; r.ok=true; st1?stRender():stSort(); } });
-    li.querySelector('.stnow').addEventListener('click',()=>{ const t=Math.max(0,songTime()); r.t=(ST.song?.bars?.length&&document.body.classList.contains('stfirst'))?Math.max(0,bT(stSnap(t))):t; /* CJ: on the nearest bar line of the click */ r.ok=true; st1?stRender():stSort(); }); /* CJ: in step 1 the list stays in order */
+    ti.addEventListener('change',()=>{ const v=parseTime(ti.value); ti.classList.toggle('bad',!(v>=0)); if(v>=0){ r.t=v; r.ok=true; st1?stPlace(r):stSort(); } });
+    li.querySelector('.stnow').addEventListener('click',()=>{ const t=Math.max(0,songTime()); r.t=(ST.song?.bars?.length&&document.body.classList.contains('stfirst'))?Math.max(0,bT(stSnap(t))):t; /* CJ: on the nearest bar line of the click */ r.ok=true; st1?stPlace(r):stSort(); }); /* CJ: in step 1 the list stays in order */
     li.querySelector('.stplay').addEventListener('click',()=>{ getAC().resume().then(()=>startAtTime(Math.max(0,r.t-0.05))); });
     li.querySelector('.stdel').addEventListener('click',()=>{ stRows.splice(i,1); stRender(); });
     ol.appendChild(li); }); stDotsDraw(); stLeftUI(); }
@@ -2208,6 +2212,11 @@ addEventListener('resize',()=>{ if(!$('stPanel').hidden){ stPeaks=null; stWaveDr
 function stFit(){ if(!document.body.classList.contains('stfirst')) return; const ol=$('stRows'), top=ol.getBoundingClientRect().top+scrollY, foot=($('stPanel').getBoundingClientRect().bottom-ol.getBoundingClientRect().bottom)+24; document.body.style.setProperty('--stH',Math.max(160,innerHeight-top-foot)+'px'); }
 addEventListener('resize',stFit);
 (function stLoop(){ stLineTick(); requestAnimationFrame(stLoop); })();
+/* CJ: a section confirmed after another confirmed section goes right after it; unconfirmed rows stay where they are */
+function stPlace(r){ const i=stRows.indexOf(r), ok=stRows.filter(x=>x.ok&&x!==r), bad=stRows.some((x,j)=>x.ok&&x!==r&&((j<i&&x.t>r.t)||(j>i&&x.t<r.t)));
+  if(i>=0&&bad){ stRows.splice(i,1); let prev=null; for(const x of ok) if(x.t<=r.t&&(!prev||x.t>=prev.t)) prev=x;
+    let k; if(prev) k=stRows.indexOf(prev)+1; else { const nx=ok.filter(x=>x.t>r.t).sort((a,b)=>a.t-b.t)[0]; k=nx?stRows.indexOf(nx):stRows.length; } stRows.splice(k,0,r); }
+  stRender(); }
 function stSort(){ stRows.sort((a,b)=>a.t-b.t); stRender(); }
 function stOpen(show){ const pn=$('stPanel'), on=show??pn.hidden; pn.hidden=!on; $('stBtn').setAttribute('aria-expanded',String(on)); if(on){ stRows=stFromChart(); $('stMsg').textContent=''; $('stMsg').className=''; stRender(); stPeaks=null; requestAnimationFrame(stWaveDraw); } }
 /* CJ: from the chart, go back to the section times step; the list is already confirmed */
@@ -2350,7 +2359,7 @@ function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
 }catch(e){ /* storage blocked: start fresh */ } })();
 $('clearAll').addEventListener('click',()=>{ for(const d of ['dropSong','dropChart','dropWork']) dropFile(d); steps.innerHTML=''; });
 function clearPicked(){ ST.songFile=null; ST.chartFile=null; ST.chartMode='pdf'; for(const [d,n] of [['dropSong','songName'],['dropChart','chartName']]){ $(d).classList.remove('has'); $(n).textContent=''; } $('chartText').hidden=true; $('chartText').value=''; $('songFile').value=''; $('chartFile').value=''; ready(); }
-$('newBtn').addEventListener('click',()=>{ forgetLast(); setTimeout(libList,0); ST.work=null; $('workName').textContent=''; $('dropWork').classList.remove('has'); $('workMsg').textContent=''; document.body.classList.remove('stfirst'); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-open'); }catch(e){} $('bpmIn').value=''; $('meterIn').value=''; if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
+$('newBtn').addEventListener('click',()=>{ forgetLast(); setTimeout(libList,0); ST.work=null; $('dropWork').hidden=true; $('workName').textContent=''; $('dropWork').classList.remove('has'); $('workMsg').textContent=''; document.body.classList.remove('stfirst'); try{ sessionStorage.removeItem('mcb-st1'); }catch(e){} stSnap0=null; if(rate!==1) setRate(1); try{ sessionStorage.removeItem('mcb-open'); }catch(e){} $('bpmIn').value=''; $('meterIn').value=''; if(playing) pause(); $('result').hidden=true; $('upload').hidden=false; $('buildBtn').disabled=false; steps.innerHTML=''; });
 
 // ---------- downloads ----------
 let dl=null; (async()=>{ try{ dl=await window.claude?.use?.('downloads'); }catch(e){ dl=null; } if(window.claude?.use && !dl) $('workSave').parentElement.hidden=true; /* a Claude page without downloads can't hand over the chart file */ })();

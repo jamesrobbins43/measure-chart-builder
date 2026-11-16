@@ -98,6 +98,15 @@ html:has(#upload:not([hidden])) body{background:#000}
 .secnav:not(:has(button:not(.secplus))){display:none}
 .secnav button{flex:none;border-left:4px solid var(--c,var(--rule));font-family:var(--f-ui);font-size:13px;padding:4px 11px;border-radius:999px;white-space:nowrap}
 .secnav button.on{background:var(--c,var(--accent));border-color:var(--c,var(--accent));color:#fff;font-weight:600} /* each section lights up in its own chart color (CJ) */
+.secnav .chip{flex:none;display:inline-flex;align-items:stretch;border-radius:999px;position:relative}
+.secnav .chip>.cj:not(:last-child){border-radius:999px 0 0 999px;border-right:0;padding-right:5px}
+.secnav .chip>.grip{border-left-width:0;border-radius:0 999px 999px 0;padding:4px 10px 4px 6px;display:inline-flex;align-items:center;touch-action:none;cursor:grab;color:var(--muted)}
+.secnav .chip>.grip svg{fill:currentColor} .secnav .chip>.grip.on{color:inherit}
+.secnav .chip.drag{z-index:3;opacity:.9;cursor:grabbing;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))} .secnav .chip.drag>button{cursor:grabbing}
+.secnav .chip.dropL::before,.secnav .chip.dropR::after{content:"";position:absolute;top:2px;bottom:2px;width:3px;border-radius:2px;background:var(--accent)} .secnav .chip.dropL::before{left:-5px} .secnav .chip.dropR::after{right:-5px}
+.secnav .arrsw{border-left-width:1px;font-weight:600}
+.secmenu{position:fixed;z-index:50;display:flex;flex-direction:column;min-width:150px;padding:4px;background:var(--paper);border:1px solid var(--rule);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.3);font-family:var(--f-ui);font-size:13px}
+.secmenu button{border:0;background:none;text-align:left;padding:8px 12px;border-radius:6px} .secmenu button:hover:not(:disabled),.secmenu button:focus-visible{background:var(--accent-soft)} .secmenu button.del{color:var(--flag)}
 .tin{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:10px;margin:0 auto}
 .titleblock{min-width:0}
 .titleblock h1{font-size:21px}
@@ -577,7 +586,7 @@ async function build(){
       const hit0=ST.noChords?null:await libFind(ST.audio.duration,ST.env); chk();
       if(hit0 && (!own || Date.parse(hit0.v.savedAt||0)>(ST.restoreAt||0))){ ST.restore=null; if(applyLib(hit0)){ s=step(showChecks()?'Checking the song library':'Lining the chart up with the song'); if(showChecks()) s.done('Found this song in the library'); else steps.lastElementChild?.remove(); building=false; ST.showRec=false; undoClear(); libShow(); /* CJ: Reopen goes straight to the chart */ try{ if(sessionStorage.getItem('mcb-st1')) stFirst(); }catch(e){} return; } } }
     if(ST.restore){ const v=ST.restore; ST.restore=null; // reopening the last song after a refresh: put back exactly how it was
-      ST.notes=v.notes||{}; Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], libId:v.libId||null, libDate:v.libDate||null}); setOrder(v.order); useCf(v.cf);
+      ST.notes=v.notes||{}; Object.assign(ST,{P:v.P, beat0:v.beat0, downPhase:v.downPhase, meter:v.meter||ST.meter, den:v.den||ST.den, compound:!!v.compound, shift:v.shift||0, nudge:v.nudge||0, anchors:v.anchors||{}, overrides:v.overrides||{}, barLens:v.barLens||{}, breaks:v.breaks||{}, barEdits:v.barEdits||[], arr:v.arr||null, libId:v.libId||null, libDate:v.libDate||null}); setOrder(v.order); useCf(v.cf);
       s=step('Putting back your last chart'); s.done('Reopened your last song'); building=false; ST.showRec=false; undoClear(); if(ST.restoreUndo){ [undoStack,redoStack]=ST.restoreUndo; ST.restoreUndo=null; undoUI(); } realign(false); if(!ST.al?.path?.length) await recoverEmpty(); try{ if(sessionStorage.getItem('mcb-st1')) stFirst(); }catch(e){} return; } // CJ: undo still works after a refresh
     s=step(showChecks()?'Checking the song library':'Lining the chart up with the song');
     const hit=ST.noChords?null:chk(await libFind(ST.audio.duration,ST.env)); /* lyrics without chords: always set the sections yourself */
@@ -589,7 +598,7 @@ async function build(){
     const hint=+$('bpmIn').value || parsed.meta.bpm || 0;
     await new Promise(r=>setTimeout(r,20));
     const G=findGrid(ST.O,ST.audio.duration,ST.compound?60/compoundEighth(ST.O,hint,ST.meter):hint);
-    ST.P=G.P; ST.beat0=G.beat0; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; undoClear();
+    ST.P=G.P; ST.beat0=G.beat0; ST.nudge=0; ST.anchors={}; ST.overrides={}; ST.barLens={}; ST.breaks={}; ST.barEdits=[]; ST.arr=null; undoClear();
     s.done(`Tempo: ${(60/G.P).toFixed(1)} BPM`);
     if(ST.noChords){ s=step('Hearing the chords'); await new Promise(r=>setTimeout(r,20)); lyricsOnlyLayout(); building=false; ST.showRec=false; s.done(`Key: ${ST.meta.key}. Now set where each section starts.`); finish(); hearAll(); stFirst(); return; }
     s=step('Lining the chart up with the song');
@@ -655,7 +664,7 @@ function applyLib(h){
   ST.beat0=t-k*ST.P; ST.downPhase=(((v.downPhase+k)%ST.meter)+ST.meter)%ST.meter;
   ST.nudge=v.nudge||0;
   ST.anchors=h.sameChart?{...(v.anchors||{})}:{}; ST.overrides=h.sameChart?JSON.parse(JSON.stringify(v.overrides||{})):{}; ST.barLens=h.sameChart?{...(v.barLens||{})}:{}; ST.breaks=h.sameChart?{...(v.breaks||{})}:{}; ST.barEdits=h.sameChart?JSON.parse(JSON.stringify(v.barEdits||[])):[]; setOrder(h.sameChart?v.order:null);
-  if(v.notes) ST.notes={...v.notes}; ST.libId=h.id; ST.libDate=v.savedAt||null; ST.libSame=!!h.sameChart; useCf(h.sameChart?v.cf:'srv');
+  if(v.notes) ST.notes={...v.notes}; ST.arr=h.sameChart&&v.arr?JSON.parse(JSON.stringify(v.arr)):null; ST.libId=h.id; ST.libDate=v.savedAt||null; ST.libSame=!!h.sameChart; useCf(h.sameChart?v.cf:'srv');
   /* CJ (In Christ Alone): the saved line-up itself, so every page shows exactly the chords that were saved, even one that hears the song differently (no server) */
   ST.libAl=h.sameChart&&k===0&&v.al&&Array.isArray(v.al.path)&&v.al.path.length?JSON.parse(JSON.stringify(v.al)):null;
   return true;
@@ -670,7 +679,7 @@ function useLibChart(hit){ const c=hit.v.chart; ST.meta={...ST.meta,...(c.meta||
   ST.events=expandEvents(ST.sections); ST.chartSig=chartSig(ST.events); hit.sameChart=ST.chartSig===hit.v.chartSig; ST.libChart=true; }
 function workDoc(){ return {dur:Math.round(ST.audio.duration*100)/100, env:ST.env, title:ST.meta.title||'', artist:ST.meta.artist||'', chartKey:ST.meta.key||'', chartSig:ST.chartSig,
     P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den||4, compound:!!ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', al:ST.al||null, notes:ST.notes||{}, savedAt:new Date().toISOString()}; }
-$('workSave').addEventListener('click',async()=>{ if(!ST.audio) return; const d={kind:'chart-play-along',version:2,songName:ST.songFile?.name||'',...workDoc(), chart:{meta:ST.meta, sections:chartPack(ST.base||ST.sections)}}; /* CJ: the project file carries the chart, so it can stand in for it */
+$('workSave').addEventListener('click',async()=>{ if(!ST.audio) return; const d={kind:'chart-play-along',version:2,songName:ST.songFile?.name||'',...workDoc(), arr:ST.arr||null, chart:{meta:ST.meta, sections:chartPack(ST.base||ST.sections)}}; /* CJ: the project file carries the chart, so it can stand in for it */
   const nm=(ST.meta.title||ST.songFile?.name.replace(/\.[^.]+$/,'')||'song').replace(/[\\/:*?"<>|]+/g,'').trim().slice(0,60)||'song';
   const ok=await save(nm+' - project.json', new Blob([JSON.stringify(d)],{type:'application/json'}));
   $('workMsg').textContent=ok?'Saved. Next time, drop this file in with the song instead of the chart.':"Couldn't save the file."; });
@@ -835,7 +844,7 @@ function refineChords(al){
 function realign(keep=true){ if(ST.noChords){ ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration); if(!ST.al?.path?.length||ST.al.path.some(p=>!ST.events[p.j])){ lyricsOnlyLayout(true); finish(keep); hearAll(); } else finish(keep); return; } /* lyrics-only: the bars stay where they are */
   ST.S=beatSegments(ST.Cf,ST.P,ST.beat0,ST.audio.duration);
   // anchors are stored as bar numbers; convert to beats for this grid
-  const anchors={}; for(const [j,bar] of Object.entries(ST.anchors)) anchors[j]= bar&&typeof bar==='object'&&bar.t!=null ? Math.max(0,Math.round((bar.t-ST.beat0)/ST.P)) : ST.downPhase+(ST.song?.bars[bar-1]?.s0??ST.song?.bars[bar-1]?.s??(bar-1)*ST.meter); // {t}: a start time CJ typed, on the nearest beat
+  const anchors={}; for(const [j,bar] of Object.entries(ST.anchors)) anchors[j]= bar&&typeof bar==='object'&&bar.t!=null ? Math.max(0,Math.round((bar.t-ST.beat0)/ST.P)) : ST.downPhase+((ST.songRec||ST.song)?.bars[bar-1]?.s0??(ST.songRec||ST.song)?.bars[bar-1]?.s??(bar-1)*ST.meter); // {t}: a start time CJ typed, on the nearest beat
   ST.al=refineChords(fineAlign(anchors));
   finish(keep);
 }
@@ -846,6 +855,77 @@ function leadFrom(B,k){ const x=ST.mono, sr=22050; if(!x) return k; const sg=ST.
   const loud=b=>{ const t0=Math.max(0,sg.bar0+B[b].s*sg.beat), t1=Math.max(t0,sg.bar0+(B[b].s+B[b].len)*sg.beat); const a=Math.floor(t0*sr), z=Math.min(x.length,Math.floor(t1*sr)); if(z-a<sr*0.05) return false;
     let e=0,c=0; for(let i=a;i<z;i+=16){ e+=x[i]*x[i]; c++; } return Math.sqrt(e/c)>songRms.v*0.03; }; // louder than about -30 dB under the song's average
   let j=0; while(j<k && !loud(j)) j++; return j; }
+/* CJ: your own order of sections. Move, duplicate or delete a section right on the row of section buttons; the recording is cut at the
+   section lines and joined in your order (with a very short crossfade), so the chart, click and music stay together. Fix bars and section
+   times work on the recording's own order. */
+function recChips(song){ const B=song.bars, out=[]; B.forEach((b,i)=>{ if(b.section && !/^lead-?in$/i.test(b.section) && (!out.length||out[out.length-1].label!==b.section)) out.push({label:b.section,a:i}); });
+  const occ={}; out.forEach((c,k)=>{ c.b=k+1<out.length?out[k+1].a:B.length; c.occ=occ[c.label]=(occ[c.label]??-1)+1; }); return out; }
+const recRefs=()=>ST.songRec?recChips(ST.songRec).map(c=>({label:c.label,occ:c.occ})):[];
+function arrangeSong(rec,refs,dur){ const C=recChips(rec), B=rec.bars; if(!C.length||!B.length) return null;
+  const pick=[], ok=[]; for(const r of refs){ const c=C.find(c=>c.label===r.label&&c.occ===r.occ); if(c){ pick.push(c); ok.push({label:r.label,occ:r.occ}); } } if(!pick.length) return null;
+  const P=rec.beat, M=rec.meter||ST.meter, T=i=>rec.bar0+(i<B.length?B[i].s:B[B.length-1].s+(B[B.length-1].len||M))*P;
+  const bars=[], segs=[], starts=[]; let x=0, o=0;
+  const seg=(a,b)=>{ if(b<=a+1e-4) return; const l=segs[segs.length-1]; if(l&&Math.abs(l.e-a)<1e-4) l.e=b; else segs.push({s:a,e:b,o}); o+=b-a; };
+  const add=(a,b)=>{ for(let i=a;i<b;i++){ const q=B[i]; bars.push({...q, chords:q.chords.map(c=>[...c]), lyrics:q.lyrics.map(w=>[...w]), s:x, s0:x, src:i}); x+=q.len||M; } seg(T(a),T(b)); };
+  const pre=C[0].a, first=pre>0?0:pick[0].a, lead=Math.max(0,T(0));
+  seg(T(first)-lead,T(first)); // the music just before the first bar (a pickup, the lead-in)
+  for(let i=0;i<pre;i++) if(B[i].section) starts.push({label:B[i].section,bar:i,k:null});
+  add(0,pre);
+  pick.forEach((c,k)=>{ starts.push({label:c.label,bar:bars.length,k}); add(c.a,c.b); });
+  const last=pick[pick.length-1], te=T(last.b);
+  if(last.b>=B.length) seg(te,Math.max(te,dur)); // the song's own ending rings out
+  else { const fo=Math.min(Math.max(0,dur-te),2*P,1.5); seg(te,te+fo); if(segs.length) segs[segs.length-1].fo=fo; } // otherwise fade out over the next section's first beats
+  return {song:{...rec, bar0:lead, bars}, segs, starts, dur:o, refs:ok}; }
+function arrApply(){ ST.songRec=ST.song; ST.arrSegs=null; ST.arrStarts=null;
+  if(!ST.arr?.on||!ST.audio) return;
+  const r=arrangeSong(ST.song,ST.arr.refs||[],ST.audio.duration); if(!r){ ST.arr=null; return; }
+  ST.arr={on:true,refs:r.refs}; ST.song=r.song; ST.arrSegs=r.segs; ST.arrStarts=r.starts; ST.arrDur=r.dur; ST.arrKey=JSON.stringify(r.segs); }
+const arrCache=new WeakMap();
+function spliceBuf(buf){ const g=ST.arrSegs; if(!g||!(buf instanceof AudioBuffer)) return buf; const c=arrCache.get(buf); if(c&&c.key===ST.arrKey) return c.out;
+  const sr=buf.sampleRate, ch=buf.numberOfChannels, N=Math.max(1,Math.round(ST.arrDur*sr)), out=getAC().createBuffer(ch,N,sr), X=Math.max(1,Math.round(0.012*sr));
+  for(let q=0;q<ch;q++){ const src=buf.getChannelData(q), dst=out.getChannelData(q), L=src.length, rd=i=>i>=0&&i<L?src[i]:0;
+    for(const sg of g){ const a=Math.round(sg.s*sr), w=Math.round(sg.o*sr), n=Math.min(N-w,Math.round((sg.e-sg.s)*sr)), a0=Math.max(0,a), a1=Math.min(L,a+n); if(a1>a0) dst.set(src.subarray(a0,a1),w+(a0-a)); }
+    g.forEach((sg,k)=>{ const J=Math.round(sg.o*sr), a=Math.round(sg.s*sr);
+      if(k===0){ if(sg.s>0.01) for(let d=0;d<X&&J+d<N;d++) dst[J+d]*=d/X; return; } // starts mid-song: tiny fade-in
+      const p=g[k-1], pa=Math.round(p.s*sr), pw=Math.round(p.o*sr);
+      for(let d=-X;d<X;d++){ const i=J+d; if(i<0||i>=N) continue; const u=(d+X)/(2*X); dst[i]=rd(pa+(i-pw))*Math.cos(u*Math.PI/2)+rd(a+(i-J))*Math.sin(u*Math.PI/2); } }); // equal-power crossfade at each join
+    const l=g[g.length-1]; if(l.fo){ const F=Math.round(l.fo*sr); for(let d=0;d<F;d++){ const i=N-F+d; if(i>=0) dst[i]*=1-d/F; } } }
+  arrCache.set(buf,{key:ST.arrKey,out}); return out; }
+const pbAudio=()=>spliceBuf(ST.audio), pbDur=()=>ST.arrSegs?ST.arrDur:ST.audio.duration;
+function pbStems(){ const s=ST.stems; if(!s||!ST.arrSegs) return s; const o={}; for(const k of Object.keys(s)) o[k]=spliceBuf(s[k]); return o; }
+const RI=i=>ST.song?.bars[i]?.src??i; // a bar's number in the recording's order (notes, line breaks and chord edits belong to it, so every copy shares them)
+function arrEdit(op,k,to){ const refs=ST.arrSegs?ST.arr.refs.map(r=>({...r})):recRefs(), r=refs[k]; if(!r) return; if(playing) pause(); let say='';
+  if(op==='dup'){ refs.splice(k+1,0,{...r}); to=k+1; say=`${r.label} now plays twice in a row.`; }
+  else if(op==='del'){ if(refs.length<2) return; refs.splice(k,1); to=Math.min(k,refs.length-1); say=`Deleted ${r.label}. The recording skips it too.`; }
+  else { to=Math.max(0,Math.min(refs.length-1,to)); if(to===k) return; refs.splice(k,1); refs.splice(to,0,r); say=`Moved ${r.label}. The recording plays it there too.`; }
+  pushUndo(); ST.arr=JSON.stringify(refs)===JSON.stringify(recRefs())?null:{on:true,refs}; finish(true);
+  const e=secSp.find(x=>x.k===to); pausedAt=e?bT(e.bar):0; update(true);
+  $('msg').className='msg'; $('msg').textContent=say+' Undo (⌘Z / Ctrl+Z) puts it back.'; }
+function arrToggle(){ if(!ST.arr) return; if(playing) pause(); ST.arr={...ST.arr,on:!ST.arr.on}; finish(true); pausedAt=0; update(true);
+  $('msg').className='msg'; $('msg').textContent=ST.arr?.on?'Back to your order of sections.':"Playing the recording's own order. Press My order to go back to yours."; }
+function arrOff(){ if(!ST.arr?.on||!ST.song) return; if(playing) pause(); ST.arr={...ST.arr,on:false}; finish(true); pausedAt=0; update(true);
+  $('msg').className='msg'; $('msg').textContent="Fixing works on the recording's own order, so the chart is back in that order for now. Press My order on the row of sections to go back to your arrangement."; }
+let navDrag=false;
+function secMenu(k,el){ const old=document.querySelector('.secmenu'); old?.remove(); if(old&&old.dataset.k===String(k)) return;
+  const n=secSp.filter(e=>e.k!=null).length, m=document.createElement('div'); m.className='secmenu'; m.dataset.k=k; m.setAttribute('role','menu');
+  const close=()=>{ m.remove(); document.removeEventListener('pointerdown',out,true); document.removeEventListener('keydown',esc,true); window.removeEventListener('scroll',close,true); };
+  const out=e=>{ if(!m.contains(e.target)&&e.target!==el) close(); }, esc=e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); el.focus(); } };
+  for(const [txt,fn,off] of [['Duplicate',()=>arrEdit('dup',k)],['Move earlier',()=>arrEdit('move',k,k-1),k===0],['Move later',()=>arrEdit('move',k,k+1),k>=n-1],['Delete',()=>arrEdit('del',k),n<2]]){
+    const b=document.createElement('button'); b.type='button'; b.setAttribute('role','menuitem'); b.textContent=txt; b.disabled=!!off; if(txt==='Delete') b.className='del'; b.onclick=()=>{ close(); fn(); }; m.appendChild(b); }
+  document.body.appendChild(m); const r=el.getBoundingClientRect(); m.style.left=Math.max(8,Math.min(r.right-m.offsetWidth,innerWidth-m.offsetWidth-8))+'px'; m.style.top=(r.bottom+4)+'px';
+  setTimeout(()=>{ document.addEventListener('pointerdown',out,true); document.addEventListener('keydown',esc,true); window.addEventListener('scroll',close,true); }); m.querySelector('button:not(:disabled)')?.focus(); }
+/* drag a section along the row to move it: the dots handle drags with a finger or mouse, the name drags with a mouse (a finger on the name scrolls the row) */
+function navDraggable(w,hs,k){ for(const h of hs) h.addEventListener('pointerdown',ev=>{ if(ev.button!==0||(h.classList.contains('cj')&&ev.pointerType!=='mouse')) return;
+  const nav=$('secNav'), x0=ev.clientX; let on=false, to=k; navDrag=false;
+  const others=()=>[...nav.querySelectorAll('.chip[data-k]')].filter(c=>c!==w);
+  const mv=e=>{ const dx=e.clientX-x0; if(!on){ if(Math.abs(dx)<7) return; on=true; navDrag=true; w.classList.add('drag'); document.querySelector('.secmenu')?.remove(); try{ h.setPointerCapture(e.pointerId); }catch(_){} }
+    e.preventDefault(); const r=nav.getBoundingClientRect(); if(e.clientX<r.left+28) nav.scrollLeft-=10; else if(e.clientX>r.right-28) nav.scrollLeft+=10;
+    w.style.transform=`translateX(${dx}px)`; const os=others(); to=os.filter(c=>{ const cr=c.getBoundingClientRect(); return cr.left+cr.width/2<e.clientX; }).length;
+    os.forEach((c,j)=>{ c.classList.toggle('dropL',j===to); c.classList.toggle('dropR',to===os.length&&j===os.length-1); }); };
+  const up=()=>{ removeEventListener('pointermove',mv); removeEventListener('pointerup',up); removeEventListener('pointercancel',up);
+    w.classList.remove('drag'); w.style.transform=''; nav.querySelectorAll('.dropL,.dropR').forEach(c=>c.classList.remove('dropL','dropR'));
+    if(on){ setTimeout(()=>{ navDrag=false; },0); if(to!==k) arrEdit('move',k,to); } };
+  addEventListener('pointermove',mv,{passive:false}); addEventListener('pointerup',up); addEventListener('pointercancel',up); }); }
 function bpmLabel(){ const b=Math.round(60/ST.P*10)/10; return ST.compound? `${b} BPM (eighth notes)` : b+' BPM'; }
 function finish(keep){
   lgDraft={};
@@ -863,6 +943,7 @@ function finish(keep){
   // CJ (Same God): the same chord twice in a row inside one bar is redundant; keep the first (the one on beat 1) and drop the repeat
   { const key=c=>{ const m=String(c).match(/^([A-G][b#]?)(.*?)(?:\/([A-G][b#]?))?$/); return m&&PC[m[1]]!=null? PC[m[1]]+'|'+m[2]+'|'+(m[3]?PC[m[3]]:'') : c; };
     for(const b of ST.song.bars) if(b.chords.length>1) b.chords=b.chords.filter((c,k,a)=>!k||key(c[1])!==key(a[k-1][1])); }
+  arrApply();
   $('upload').hidden=true; $('result').hidden=false; try{ sessionStorage.setItem('mcb-open','1'); }catch(e){} embedPin();
   $('songTitle').textContent=ST.meta.title||ST.songFile.name.replace(/\.[^.]+$/,'');
   $('songMeta').textContent=[ST.meta.artist, ST.meta.key&&(ST.shift?`Chart in ${ST.meta.key}, recording in ${recKey()}`:'Key '+ST.meta.key), bpmLabel(), ST.meter+'/'+(ST.den||4), ST.song.bars.length+' bars'].filter(Boolean).join(' · ');
@@ -897,7 +978,7 @@ function render(forcePer){
   perLine=forcePer||pickPer(); $('rows').style.setProperty('--per',perLine);
   const song=ST.song, rowsEl=$('rows'); rowsEl.innerHTML=''; measEls=[]; timeline=[];
   let sec=''; song.bars.forEach((b,i)=>{ if(b.section) sec=b.section; b.sec=sec; b.chords.forEach(([beat,name],k)=>timeline.push({t:bT(i)+(beat-1)*song.beat,name,bar:i,k})); });
-  const rows=[]; song.bars.forEach((b,i)=>{ const cur=rows[rows.length-1], br=ST.breaks?.[i]; // br: true = this bar starts a line, false = stays on the line above (CJ)
+  const rows=[]; song.bars.forEach((b,i)=>{ const cur=rows[rows.length-1], br=ST.breaks?.[RI(i)]; // br: true = this bar starts a line, false = stays on the line above (CJ)
     if(!cur||cur.length===perLine||br===true||(b.section&&br!==false)) rows.push([i]); else cur.push(i); });
   for(const idxs of rows){
     const row=document.createElement('div'); row.className='row'; row.style.setProperty('--c',colorFor(song.bars[idxs[0]].sec));
@@ -918,9 +999,9 @@ function render(forcePer){
         while(q<M){ let span=1; while(q+span<M && !lyB[q+span].length) span++;
           lh+=`<span style="min-width:calc(100% * ${span} / ${M})">${lyB[q].join(' ')}</span>`; q+=span; }
         h+=`<div class="lyr">${lh}</div>`; }
-      h+=`<div class="bnote" contenteditable="plaintext-only" spellcheck="false" data-i="${i}" aria-label="Notes for bar ${i+1}">${esc(ST.notes?.[i]||'')}</div>`; /* CJ: an open line under the count for your own notes or words */
+      h+=`<div class="bnote" contenteditable="plaintext-only" spellcheck="false" data-i="${i}" aria-label="Notes for bar ${i+1}">${esc(ST.notes?.[RI(i)]||'')}</div>`; /* CJ: an open line under the count for your own notes or words */
       m.innerHTML=h+'</div>';
-      { const nt=m.querySelector('.bnote'); for(const ev of ['click','dblclick','mousedown','pointerdown']) nt.addEventListener(ev,e=>e.stopPropagation()); nt.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); nt.blur(); } }); nt.addEventListener('input',()=>{ const v=nt.textContent.replace(/\s+/g,' ').trim().slice(0,200); ST.notes={...(ST.notes||{})}; if(v) ST.notes[i]=v; else delete ST.notes[i]; saveLast(); }); }
+      { const nt=m.querySelector('.bnote'); for(const ev of ['click','dblclick','mousedown','pointerdown']) nt.addEventListener(ev,e=>e.stopPropagation()); nt.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); nt.blur(); } }); nt.addEventListener('input',()=>{ const v=nt.textContent.replace(/\s+/g,' ').trim().slice(0,200); ST.notes={...(ST.notes||{})}; const ri=RI(i); if(v) ST.notes[ri]=v; else delete ST.notes[ri]; saveLast(); }); }
       m.addEventListener('click',e=>{ if(!editing && !playing){ clearTimeout(qcT); qcT=setTimeout(()=>onBar(i),280); return; } onBar(i); });
       m.addEventListener('dblclick',e=>{ if(editing||playing) return; clearTimeout(qcT); e.preventDefault(); const c=e.target.closest('.c1');
         if(c) return quickChord(i,+c.dataset.k,c);
@@ -943,7 +1024,7 @@ function fitLyrics(){ for(const el of $('rows').querySelectorAll('.lyr')){ el.cl
 let clickBuf=null, src=null, csrc=null, startAt=0, offsetAt=0, playing=false, pausedAt=0, nodes=null;
 let userSync=0; try{ userSync=+(localStorage.getItem('mcb-sync')||0); }catch(e){}
 function makeClick(){
-  const ac=getAC(), sr=ac.sampleRate, n=Math.ceil(ST.audio.duration*sr), buf=ac.createBuffer(1,n,sr), d=buf.getChannelData(0);
+  const ac=getAC(), sr=ac.sampleRate, n=Math.ceil(pbDur()*sr), buf=ac.createBuffer(1,n,sr), d=buf.getChannelData(0);
   const song=ST.song, P=song.beat, M=ST.meter;
   const tone=(f,amp)=>{ const L=Math.floor(sr*0.04), a=new Float32Array(L); for(let i=0;i<L;i++){ const t=i/sr; a[i]=amp*Math.sin(2*Math.PI*f*t)*Math.exp(-t*80)*Math.min(1,i/20); } return a; };
   const hi=tone(1800,0.6), mid=tone(1500,0.5), lo=tone(1200,0.36);
@@ -1042,8 +1123,8 @@ function scheduleCut(param,ctxT0,songT0,level){
 function vocalLevel(){ return +$('vocal').value/100; } function clickLevel(){ return (+$('clickVol').value/100)**1.5*1.4; }
 function startAtTime(t,countBar,keep,four){
   const ac=getAC(); stopSrc();
-  nodes=buildGraph(ac,ac.destination,ST.audio,clickBuf,vocalLevel(),clickLevel(),ST.stems);
-  offsetAt=Math.max(0,Math.min(t,ST.audio.duration-0.1)); ciBar=null;
+  nodes=buildGraph(ac,ac.destination,pbAudio(),clickBuf,vocalLevel(),clickLevel(),pbStems());
+  offsetAt=Math.max(0,Math.min(t,pbDur()-0.1)); ciBar=null;
   if(countBar!=null){ // one bar of clicks first, landing on the downbeat of countBar
     const P=ST.song.beat, M=ST.meter, down=bT(countBar), now=ac.currentTime+0.06;
     const six=four&&ST.compound, N=four&&!six?4:M, Q=P; // four: the section bar's "1, 2, 3, 4" (CJ); in 6/8 it counts all 6 (CJ)
@@ -1055,7 +1136,7 @@ function startAtTime(t,countBar,keep,four){
   else startAt=ac.currentTime+0.06;
   scheduleCut(nodes.cut.gain, startAt, offsetAt, vocalLevel());
   nodes.start(startAt,offsetAt);
-  nodes.s.onended=()=>{ if(playing && songTime()>=ST.audio.duration-0.3){ playing=false; pausedAt=0; $('play').textContent='Play'; update(true);} };
+  nodes.s.onended=()=>{ if(playing && songTime()>=pbDur()-0.3){ playing=false; pausedAt=0; $('play').textContent='Play'; update(true);} };
   playing=true; $('play').textContent='Pause';
 }
 // rebuild the audio graph without losing our place (keeps a count-in going if one is running)
@@ -1068,12 +1149,20 @@ function countInSource(ac,when,skip=0,M=ST.meter,P=ST.song.beat,four=false){ con
 function pause(){ pausedAt=songTime()+userSync/1000; playing=false; stopSrc(); $('play').textContent='Play'; update(true); }
 // section bar: jump to a section with a "1, 2, 3, 4" count before it starts (CJ)
 function jumpSection(i){ const t=bT(i); getAC().resume().then(()=>startAtTime(t,i,false,true)); pausedAt=t; update(true); }
-function buildSecNav(){ const nav=$('secNav'); if(!nav) return; secSp=ST.song?sectionSpans().filter((o,k,a)=>!k||o.label!==a[k-1].label):[]; /* one button for a run of same-named sections */ lastSec=-2; nav.innerHTML='';
-  for(const sp of secSp){ const b=document.createElement('button'); b.type='button'; b.textContent=sp.label; b.style.setProperty('--c',colorFor(sp.label)); b.title=`Go to ${sp.label} (bar ${sp.bar+1}) with a four-count`; b.onclick=()=>jumpSection(sp.bar); nav.appendChild(b); }
+function buildSecNav(){ const nav=$('secNav'); if(!nav) return; document.querySelector('.secmenu')?.remove();
+  if(!ST.song) secSp=[]; else if(ST.arrStarts) secSp=ST.arrStarts.map(e=>({...e}));
+  else { const C=recChips(ST.song), a0=C.length?C[0].a:ST.song.bars.length; secSp=[]; ST.song.bars.forEach((b,i)=>{ if(i<a0&&b.section) secSp.push({label:b.section,bar:i,k:null}); }); C.forEach((c,k)=>secSp.push({label:c.label,bar:c.a,k})); } /* one button for a run of same-named sections */
+  lastSec=-2; nav.innerHTML='';
+  for(const sp of secSp){ const w=document.createElement('span'); w.className='chip'; w.style.setProperty('--c',colorFor(sp.label));
+    const b=document.createElement('button'); b.type='button'; b.className='cj'; b.textContent=sp.label; b.title=`Go to ${sp.label} (bar ${sp.bar+1}) with a four-count`; b.onclick=()=>{ if(!navDrag) jumpSection(sp.bar); }; w.appendChild(b);
+    if(sp.k!=null){ w.dataset.k=sp.k; const g=document.createElement('button'); g.type='button'; g.className='grip'; g.innerHTML='<svg viewBox="0 0 6 14" width="6" height="14" aria-hidden="true"><circle cx="3" cy="2" r="1.4"/><circle cx="3" cy="7" r="1.4"/><circle cx="3" cy="12" r="1.4"/></svg>';
+      g.setAttribute('aria-label',`Duplicate, delete or move ${sp.label}`); g.setAttribute('aria-haspopup','menu'); g.title='Drag to move this section, or tap for Duplicate, Delete, Move'; g.onclick=()=>{ if(!navDrag) secMenu(sp.k,g); }; navDraggable(w,[b,g],sp.k); w.appendChild(g); }
+    nav.appendChild(w); }
+  if(ST.arr && secSp.length){ const b=document.createElement('button'); b.type='button'; b.className='secplus arrsw'; b.textContent=ST.arr.on?"Recording's order":'My order'; b.title=ST.arr.on?"Play the sections in the recording's own order (your order is kept)":'Go back to your order of sections'; b.onclick=arrToggle; nav.appendChild(b); }
   if(CAN_FIX && secSp.length){ const b=document.createElement('button'); b.type='button'; b.className='secplus'; b.textContent='+ Add section'; b.title='Add a whole section the chart left out or put in a different order'; b.onclick=openSecAdd; nav.prepend(b); } } /* first, so it's in view even when the row of sections scrolls */
 /* CJ: a chart is a rough guide; the recording may play a section more times or in another order. Add a whole section from the top bar:
    it goes in at the chosen bar, everything before stays put, and the rest of the song is lined up again after it (same as Fix bars > section start). */
-function openSecAdd(){ const box=$('secAdd'); if(!box.hidden){ box.hidden=true; return; }
+function openSecAdd(){ const box=$('secAdd'); if(!box.hidden){ box.hidden=true; return; } arrOff();
   const opts=[], seen=new Set(), base=ST.base||ST.sections; ST.events.forEach((e,j)=>{ const bi=ST.order?ordBase(ST.order[e.sec]):e.sec; if(e.k===0&&e.pass===0&&!seen.has(bi)){ seen.add(bi); const n=base.filter(s=>s.label===e.label).length>1?' '+base.slice(0,bi+1).filter(s=>s.label===e.label).length:''; opts.push(`<option value="${j}">${esc(e.label+n)}</option>`); } });
   $('saSec').innerHTML=opts.join('')+''+genSecs(base).map(n=>`<option value="g:${n}">${n}</option>`).join('')+'<option value="end">End (runs to the end of the song)</option><option value="custom">A section not on the chart…</option>'; $('saName').hidden=true; $('saName').value=''; const nb=ST.song.bars.length, cur=Math.max(0,Math.min(nb-1,barAt(songTime()+userSync/1000)));
   $('saBar').max=nb; $('saBar').value=cur+1; $('saMsg').textContent=''; box.hidden=false; $('saSec').focus(); }
@@ -1158,14 +1247,14 @@ function quickScroll(y){ if(document.body.classList.contains('stfirst')) return;
 function update(force,noScroll){
   if(!ST.song) return;
   const song=ST.song, M=ST.meter, P=song.beat, t=songTime();
-  $('time').textContent=`${editing?fmtT(Math.max(0,t)):fmt(t)} / ${fmt(ST.audio.duration)}`; // tenths while fixing, to read section start times (CJ)
+  $('time').textContent=`${editing?fmtT(Math.max(0,t)):fmt(t)} / ${fmt(pbDur())}`; // tenths while fixing, to read section start times (CJ)
   if(editing) $('edNowT').textContent=fmtT(Math.max(0,t));
   let bar=barAt(t), beat=Math.max(0,Math.floor((t-bT(bar))/P+1e-6)); beat=bar<0||bar>=song.bars.length?((beat%M)+M)%M:Math.min(bLen(bar)-1,beat);
   const ci=playing && ciBar!=null && ctxNow()<ciUntil; // one-bar count-in before a chorus: show the chorus's first bar counting down
   if(ci){ bar=ciBar; beat=Math.max(0,Math.min(M-1,ciN-1, ciN-Math.ceil((ciUntil-ctxNow())/ciQ-1e-6))); }
   { let si=-1; for(let k=0;k<secSp.length;k++){ if(secSp[k].bar<=bar) si=k; else break; } // section bar: light up the section that's playing (CJ)
-    if(si!==lastSec||force){ lastSec=si; const nav=$('secNav'); [...nav.querySelectorAll('button:not(.secplus)')].forEach((b,k)=>{ b.classList.toggle('on',k===si); if(k===si) b.setAttribute('aria-current','true'); else b.removeAttribute('aria-current'); });
-      const on=nav.children[si]; if(on){ const l=on.offsetLeft-nav.offsetLeft, r=l+on.offsetWidth; if(l<nav.scrollLeft||r>nav.scrollLeft+nav.clientWidth) nav.scrollTo({left:Math.max(0,l-40),behavior:'smooth'}); } } }
+    if(si!==lastSec||force){ lastSec=si; const nav=$('secNav'); const chips=[...nav.querySelectorAll('.chip')]; chips.forEach((w,k)=>{ w.classList.toggle('on',k===si); w.querySelectorAll('button').forEach(b=>b.classList.toggle('on',k===si)); const b=w.querySelector('.cj'); if(k===si) b.setAttribute('aria-current','true'); else b.removeAttribute('aria-current'); });
+      const on=chips[si]; if(on){ const l=on.offsetLeft-nav.offsetLeft, r=l+on.offsetWidth; if(l<nav.scrollLeft||r>nav.scrollLeft+nav.clientWidth) nav.scrollTo({left:Math.max(0,l-40),behavior:'smooth'}); } } }
   const ciEl=ci?document.querySelector(`#rows .cirow[data-bar="${ciBar}"] .measure`):null, curEl=ciEl||measEls[bar], key=ciEl?'ci'+bar:bar;
   if(key!==lastBar||force){
     document.querySelectorAll('.measure.cur').forEach(e=>e.classList.remove('cur'));
@@ -1307,7 +1396,7 @@ $('lgSave').addEventListener('click',()=>{
 });
 // ---------- fixing ----------
 let editing=false, selBar=-1;
-$('editBtn').addEventListener('click',()=>{ editing=!editing; $('editBtn').setAttribute('aria-pressed',editing); $('editBtn').classList.toggle('primary',editing); $('editBtn').textContent=editing?'Done fixing':'Fix bars'; if(editing) openEditor(Math.max(0,Math.min(ST.song.bars.length-1,selBar>=0?selBar:barAt(songTime())))); else closeEditor(); });
+$('editBtn').addEventListener('click',()=>{ if(!editing) arrOff(); editing=!editing; $('editBtn').setAttribute('aria-pressed',editing); $('editBtn').classList.toggle('primary',editing); $('editBtn').textContent=editing?'Done fixing':'Fix bars'; if(editing) openEditor(Math.max(0,Math.min(ST.song.bars.length-1,selBar>=0?selBar:barAt(songTime())))); else closeEditor(); });
 // CJ: while paused, double-click a chord to change it right there (no Fix bars panel). Enter saves, Esc cancels, empty removes it
 let qcT=null;
 function quickChord(i,k,el,bt,cx,cy){ const b=ST.song.bars[i]; if(!b) return; const ch=k>=0?b.chords[k]:[bt,'']; if(!ch) return; document.querySelector('.qchord')?.remove();
@@ -1318,7 +1407,7 @@ function quickChord(i,k,el,bt,cx,cy){ const b=ST.song.bars[i]; if(!b) return; co
   const save=()=>{ if(done) return; const v=inp.value.trim(); if(v && !isChord(v)){ inp.classList.add('bad'); inp.title='Type a chord like C, F#m7 or Bb/D'; return; }
     close(); if(k>=0? v===lgOut(ch[1]) : !v) return; pushUndo(); ST.overrides={...ST.overrides}; const cs=b.chords.map(c=>[...c]);
     if(k<0){ cs.push([bt,lgIn(v)]); cs.sort((x,y)=>x[0]-y[0]); } else if(v) cs[k][1]=lgIn(v); else cs.splice(k,1);
-    ST.overrides[i]={...(ST.overrides[i]||{}), chords:cs, lyrics:(ST.overrides[i]?.lyrics||b.lyrics)}; b.chords=cs; render(); sectionCheck(); update(true,true); saveLast();
+    const oi=RI(i); ST.overrides[oi]={...(ST.overrides[oi]||{}), chords:cs, lyrics:(ST.overrides[oi]?.lyrics||b.lyrics)}; b.chords=cs; if(b.src!=null){ for(const x of ST.song.bars) if(x.src===b.src) x.chords=cs.map(c=>[...c]); const rb=ST.songRec?.bars[b.src]; if(rb) rb.chords=cs.map(c=>[...c]); } render(); sectionCheck(); update(true,true); saveLast();
     $('msg').className='msg'; $('msg').textContent=(v?(k<0?`Bar ${i+1}: added ${v} on beat ${bt}.`:`Bar ${i+1}: changed to ${v}.`):`Bar ${i+1}: chord removed.`)+' Undo (⌘Z / Ctrl+Z) puts it back.'; };
   inp.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter'){ e.preventDefault(); save(); } else if(e.key==='Escape'){ e.preventDefault(); close(); } });
   inp.addEventListener('blur',()=>{ if(!done) save(); if(!done) close(); }); }
@@ -1414,13 +1503,13 @@ $('edClose').addEventListener('click',()=>{ if(editing) $('editBtn').click(); el
   try{ new ResizeObserver(padEd).observe($('editor')); }catch(e){} new MutationObserver(padEd).observe($('editor'),{attributes:true,attributeFilter:['hidden']}); }
 // ---------- undo / redo for Fix bars (CJ): every bar length, section pin and grid save can be stepped back ----------
 var undoStack=[], redoStack=[];
-function snapFix(){ return {P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, shift:ST.shift, nudge:ST.nudge, cf:ST.cfSrc, anchors:JSON.parse(JSON.stringify(ST.anchors||{})), overrides:JSON.parse(JSON.stringify(ST.overrides||{})), barLens:{...(ST.barLens||{})}, breaks:{...(ST.breaks||{})}, barEdits:JSON.parse(JSON.stringify(ST.barEdits||[])), order:ST.order?[...ST.order]:null, al:ST.al}; }
+function snapFix(){ return {P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, shift:ST.shift, nudge:ST.nudge, cf:ST.cfSrc, anchors:JSON.parse(JSON.stringify(ST.anchors||{})), overrides:JSON.parse(JSON.stringify(ST.overrides||{})), barLens:{...(ST.barLens||{})}, breaks:{...(ST.breaks||{})}, barEdits:JSON.parse(JSON.stringify(ST.barEdits||[])), order:ST.order?[...ST.order]:null, arr:ST.arr?JSON.parse(JSON.stringify(ST.arr)):null, al:ST.al}; }
 function undoUI(){ const u=$('edUndo'), r=$('edRedo'); if(u) u.disabled=!undoStack.length; if(r) r.disabled=!redoStack.length; const tu=$('tbUndo'), tr=$('tbRedo'); if(tu) tu.hidden=!undoStack.length; if(tr) tr.hidden=!redoStack.length; }
 function undoClear(){ undoStack=[]; redoStack=[]; undoUI(); }
 function pushUndo(){ undoStack.push(snapFix()); if(undoStack.length>50) undoStack.shift(); redoStack=[]; undoUI(); }
 function applySnap(x){ const grid=x.P!=null && (x.P!==ST.P||x.beat0!==ST.beat0||x.downPhase!==ST.downPhase||x.shift!==ST.shift);
   if(x.P!=null) Object.assign(ST,{P:x.P, beat0:x.beat0, downPhase:x.downPhase, shift:x.shift, nudge:x.nudge||0}); if(x.cf && x.cf!==ST.cfSrc && typeof useCf==='function') useCf(x.cf);
-  Object.assign(ST,{anchors:x.anchors, overrides:x.overrides, barLens:x.barLens, breaks:x.breaks||{}, barEdits:x.barEdits||[]}); setOrder(x.order); const keep=selBar;
+  Object.assign(ST,{anchors:x.anchors, overrides:x.overrides, barLens:x.barLens, breaks:x.breaks||{}, barEdits:x.barEdits||[]}); if('arr' in x) ST.arr=x.arr; setOrder(x.order); const keep=selBar;
   if(x.al && !grid){ ST.al=x.al; finish(true); } else realign(true); /* a step kept from before a refresh, or a different beat grid: line it up again from the fixes */ if(keep>=0 && !$('editor').hidden) openEditor(Math.min(keep,ST.song.bars.length-1),true); undoUI(); }
 function undoFix(){ if(!undoStack.length) return; redoStack.push(snapFix()); applySnap(undoStack.pop()); undoSay('Undid the last change.'); }
 function redoFix(){ if(!redoStack.length) return; undoStack.push(snapFix()); applySnap(redoStack.pop()); undoSay('Redid it.'); }
@@ -1639,7 +1728,7 @@ function stSnap(t){ let b=barAt(t); if(b<0) b=0; const n=ST.song.bars.length; if
 
 /* CJ: right from the start, the list of section times comes first; the chart is only built once the list is confirmed */
 let stSnap0=null; const stKey=r=>JSON.stringify(r.map(x=>[x.sec,Math.round(x.t*10),x.sec==='custom'||x.rn?(x.name||'').trim():'']));
-function stFirst(back,libAsk){ document.body.classList.add('stfirst'); $('stLibAsk').hidden=libAsk==null; if(libAsk!=null){ $('stLibWhen').textContent=libAsk?' (saved '+new Date(libAsk).toLocaleDateString()+')':''; } if(stClickPrev===null){ stClickPrev=+$('clickVol').value; if(!stClickPrev) setClickVol(100); } stClickUI(); document.body.classList.toggle('stback',!!back); try{ sessionStorage.setItem('mcb-st1','1'); }catch(e){} stOpen(true); if(!back && !ST.stInit) ST.stInit=stRows.map(r=>({...r,ok:false})); /* the list as first found, for Clear sections */ if(back || (ST.barEdits||[]).some(e=>e.op==='nolead')){ stRows.forEach(r=>r.ok=true); stRender(); } /* CJ: a list you already confirmed stays confirmed */ stSnap0=stKey(stRows); $('stClose').textContent='Back to the chart';
+function stFirst(back,libAsk){ arrOff(); document.body.classList.add('stfirst'); $('stLibAsk').hidden=libAsk==null; if(libAsk!=null){ $('stLibWhen').textContent=libAsk?' (saved '+new Date(libAsk).toLocaleDateString()+')':''; } if(stClickPrev===null){ stClickPrev=+$('clickVol').value; if(!stClickPrev) setClickVol(100); } stClickUI(); document.body.classList.toggle('stback',!!back); try{ sessionStorage.setItem('mcb-st1','1'); }catch(e){} stOpen(true); if(!back && !ST.stInit) ST.stInit=stRows.map(r=>({...r,ok:false})); /* the list as first found, for Clear sections */ if(back || (ST.barEdits||[]).some(e=>e.op==='nolead')){ stRows.forEach(r=>r.ok=true); stRender(); } /* CJ: a list you already confirmed stays confirmed */ stSnap0=stKey(stRows); $('stClose').textContent='Back to the chart';
   $('stTitle').textContent='Step 1: Section times'; $('stHelp').textContent='Play the song and press Now on each section right as it starts. That sets its time and gives it a check mark. You can also type a time (like 1:23.5). Tap anywhere on the song line to play from there. When every section has a check mark, press Build Chart.';
   $('stGo').textContent='Build Chart'; scrollTo(0,0); requestAnimationFrame(stFit); }
 /* CJ: a metronome while you set the section times; sections start on its bar lines */
@@ -1766,7 +1855,7 @@ const ANA_V=2; // bump when onsetEnvelope / chromaFrames / vocalOnsets / the ser
 function saveLast(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(!ST.songFile || !ST.al?.path?.length) return; /* never keep an empty chart for next time */
   const rec={song:ST.songFile, songName:ST.songFile.name, chartMode:ST.chartMode, chart:ST.chartMode==='pdf'?ST.chartFile:null, chartName:ST.chartFile?.name||'', chartText:ST.chartMode==='text'?$('chartText').value:'', chartLib:ST.chartMode==='lib'?ST.libChartDoc:null,
     bpmIn:$('bpmIn').value, meterIn:$('meterIn').value,
-    state:{notes:ST.notes||{}, P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', libId:ST.libId, libDate:ST.libDate}, undo:undoStack.slice(-30).map(({al,...r})=>r), redo:redoStack.slice(-30).map(({al,...r})=>r), savedAt:Date.now()};
+    state:{notes:ST.notes||{}, P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, arr:ST.arr||null, cf:ST.cfSrc||'local', libId:ST.libId, libDate:ST.libDate}, undo:undoStack.slice(-30).map(({al,...r})=>r), redo:redoStack.slice(-30).map(({al,...r})=>r), savedAt:Date.now()};
   idb('readwrite',st=>st.put(rec,'last')).catch(e=>console.warn('could not keep the song for next time',e)); },400); }
 function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
 (async()=>{ try{ const r=await idb('readonly',st=>st.get('last')); if(!r||!r.song||!(r.chart||r.chartText||r.chartLib)) return;
@@ -1805,9 +1894,9 @@ function zipStore(files){ // [{name, data:Uint8Array}] -> Blob (no compression)
   return new Blob([...parts,...central,new Uint8Array(e.buffer)],{type:'application/zip'});
 }
 async function renderMix(withSong,withClick){
-  const sr=44100, n=Math.ceil(ST.audio.duration*sr), off=new OfflineAudioContext(2,n,sr);
+  const sr=44100, n=Math.ceil(pbDur()*sr), off=new OfflineAudioContext(2,n,sr);
   const silent=off.createBuffer(2,1,sr);
-  const g=buildGraph(off,off.destination, withSong?ST.audio:silent, withClick?clickBuf:null, vocalLevel(), withClick?Math.max(clickLevel(),withSong?0.5:1):0, withSong?ST.stems:null);
+  const g=buildGraph(off,off.destination, withSong?pbAudio():silent, withClick?clickBuf:null, vocalLevel(), withClick?Math.max(clickLevel(),withSong?0.5:1):0, withSong?pbStems():null);
   scheduleCut(g.cut.gain,0,0,vocalLevel());
   g.start(0,0);
   return off.startRendering();
@@ -1854,7 +1943,7 @@ function vidPlan(){
   const song=ST.song, P=song.beat, M0=ST.meter, nb=song.bars.length, start=Math.min(topBar(),nb-1), T0=bT(start), C=M0*P; // one bar of count-in first
   const songEnd=bT(nb), dur=C+(songEnd-T0)+1.5;
   // rows: 4 bars a line, each section on a new line, your own line moves too
-  const PER=4, rows=[]; for(let i=start;i<nb;i++){ const b=song.bars[i], cur=rows[rows.length-1], br=ST.breaks?.[i]; if(!cur||cur.idx.length===PER||br===true||(b.section&&br!==false)) rows.push({idx:[i]}); else cur.idx.push(i); }
+  const PER=4, rows=[]; for(let i=start;i<nb;i++){ const b=song.bars[i], cur=rows[rows.length-1], br=ST.breaks?.[RI(i)]; if(!cur||cur.idx.length===PER||br===true||(b.section&&br!==false)) rows.push({idx:[i]}); else cur.idx.push(i); }
   let y=0; const secAt=[]; { let sc=''; song.bars.forEach((b,i)=>{ if(b.section) sc=b.section; secAt[i]=sc; }); }
   for(const r of rows){ r.sec=r.idx.some(i=>song.bars[i].section); r.y=y; r.band=r.sec?30:0; y+=r.band+124; r.end=y; }
   const rowOf=new Int32Array(nb).fill(-1); rows.forEach((r,k)=>r.idx.forEach(i=>rowOf[i]=k));
@@ -1988,9 +2077,9 @@ $('dlPdf').addEventListener('click',async()=>{
     if(map.length){ doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(21,25,31); const lines=doc.splitTextToSize(map.join('   ·   '), W-2*MG); doc.text(lines, MG, y+2); y+=lines.length*13+8; }
     // 8 bars a line on letter paper; each section starts a new line, and your own line moves from Fix bars apply too (CJ)
     const secAt=[]; { let sc=''; song.bars.forEach((b,i)=>{ if(b.section) sc=b.section; secAt[i]=sc; }); }
-    const rows=[]; song.bars.forEach((b,i)=>{ const cur=rows[rows.length-1], br=ST.breaks?.[i]; if(!cur||cur.length===PER||br===true||(b.section&&br!==false)) rows.push([i]); else cur.push(i); });
+    const rows=[]; song.bars.forEach((b,i)=>{ const cur=rows[rows.length-1], br=ST.breaks?.[RI(i)]; if(!cur||cur.length===PER||br===true||(b.section&&br!==false)) rows.push([i]); else cur.push(i); });
     for(const idx of rows){
-      const hasSec=idx.some(i=>song.bars[i].section), noteL=Math.max(0,...idx.map(i=>{ if(!ST.notes?.[i]) return 0; doc.setFont('helvetica','normal'); doc.setFontSize(7.5); const k=idx.indexOf(i); return Math.min(3,doc.splitTextToSize(ST.notes[i], bw*(song.bars[i].len||M0)/M0-6).length); })), RH=rowH+(noteL?3+noteL*9:0), need=RH+(hasSec?secH:0); // CJ: your notes print under the count
+      const hasSec=idx.some(i=>song.bars[i].section), noteL=Math.max(0,...idx.map(i=>{ if(!ST.notes?.[RI(i)]) return 0; doc.setFont('helvetica','normal'); doc.setFontSize(7.5); const k=idx.indexOf(i); return Math.min(3,doc.splitTextToSize(ST.notes[RI(i)], bw*(song.bars[i].len||M0)/M0-6).length); })), RH=rowH+(noteL?3+noteL*9:0), need=RH+(hasSec?secH:0); // CJ: your notes print under the count
       if(y+need>H-MG-10){ footer(); doc.addPage(); page++; y=MG; }
       const xs=[]; { let x=MG; idx.forEach(i=>{ xs.push(x); x+=bw*(song.bars[i].len||M0)/M0; }); xs.push(x); }
       if(hasSec){ doc.setFont('helvetica','bold'); doc.setFontSize(7.5); idx.forEach((i,k)=>{ const b=song.bars[i]; if(!b.section) return; doc.setTextColor(...lightColor(b.section)); doc.text(b.section.toUpperCase(), xs[k]+2, y+8); }); y+=secH; }

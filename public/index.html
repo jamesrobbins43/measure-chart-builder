@@ -2384,7 +2384,17 @@ function saveLast(){ clearTimeout(saveT); saveT=setTimeout(()=>{ if(!ST.songFile
     state:{notes:ST.notes||{}, P:ST.P, beat0:ST.beat0, downPhase:ST.downPhase, meter:ST.meter, den:ST.den, compound:ST.compound, shift:ST.shift, nudge:ST.nudge, anchors:ST.anchors, overrides:ST.overrides, barLens:ST.barLens||{}, breaks:ST.breaks||{}, barEdits:ST.barEdits||[], order:ST.order||null, cf:ST.cfSrc||'local', libId:ST.libId, libDate:ST.libDate}, undo:undoStack.slice(-30).map(({al,...r})=>r), redo:redoStack.slice(-30).map(({al,...r})=>r), savedAt:Date.now()};
   idb('readwrite',st=>st.put(rec,'last')).catch(e=>console.warn('could not keep the song for next time',e)); },400); }
 function forgetLast(){ idb('readwrite',st=>st.delete('last')).catch(()=>{}); }
-(async()=>{ try{ const r=await idb('readonly',st=>st.get('last')); if(!r||!r.song||!(r.chart||r.chartText||r.chartLib)) return;
+(async()=>{ try{ let hand=0; try{ hand=+localStorage.getItem('mcb-handoff')||0; localStorage.removeItem('mcb-handoff'); }catch(e){}
+  const r=await idb('readonly',st=>st.get('last'));
+  /* CJ (Nov 20): the course page's Chart Builder tab hands the song and chart over (handoff.html) and sends the member here; build straight away, once */
+  if(hand && r && r.handoff===hand && r.song && Date.now()-hand<10*60*1000){ const asFile=(b,n)=>b instanceof File?b:new File([b],n||'file');
+    takeFile('songFile',asFile(r.song,r.songName));
+    if(r.chartMode==='text'&&r.chartText){ ST.chartMode='text'; $('chartText').value=r.chartText; $('chartText').hidden=false; $('chartFile').style.pointerEvents='none'; }
+    else if(r.chart) takeFile('chartFile',asFile(r.chart,r.chartName));
+    if(r.work) await takeWork(asFile(r.work,r.workName));
+    if(r.bpmIn) $('bpmIn').value=r.bpmIn; if(r.meterIn) $('meterIn').value=r.meterIn;
+    ready(); if(!$('buildBtn').disabled) build(); return; }
+  if(!r||!r.song||!(r.chart||r.chartText||r.chartLib)) return;
   ST.songFile=r.song instanceof File?r.song:new File([r.song],r.songName||'song'); $('songName').textContent=r.songName||'song'; $('dropSong').classList.add('has');
   if(r.chartMode==='text'){ ST.chartMode='text'; $('chartText').value=r.chartText; $('chartText').hidden=false; }
   else if(r.chartMode==='lib'&&r.chartLib){ ST.chartMode='lib'; ST.libChartDoc=r.chartLib; $('chartName').textContent='From the library: '+(r.chartLib.title||'saved chart'); $('dropChart').classList.add('has'); }

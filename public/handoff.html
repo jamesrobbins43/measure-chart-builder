@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Chart Builder hand-off</title>
+<!-- CJ (Nov 20): the course page's Chart Builder tab loads this page hidden, hands it the song and chart with postMessage,
+     and it keeps them in this browser (same place the builder keeps your last song), then the course page sends the member
+     to the Chart Builder page, which builds the chart straight away. Nothing is uploaded anywhere. -->
+<script>
+(function(){
+  var OK=/^https:\/\/((www\.)?dontgiveup\.pro|[a-z0-9-]+\.squarespace\.com)$/;
+  function put(rec){ return new Promise(function(res,rej){ var rq=indexedDB.open('mcb',1);
+    rq.onupgradeneeded=function(){ rq.result.createObjectStore('kv'); }; rq.onerror=function(){ rej(rq.error); };
+    rq.onsuccess=function(){ var db=rq.result, tx=db.transaction('kv','readwrite'); tx.objectStore('kv').put(rec,'last');
+      tx.oncomplete=function(){ db.close(); res(); }; tx.onerror=function(){ rej(tx.error); }; }; }); }
+  addEventListener('message',function(e){
+    if(!OK.test(e.origin)) return; var d=e.data; if(!d||d.type!=='mcb-handoff') return;
+    var reply=function(m){ try{ e.source.postMessage(m,e.origin); }catch(x){} };
+    var song=d.song, chart=d.chart||null, work=d.work||null, text=typeof d.text==='string'?d.text:'';
+    if(!(song instanceof Blob)){ reply({type:'mcb-handoff-error',id:d.id,msg:'no song'}); return; }
+    var ts=Date.now();
+    put({ song:song, songName:song.name||'song', chartMode:(!chart&&text)?'text':'pdf', chart:chart, chartName:chart?(chart.name||'chart.pdf'):'',
+          chartText:text, chartLib:null, work:work, workName:work?(work.name||'project.json'):'', bpmIn:'', meterIn:'', state:null, savedAt:ts, handoff:ts })
+      .then(function(){ localStorage.setItem('mcb-handoff',String(ts)); reply({type:'mcb-handoff-ok',id:d.id}); })
+      .catch(function(err){ reply({type:'mcb-handoff-error',id:d.id,msg:String(err&&err.message||err)}); });
+  });
+  try{ parent.postMessage({type:'mcb-handoff-ready'},'*'); }catch(x){}
+})();
+</script>
